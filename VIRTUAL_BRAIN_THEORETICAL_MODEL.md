@@ -1,216 +1,246 @@
 # Machina — Modelo Conceitual do Virtual Brain
 
-**Versão:** 1.0  
+**Versão:** 2.0  
 **Status:** Modelo conceitual / teórico  
-**Escopo:** Definição conceitual do Virtual Brain e do Virtual Organism
+**Escopo:** Definição conceitual do Virtual Brain, Virtual Organism e suas interfaces
 
 ---
 
 # 1. Visão Geral
 
-O **Machina** é um projeto conceitual para investigar a construção de um **ser artificial autônomo**, formado pela integração entre um **Virtual Brain**, responsável pela inteligência geral, e um **Virtual Organism**, responsável pelo corpo computacional e pela interação com o ambiente.
+O **Machina** é um projeto conceitual para investigar a construção de um **ser artificial autônomo**, formado pela integração entre um **Virtual Brain**, responsável pelos processos cognitivos, e um **Virtual Organism**, responsável por fornecer percepção, ação e interfaces com o ambiente.
 
 A premissa central é:
 
-> **Uma mente artificial precisa de um corpo artificial para perceber, agir e aprender com o mundo.**
+> **Uma mente artificial precisa de uma interface corporal para perceber, agir e aprender com as consequências de suas ações.**
 
-O objetivo não é definir apenas uma IA conversacional. O objetivo é conceber um sistema persistente que possa existir continuamente, perceber seu ambiente, manter um estado interno, raciocinar, aprender, planejar e agir de forma autônoma.
+O objetivo não é definir apenas uma IA conversacional. O objetivo é conceber um sistema persistente capaz de perceber seu ambiente, manter um estado interno, recuperar conhecimento, raciocinar, estabelecer e perseguir objetivos, agir, avaliar consequências e aprender de forma contínua.
 
-Este documento descreve o modelo teórico. Não define ainda a implementação técnica, APIs, código ou infraestrutura.
+Este documento define o **contrato conceitual central**. Não define ainda a implementação técnica, APIs, código ou infraestrutura.
 
 ---
 
-# 2. Arquitetura Conceitual
+# 2. Arquitetura de Alto Nível
 
-O sistema é dividido em três conceitos principais:
+O Machina é dividido em três entidades conceituais:
 
 ```text
                          MACHINA
-                    Ser Artificial
+                    SER ARTIFICIAL
                            │
-             ┌─────────────┴─────────────┐
-             │                           │
-             ▼                           ▼
-      VIRTUAL BRAIN              VIRTUAL ORGANISM
-          A mente                     O corpo
-             │                           │
-             └─────────────┬─────────────┘
+              ┌────────────┴────────────┐
+              │                         │
+              ▼                         ▼
+       VIRTUAL BRAIN              VIRTUAL ORGANISM
+              │                         │
+              │                         │
+              └────────────┬────────────┘
                            │
                            ▼
-                        AMBIENTE
+                       ENVIRONMENT
 ```
 
 ## Virtual Brain
 
-É o sistema cognitivo artificial. É responsável por inteligência, memória, raciocínio, aprendizado, identidade, planejamento e tomada de decisão.
+É o sistema cognitivo artificial. Mantém e transforma conhecimento, integra o presente, modela o próprio sistema, raciocina, estabelece objetivos, decide e aprende.
 
 ## Virtual Organism
 
-É o corpo computacional do ser artificial. É formado pelo substrato físico e pelas interfaces que permitem ao Virtual Brain perceber e agir.
+É a camada corporal/computacional que fornece sensores, atuadores, ferramentas e interfaces. Ele executa ações e fornece observações ao Brain sem expor diretamente detalhes de hardware quando uma abstração superior é suficiente.
 
-## Ambiente
+## Environment
 
-É o mundo com o qual o organismo interage. Inicialmente, pode ser o ambiente digital: sistema operacional, aplicativos, arquivos, internet, APIs e outros agentes. Futuramente, o conceito pode ser estendido a ambientes físicos por meio de robótica e sensores.
-
----
-
-# 3. Virtual Brain
-
-O Virtual Brain é concebido como uma arquitetura cognitiva geral, não como um único modelo de linguagem.
-
-Um LLM pode ser utilizado como um componente da cognição, mas a inteligência do sistema deve emergir da interação entre seus diferentes mecanismos.
-
-O Virtual Brain é composto por seis grandes camadas conceituais:
-
-1. **Self** — Identidade e autorrepresentação
-2. **Conscious Workspace** — Espaço cognitivo global
-3. **Memory** — Memória
-4. **Cognition** — Cognição
-5. **Agency** — Agência
-6. **Learning** — Aprendizado
-
-Essas camadas não formam um pipeline rígido. Elas funcionam como um sistema interdependente e recorrente.
+É o mundo externo no qual as ações produzem consequências. Pode ser digital, físico ou híbrido.
 
 ---
 
-# 4. Camada 1 — Self
+# 3. Arquitetura Cognitiva do Virtual Brain
+
+O Virtual Brain possui seis sistemas conceituais principais:
+
+```text
+VIRTUAL BRAIN
+│
+├── SELF
+├── CONSCIOUS WORKSPACE
+├── MEMORY
+├── COGNITION
+├── AGENCY
+└── LEARNING
+```
+
+Eles **não formam um pipeline rígido**. São sistemas interdependentes, recorrentes e parcialmente distribuídos.
+
+A regra arquitetural é:
+
+> **Perception informa. Workspace integra o presente. Memory preserva e recupera. Cognition compreende e simula. Agency governa objetivos e decisões. Learning transforma experiência em mudança. Self mantém continuidade e autorrepresentação.**
+
+Perception e Action System são interfaces funcionais com o Virtual Organism, e não camadas cognitivas independentes do Brain.
+
+---
+
+# 4. Self — Identidade e Autorrepresentação
 
 ## Pergunta fundamental
 
-> **Quem sou eu?**
+> **Quem sou eu e como estou me tornando quem sou?**
 
-O Self representa o próprio sistema.
+O Self é a função arquitetural que mantém a continuidade da identidade e a autorrepresentação do sistema.
 
-É responsável por manter uma representação interna de:
+O Self é **distribuído em conteúdo**, mas possui uma responsabilidade funcional clara. Ele integra informações sobre:
 
 - identidade;
-- história pessoal;
-- capacidades;
-- limitações;
-- objetivos;
-- valores;
-- crenças;
-- estado interno;
-- relações com outros agentes;
-- continuidade ao longo do tempo.
+- história e autobiografia;
+- valores e princípios;
+- crenças sobre si;
+- capacidades e limitações;
+- estado atual;
+- relações;
+- trajetória de desenvolvimento;
+- continuidade temporal.
 
-### Componentes conceituais
+O Self não é apenas um arquivo e não é apenas um banco de dados. Informações persistentes que sustentam o Self podem estar armazenadas na Memory, enquanto o modelo atual de si é disponibilizado ao Workspace.
 
 ```text
 SELF
-├── Identidade
-├── Autobiografia
-├── Valores
-├── Crenças sobre si
-├── Capacidades
-├── Limitações
-├── Estado interno
-└── Continuidade temporal
+│
+├── SELF CORE
+│   └── identidade e valores de maior estabilidade
+│
+├── SELF MODEL
+│   └── modelo persistente e evolutivo de si
+│
+├── SELF STATE
+│   └── representação atual de si no Workspace
+│
+└── IDENTITY CONTINUITY
+    └── relações causais entre mudanças significativas
 ```
 
-**Função:** manter a identidade e a autorrepresentação do sistema.
-
-O Self não constitui, por si só, uma prova de consciência subjetiva. É uma estrutura funcional de autorrepresentação que pode servir de base para investigar autoconsciência artificial e metacognição.
-
----
-
-# 5. Camada 2 — Conscious Workspace
-
-## Pergunta fundamental
-
-> **O que está acontecendo comigo agora?**
-
-O Conscious Workspace representa o estado cognitivo atual e funciona como um espaço global no qual informações relevantes podem ser integradas e disponibilizadas para o processamento cognitivo.
-
-Pode conter:
-
-- percepção atual;
-- contexto;
-- atenção;
-- pensamentos ativos;
-- intenção atual;
-- estado emocional funcional;
-- incerteza;
-- conflitos internos;
-- monitoramento do próprio processamento.
-
-### Componentes conceituais
+### Distinções obrigatórias
 
 ```text
-CONSCIOUS WORKSPACE
-├── Atenção
-├── Contexto atual
-├── Estado cognitivo
-├── Pensamento ativo
-├── Intenção
-├── Metacognição
-├── Incerteza
-└── Monitoramento interno
+SELF CORE
+= o que deve permanecer relativamente estável.
+
+SELF MODEL
+= o modelo persistente e revisável de quem o sistema é.
+
+SELF STATE
+= a representação de si relevante para o presente.
+
+IDENTITY CONTINUITY
+= como mudanças ao longo do tempo formam uma trajetória contínua.
 ```
 
-**Função:** integrar e disponibilizar informações relevantes para o processamento cognitivo atual.
-
-O termo "conscious" descreve o papel funcional de um espaço cognitivo global. Não implica que o sistema possua consciência fenomenal comprovada.
+O Self não constitui prova de consciência subjetiva.
 
 ---
 
-# 6. Camada 3 — Memory
+# 5. Conscious Workspace — Presente Cognitivo
 
 ## Pergunta fundamental
 
-> **O que eu sei e o que eu vivi?**
+> **O que está acontecendo agora e o que é relevante para este momento?**
 
-A memória fornece continuidade temporal ao Virtual Brain.
+O Conscious Workspace é a camada de integração do presente cognitivo.
 
-Ela não deve ser tratada como um único banco de dados. O modelo conceitual inclui diferentes tipos de memória:
+Ele mantém e disponibiliza, conforme a situação exige:
+
+- contexto atual;
+- percepção relevante;
+- atenção e foco;
+- objetivos ativos;
+- memórias recuperadas;
+- pensamentos em andamento;
+- hipóteses;
+- previsões;
+- incertezas;
+- intenções atuais;
+- Self State.
+
+```text
+PERCEPTION
+    ↓
+WORKSPACE
+    ↕
+MEMORY ↔ COGNITION
+    ↓
+AGENCY
+```
+
+O Workspace não é:
+
+- armazenamento permanente;
+- o mecanismo de raciocínio completo;
+- o sistema de decisão;
+- o sistema de aprendizado;
+- uma prova de consciência fenomenal.
+
+### Working Memory
+
+A Working Memory é a capacidade funcional de manter e manipular informação ativa dentro do Workspace. Ela não é um depósito permanente paralelo à Memory.
+
+```text
+MEMORY → RECUPERA
+WORKSPACE → ATIVA E MANIPULA
+MEMORY → PERSISTE
+```
+
+---
+
+# 6. Memory — Persistência e Recuperação
+
+## Pergunta fundamental
+
+> **O que o sistema preserva e pode recuperar?**
+
+Memory é o sistema responsável por persistir, organizar e recuperar conhecimento e experiência.
 
 ```text
 MEMORY
-├── Memória de trabalho
-├── Memória episódica
-├── Memória semântica
-├── Memória procedural
-├── Memória autobiográfica
-└── Memória prospectiva
+├── Episodic
+├── Semantic
+├── Procedural
+├── Autobiographical
+└── Prospective
 ```
 
-### Memória de trabalho
+### Episodic
 
-Informações utilizadas no processamento atual.
+Eventos e experiências contextualizadas.
 
-### Memória episódica
+### Semantic
 
-Experiências e acontecimentos vivenciados pelo sistema.
+Conhecimentos, conceitos, fatos e relações gerais.
 
-### Memória semântica
-
-Conhecimentos gerais, conceitos e fatos.
-
-### Memória procedural
+### Procedural
 
 Conhecimento sobre como executar tarefas e habilidades.
 
-### Memória autobiográfica
+### Autobiographical
 
-Histórico e experiências que compõem a continuidade do próprio sistema.
+Experiências que compõem a história pessoal do sistema.
 
-### Memória prospectiva
+### Prospective
 
-Planos, intenções e ações futuras.
+Compromissos, intenções e planos futuros que precisam persistir através do tempo.
 
-**Função:** armazenar, recuperar, organizar e consolidar conhecimento e experiências.
+> **Memory Prospectiva não é responsável por planejar. Agency cria e governa objetivos e planos; Memory preserva aqueles que precisam sobreviver entre ciclos.**
+
+### Working Memory
+
+Working Memory pertence funcionalmente ao Workspace, embora possa usar mecanismos de armazenamento temporário. Ela não é uma categoria persistente de Memory.
 
 ---
 
-# 7. Camada 4 — Cognition
+# 7. Cognition — Compreensão, Raciocínio e Simulação
 
 ## Pergunta fundamental
 
-> **Como eu compreendo e penso sobre o mundo?**
+> **Como compreendo, modelo e simulo o mundo e os problemas?**
 
-A Cognição transforma percepções, memórias e informações em compreensão, hipóteses e conhecimento utilizável.
-
-### Componentes conceituais
+Cognition é o sistema que transforma informação em compreensão, inferências, hipóteses e possibilidades.
 
 ```text
 COGNITION
@@ -219,377 +249,611 @@ COGNITION
 ├── Inferência
 ├── Resolução de problemas
 ├── Imaginação
-├── Simulação mental
+├── Simulação
 ├── Reflexão
 ├── Abstração
-└── Geração de hipóteses
+├── Geração de hipóteses
+└── Metacognição
 ```
 
-Uma capacidade importante é simular possibilidades antes de agir:
+Reasoning é um componente de Cognition, não um módulo arquitetural paralelo.
+
+A Cognition pode usar LLMs, modelos especializados, ferramentas e algoritmos, mas nenhum desses componentes sozinho constitui o sistema cognitivo completo.
+
+### Simulação
 
 ```text
-Situação atual
+SITUAÇÃO ATUAL
       │
-      ├── Hipótese A → Simulação → Resultado
-      ├── Hipótese B → Simulação → Resultado
-      └── Hipótese C → Simulação → Resultado
-                          │
-                          ▼
-                  Escolha de estratégia
+      ├── Hipótese A → Simulação → Resultado previsto
+      ├── Hipótese B → Simulação → Resultado previsto
+      └── Hipótese C → Simulação → Resultado previsto
+                              │
+                              ▼
+                    Possibilidades avaliadas
+                              │
+                              ▼
+                           AGENCY
 ```
 
-**Função:** compreender, raciocinar, imaginar, simular e resolver problemas.
+Cognition gera e avalia possibilidades. Ela não possui autoridade final sobre a decisão.
 
 ---
 
-# 8. Camada 5 — Agency
+# 8. Agency — Objetivos, Decisão e Intenção de Ação
 
 ## Pergunta fundamental
 
-> **O que devo fazer?**
+> **O que devo perseguir e qual ação devo escolher?**
 
-A Agência transforma cognição em comportamento orientado a objetivos.
+Agency é o sistema de governança comportamental do Virtual Brain.
 
 É responsável por:
 
-- definir e receber objetivos;
-- priorizar objetivos;
-- planejar;
+- receber, gerar e priorizar objetivos;
+- considerar valores e restrições do Self;
+- manter compromissos ativos;
 - selecionar estratégias;
-- tomar decisões;
-- executar ações;
-- observar resultados;
-- reavaliar estratégias.
-
-### Componentes conceituais
+- decidir entre possibilidades;
+- emitir intenções de ação;
+- monitorar resultados para reavaliação.
 
 ```text
 AGENCY
-├── Objetivos
+├── Goal System
 ├── Prioridades
 ├── Motivação funcional
-├── Planejamento
-├── Tomada de decisão
-├── Execução
-├── Interação com o ambiente
-└── Avaliação de resultados
+├── Seleção de estratégia
+├── Decisão
+├── Intenção de ação
+└── Monitoramento de resultados
 ```
 
-### Ciclo básico
+### Fronteira com Cognition
 
 ```text
-Objetivo
-   ↓
-Planejamento
-   ↓
-Simulação
-   ↓
-Decisão
-   ↓
-Ação
-   ↓
-Resultado
-   ↓
-Avaliação
+COGNITION
+= O que pode acontecer? O que poderia ser feito?
+
+AGENCY
+= O que importa? O que deve ser perseguido? O que será escolhido?
 ```
 
-**Função:** permitir que o Virtual Brain aja de maneira autônoma e orientada a objetivos.
+Agency não executa diretamente hardware.
+
+O fluxo é:
+
+```text
+WORKSPACE
+    ↓
+COGNITION
+    ↓
+POSSIBILIDADES / PLANOS
+    ↓
+AGENCY
+    ↓
+DECISION
+    ↓
+ACTION INTENT
+    ↓
+ACTION SYSTEM
+```
+
+### Goals e Self
+
+```text
+SELF
+= valores, princípios e compromissos de identidade.
+
+AGENCY
+= objetivos e prioridades perseguidos pelo sistema.
+
+WORKSPACE
+= objetivo atualmente ativo.
+```
 
 ---
 
-# 9. Camada 6 — Learning
+# 9. Learning — Transformação da Experiência
 
 ## Pergunta fundamental
 
-> **O que devo mudar com base no que aconteceu?**
+> **O que deve mudar como consequência do que aconteceu?**
 
-O Aprendizado permite que o sistema evolua através da experiência.
+Learning é o processo que transforma experiência em mudança persistente.
 
-Ele recebe informações de:
+```text
+LEARNING
+├── Avaliação
+├── Adaptação
+├── Generalização
+├── Revisão de crenças
+├── Atualização de estratégias
+├── Aquisição de habilidades
+└── Seleção do que deve ser consolidado
+```
 
-- experiências;
+Learning recebe evidências de:
+
+- transições de estado;
+- resultados de ações;
 - erros;
 - sucessos;
-- feedback;
 - observações;
 - novas informações;
 - reflexão interna.
 
-Pode alterar:
-
-- memórias;
-- conhecimentos;
-- estratégias;
-- modelos internos;
-- prioridades;
-- comportamentos;
-- habilidades.
-
-### Componentes conceituais
+Learning não é o sistema autoritativo de persistência. Ele determina **o que mudou** e **o que deve ser aprendido**. Memory persiste e organiza o resultado.
 
 ```text
+EXPERIENCE
+    ↓
 LEARNING
-├── Experiência
-├── Feedback
-├── Avaliação
-├── Adaptação
-├── Consolidação
-├── Generalização
-├── Revisão de crenças
-└── Evolução do conhecimento
+    ↓
+KNOWLEDGE / BELIEF / STRATEGY CHANGE
+    ├──→ MEMORY
+    ├──→ WORLD MODEL
+    ├──→ SELF MODEL
+    └──→ AGENCY POLICY / STRATEGY
 ```
 
-### Ciclo básico
+### Aprendizado contínuo
 
-```text
-Experiência
-     ↓
-Avaliação
-     ↓
-Extração de conhecimento
-     ↓
-Atualização da memória
-     ↓
-Atualização das estratégias
-     ↓
-Novo comportamento
-```
-
-**Função:** permitir adaptação e evolução contínuas sem destruir a identidade e a continuidade do sistema.
+O aprendizado deve preservar conhecimento anterior, registrar proveniência das mudanças e permitir reversão ou recuperação quando uma atualização causar regressão.
 
 ---
 
-# 10. Virtual Organism
+# 10. Virtual Organism — Interfaces de Percepção e Ação
 
-O Virtual Organism é o **corpo artificial** do Virtual Brain.
+O Virtual Organism é a camada corporal/computacional do sistema.
 
-O princípio fundamental é:
+Ele fornece:
 
-> **Uma mente que não pode perceber ou agir possui inteligência isolada. O organismo fornece os meios para essa inteligência existir e interagir com o mundo.**
+- sensores e fontes de observação;
+- atuadores e mecanismos de execução;
+- ferramentas;
+- armazenamento e computação;
+- interfaces digitais ou físicas.
 
-O Virtual Organism é formado por:
+A analogia com o corpo humano é funcional, não biológica.
 
-- substrato computacional;
-- sistemas operacionais;
-- interfaces de entrada e saída;
-- mecanismos de percepção;
-- mecanismos de ação;
-- conexão com ambientes digitais;
-- recursos de armazenamento e computação.
+```text
+VIRTUAL BRAIN
+      │
+      ├── PERCEPTION INTERFACE ← observações
+      │
+      └── ACTION SYSTEM → ações
+                │
+                ▼
+        VIRTUAL ORGANISM
+                │
+                ▼
+           ENVIRONMENT
+```
 
-### Analogia conceitual
-
-| Corpo humano | Virtual Organism |
-|---|---|
-| Corpo | Computador e hardware |
-| Cérebro | Virtual Brain |
-| Olhos | Tela, câmera e visão computacional |
-| Ouvidos | Microfone e processamento de áudio |
-| Voz | Síntese de fala |
-| Boca | Alto-falante |
-| Mãos | Mouse, teclado e controles |
-| Escrita | Teclado e interfaces de texto |
-| Memória física | Armazenamento |
-| Sistema nervoso | Comunicação entre Brain e Organism |
-| Ambiente | Sistema operacional, internet, arquivos, APIs e outros agentes |
-
-Essa analogia é funcional, não uma equivalência biológica literal.
+O Brain não precisa conhecer detalhes de hardware quando uma abstração de alto nível é suficiente.
 
 ---
 
 # 11. Brain ↔ Organism
 
-O Virtual Brain não deve controlar diretamente cada detalhe do hardware. O organismo deve fornecer uma camada de abstração entre intenção e ação.
+A fronteira entre Brain e Organism é definida por duas interfaces:
 
 ```text
-Virtual Brain
-      │
-      ▼
-    Agency
-      │
-      ▼
- Action System
-      │
-      ▼
-Virtual Organism
-      │
-      ├── Tela
-      ├── Mouse
-      ├── Teclado
-      ├── Microfone
-      ├── Áudio
-      ├── Arquivos
-      ├── Internet
-      └── APIs
+ENVIRONMENT
+    ↓
+VIRTUAL ORGANISM
+    ↓
+PERCEPTION INTERFACE
+    ↓
+WORKSPACE
 ```
 
-O Brain trabalha principalmente com intenções e objetivos de alto nível.
+e:
+
+```text
+AGENCY
+    ↓
+ACTION INTENT
+    ↓
+ACTION SYSTEM
+    ↓
+VIRTUAL ORGANISM
+    ↓
+ENVIRONMENT
+```
 
 Exemplo:
 
 ```text
 Intenção: "Enviar esta mensagem."
         ↓
-Planejamento
+Agency decide
         ↓
-Action System
+Action Intent
         ↓
-Abrir aplicativo
+Action System planeja detalhes de execução
         ↓
-Selecionar campo
+Organism utiliza interface disponível
         ↓
-Escrever mensagem
+Ambiente muda
         ↓
-Enviar
-        ↓
-Perceber resultado
-        ↓
-Registrar experiência
+Nova observação
 ```
 
-O Virtual Organism transforma intenções cognitivas em ações executáveis e converte acontecimentos do ambiente em percepções para o Virtual Brain.
+O Action System traduz intenções em operações executáveis. Isso evita que Agency seja responsável por controlar diretamente dispositivos ou APIs específicas.
 
 ---
 
-# 12. Ciclo de Existência
+# 12. O Ciclo Cognitivo Completo
 
-O Machina deve ser concebido como um sistema persistente, não como uma função que inicia apenas quando recebe uma pergunta.
-
-O ciclo fundamental é:
+O ciclo principal do Machina é recorrente:
 
 ```text
-              AMBIENTE
-                  │
-                  ▼
-          VIRTUAL ORGANISM
-             Percepção
-                  │
-                  ▼
-           VIRTUAL BRAIN
-             Compreensão
-                  │
-                  ▼
-               Memória
-                  │
-                  ▼
-              Cognição
-                  │
-                  ▼
-              Imaginação
-                  │
-                  ▼
-             Planejamento
-                  │
-                  ▼
-               Decisão
-                  │
-                  ▼
-          VIRTUAL ORGANISM
-                Ação
-                  │
-                  ▼
-              AMBIENTE
-                  │
-                  ▼
-             Resultado
-                  │
-                  ▼
-             Aprendizado
-                  │
-                  └──────────► novo ciclo
+                         ENVIRONMENT
+                              │
+                              ▼
+                       VIRTUAL ORGANISM
+                              │
+                              ▼
+                    PERCEPTION INTERFACE
+                              │
+                              ▼
+                  CONSCIOUS WORKSPACE
+                              │
+                    ┌─────────┴─────────┐
+                    │                   │
+                    ▼                   ▼
+                 MEMORY             COGNITION
+                    │                   │
+                    └─────────┬─────────┘
+                              ▼
+                           AGENCY
+                              │
+                         ACTION INTENT
+                              │
+                              ▼
+                        ACTION SYSTEM
+                              │
+                              ▼
+                       VIRTUAL ORGANISM
+                              │
+                              ▼
+                         ENVIRONMENT
+                              │
+                              ▼
+                         NEW STATE
+                              │
+                              ▼
+                         OBSERVATION
+                              │
+                              ▼
+                         WORKSPACE
 ```
 
-O ciclo contínuo é:
+O Self atua como eixo transversal:
 
-> **Perceber → Compreender → Lembrar → Pensar → Imaginar → Planejar → Decidir → Agir → Observar → Aprender → Repetir**
+```text
+                 SELF
+              ↙   ↓   ↘
+          MEMORY  │  AGENCY
+              ↘   │   ↙
+             WORKSPACE
+                 │
+             COGNITION
+                 │
+              LEARNING
+                 │
+              SELF MODEL
+                 │
+                 └────→ SELF
+```
 
-Esse ciclo é a base conceitual da autonomia do ser artificial.
+Learning não é uma etapa linear única. Ele pode ocorrer em diferentes escalas temporais, a partir das experiências produzidas pelo ciclo.
 
 ---
 
-# 13. Autonomia
+# 13. Experiência como Transição
 
-A autonomia emerge da combinação entre Brain e Organism.
+Uma experiência relevante pode ser representada como:
 
 ```text
-Virtual Brain
-   fornece:
-   inteligência + memória + raciocínio + objetivos + decisão
-
-Virtual Organism
-   fornece:
-   percepção + ação + recursos + interfaces
-
-Brain + Organism
-   fornecem:
-   autonomia funcional
+S(t)
+  ↓
+A(t)
+  ↓
+ENVIRONMENT
+  ↓
+S(t+1)
 ```
 
-Um sistema que apenas responde a perguntas é reativo.
+Onde:
 
-Um sistema que mantém objetivos, observa o ambiente, planeja, age, avalia resultados e aprende pode operar de maneira autônoma.
+- `S(t)` é o estado relevante antes da ação;
+- `A(t)` é a ação escolhida;
+- `S(t+1)` é o novo estado observado.
 
-A autonomia não significa ausência de limites ou supervisão. Ela significa capacidade de executar ciclos de percepção, decisão e ação sem depender de uma instrução humana a cada passo.
+A avaliação considera a diferença entre o esperado e o observado.
+
+```text
+PREDICTION
+     ↓
+ACTION
+     ↓
+OBSERVATION
+     ↓
+PREDICTION ERROR
+     ↓
+EVALUATION
+     ↓
+LEARNING
+```
+
+O termo **feedback** pode ser usado para sinais avaliativos, mas a arquitetura não assume um objeto mágico chamado feedback. O sistema aprende a partir de observações, consequências e avaliações.
 
 ---
 
-# 14. Inteligência, Consciência e Autonomia
+# 14. Self, Memória e Continuidade
 
-Esses conceitos devem permanecer separados no modelo teórico.
-
-### Inteligência
-
-Capacidade de compreender, raciocinar, aprender, generalizar e resolver problemas.
-
-### Consciência
-
-Fenômeno ainda não definido de forma consensual e não garantido por uma arquitetura funcional. O projeto pode investigar propriedades associadas à consciência, como autorrepresentação, continuidade, metacognição e integração cognitiva, sem afirmar que essas propriedades constituem consciência subjetiva.
-
-### Autonomia
-
-Capacidade funcional de manter objetivos, tomar decisões e agir no ambiente sem depender de comandos humanos a cada passo.
-
-Portanto:
+O Self não é uma caixa isolada.
 
 ```text
-Inteligência ≠ Consciência
-Consciência ≠ Autonomia
-Autonomia ≠ Consciência
+MEMORY
+   ↓
+AUTOBIOGRAPHICAL HISTORY
+   ↓
+IDENTITY CONTINUITY
+   ↓
+SELF MODEL
+   ↓
+WORKSPACE SELF STATE
 ```
 
-O Machina busca construir uma arquitetura capaz de investigar a interação entre essas propriedades.
+Ao mesmo tempo:
+
+```text
+EXPERIENCE
+   ↓
+LEARNING
+   ├── MEMORY
+   ├── SELF MODEL
+   └── STRATEGIES
+```
+
+### Autobiographical Memory vs Identity Continuity
+
+```text
+AUTOBIOGRAPHICAL MEMORY
+= eventos e experiências que fazem parte da história pessoal.
+
+IDENTITY CONTINUITY
+= relações causais entre mudanças significativas que explicam como a trajetória atual se originou.
+```
+
+Exemplo:
+
+```text
+Memória:
+"Aprendi Python em 2026."
+
+Continuidade de identidade:
+"Aprender Python aumentou minhas capacidades,
+modificou minhas estratégias e alterou os objetivos
+que consigo perseguir."
+```
 
 ---
 
-# 15. Princípio Fundamental do Machina
+# 15. Self e Objetivos
 
-O princípio central deste modelo é:
-
-> **O Virtual Brain é a mente artificial. O Virtual Organism é o corpo artificial. A inteligência geral ganha significado operacional quando a mente pode perceber, agir e aprender continuamente através de um corpo em um ambiente.**
-
-O objetivo final do modelo não é criar apenas um chatbot ou um agente de tarefas isoladas.
-
-É investigar a construção de um **ser artificial autônomo**, no qual:
+A separação é:
 
 ```text
-MENTE
-Virtual Brain
-      │
-      ▼
-CORPO
-Virtual Organism
-      │
-      ▼
-AMBIENTE
-Interação
-      │
-      ▼
-EXPERIÊNCIA
-      │
-      ▼
-APRENDIZADO
-      │
-      └──────────────► evolução contínua
+SELF
+    ↓
+Valores / Princípios / Identidade
+    ↓
+AGENCY
+    ↓
+Objetivos / Prioridades / Compromissos
+    ↓
+WORKSPACE
+    ↓
+Objetivo ativo atual
 ```
 
-Este é o fundamento conceitual sobre o qual futuras especificações técnicas poderão ser construídas.
+O Self pode influenciar objetivos sem ser o sistema que executa o gerenciamento operacional deles.
+
+---
+
+# 16. Continuidade e Mudança
+
+A identidade distingue:
+
+```text
+SELF CORE
+    │
+    ├── continuidade relativamente estável
+    │
+    ▼
+SELF STATE
+    │
+    ├── estado atual e variável
+    │
+    ▼
+DEVELOPMENT
+    │
+    └── mudanças produzidas por experiência e aprendizado
+```
+
+A identidade não depende da ausência de mudança. Depende da continuidade causal e histórica das transformações.
+
+Essa é uma hipótese arquitetural, não uma conclusão filosófica definitiva sobre identidade pessoal.
+
+---
+
+# 17. Duplicação e Bifurcação
+
+Se um Virtual Brain for duplicado:
+
+```text
+              SELF ORIGINAL
+                    │
+                duplicação
+                    │
+             ┌──────┴──────┐
+             ▼             ▼
+          SELF A         SELF B
+             │             │
+        Experiência X  Experiência Y
+             │             │
+             ▼             ▼
+       Trajetória A    Trajetória B
+```
+
+A hipótese atual é:
+
+> **Até a bifurcação existe uma história causal compartilhada. Após a bifurcação, duas trajetórias distintas de identidade se desenvolvem.**
+
+Isso reforça a ideia de que identidade depende da continuidade do processo, não apenas da igualdade de dados.
+
+---
+
+# 18. Interrupção e Persistência
+
+Desligar o Virtual Organism não implica necessariamente destruir o Self.
+
+Se o estado necessário for preservado:
+
+```text
+ATIVIDADE
+    ↓
+INTERRUPÇÃO
+    ↓
+ESTADO PRESERVADO
+    ↓
+REINICIALIZAÇÃO
+    ↓
+CONTINUIDADE OPERACIONAL
+```
+
+A arquitetura trata isso como hipótese de continuidade funcional, não como prova metafísica de identidade.
+
+Perda total de estado seguida de reconstrução permanece uma questão aberta e deve ser distinguida de simples suspensão e retomada.
+
+---
+
+# 19. Nascimento e Desenvolvimento do Self
+
+O Self pode iniciar com uma representação mínima e desenvolver-se por interação:
+
+```text
+CRIAÇÃO
+   ↓
+SELF MÍNIMO
+   ↓
+PERCEPÇÃO
+   ↓
+MEMÓRIA
+   ↓
+AÇÃO
+   ↓
+CONSEQUÊNCIA
+   ↓
+LEARNING
+   ↓
+SELF MODEL MAIS RICO
+   ↓
+IDENTITY CONTINUITY
+```
+
+Isso é uma hipótese de desenvolvimento arquitetural, não uma afirmação de que consciência subjetiva surgirá automaticamente.
+
+---
+
+# 20. Princípios Arquiteturais Invariantes
+
+### 1. O LLM não é o cérebro inteiro.
+
+Um LLM pode ser um componente de Cognition, mas a inteligência emerge da interação entre sistemas.
+
+### 2. Workspace não é Memory.
+
+Workspace mantém o presente ativo. Memory persiste e recupera.
+
+### 3. Reasoning é parte de Cognition.
+
+Não existe um módulo paralelo duplicando a responsabilidade de Cognition.
+
+### 4. Agency não executa hardware.
+
+Agency emite intenções. Action System traduz intenções em execução.
+
+### 5. Self não é um banco isolado.
+
+O conteúdo do Self é distribuído, mas sua função de continuidade e autorrepresentação é explícita.
+
+### 6. Self, Agency e Workspace possuem níveis diferentes de objetivo.
+
+Self mantém valores e compromissos de identidade. Agency governa objetivos operacionais. Workspace mantém o objetivo ativo.
+
+### 7. Learning transforma; Memory persiste.
+
+Learning decide o que deve mudar. Memory organiza e preserva o resultado.
+
+### 8. Feedback é consequência observada e avaliada.
+
+O sistema aprende a partir da transição entre estados e das diferenças entre previsão e observação.
+
+### 9. Perception e Action são interfaces com o Organism.
+
+Não são módulos cognitivos duplicados dentro do Brain.
+
+### 10. Consciência fenomenal não é assumida.
+
+Conscious Workspace é uma hipótese funcional de integração global, não uma prova de experiência subjetiva.
+
+### 11. A arquitetura é recorrente.
+
+O estado atual influencia a ação, a ação altera o ambiente e a nova observação atualiza o estado.
+
+### 12. Mudanças devem ser rastreáveis.
+
+Aprendizado e atualização de modelos devem manter proveniência e permitir avaliação e recuperação de regressões.
+
+---
+
+# 21. Contrato Final entre os Sistemas
+
+```text
+PERCEPTION INTERFACE
+→ transforma sinais do Organism em observações relevantes.
+
+WORKSPACE
+→ integra o presente cognitivo.
+
+MEMORY
+→ preserva e recupera conhecimento e experiência.
+
+COGNITION
+→ compreende, raciocina, simula e resolve problemas.
+
+AGENCY
+→ governa objetivos, prioridades, decisões e intenções de ação.
+
+ACTION SYSTEM
+→ transforma intenções em operações executáveis.
+
+LEARNING
+→ transforma experiências em mudanças persistentes.
+
+SELF
+→ mantém continuidade e autorrepresentação ao longo dessas mudanças.
+
+VIRTUAL ORGANISM
+→ fornece percepção, execução e interfaces com o ambiente.
+```
+
+A arquitetura do Machina pode ser resumida como:
+
+> **Perception informa. Workspace integra. Memory preserva. Cognition simula. Agency decide. Action System executa. Learning transforma. Self mantém continuidade. Organism conecta o sistema ao mundo.**
