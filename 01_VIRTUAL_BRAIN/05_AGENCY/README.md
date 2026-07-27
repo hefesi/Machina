@@ -1,655 +1,365 @@
 # 05 — Agency
 
-## Objetivo
+## Objetivos, prioridades, decisão e intenção de ação
 
-O módulo **Agency** é responsável pela capacidade do Virtual Brain de transformar estados internos, objetivos, raciocínio e informações do ambiente em ações direcionadas.
+> **Pergunta fundamental:** O que o Virtual Brain deve perseguir e qual intenção deve emitir para agir?
 
-Enquanto a memória permite que o sistema retenha informações e o reasoning permite que o sistema pense sobre problemas, a Agency permite que o sistema **escolha e execute ações de forma autônoma**.
+Agency é o sistema responsável por transformar valores, contexto e objetivos em prioridades, decisões e **Action Intents**.
 
-A Agency é o componente que transforma:
-
-> "Eu sei."
-
-em:
-
-> "Eu penso."
-
-Depois:
-
-> "Eu decido."
-
-E finalmente:
-
-> "Eu faço."
-
----
-
-# 1. O que é Agency?
-
-Agency é a capacidade de um sistema de:
-
-- possuir objetivos;
-- estabelecer prioridades;
-- avaliar situações;
-- decidir entre alternativas;
-- iniciar ações;
-- monitorar resultados;
-- adaptar seu comportamento;
-- corrigir erros;
-- continuar operando sem depender de uma solicitação humana constante.
-
-A Agency é o mecanismo que permite ao Virtual Brain funcionar como um sistema **proativo**, e não apenas reativo.
-
-Um sistema reativo espera:
+Agency não executa ações diretamente.
 
 ```text
-INPUT HUMANO
-    ↓
-PROCESSAMENTO
-    ↓
-OUTPUT
-```
-
-Um sistema com Agency opera continuamente:
-
-```text
-OBSERVAR
-    ↓
-INTERPRETAR
-    ↓
-PENSAR
-    ↓
-AVALIAR OBJETIVOS
-    ↓
-DECIDIR
-    ↓
-AGIR
-    ↓
-OBSERVAR RESULTADOS
-    ↓
-APRENDER
-    ↓
-REPETIR
-```
-
----
-
-# 2. Agency como sistema de autonomia
-
-A Agency deve permitir que o Virtual Brain determine:
-
-1. O que está acontecendo?
-2. O que é importante?
-3. O que precisa ser feito?
-4. Por que isso precisa ser feito?
-5. Qual ação é mais adequada?
-6. Qual o risco dessa ação?
-7. Qual será o resultado esperado?
-8. Como saberemos se a ação funcionou?
-9. O que fazer caso falhe?
-
-Isso transforma a arquitetura em um sistema de decisão contínua.
-
----
-
-# 3. Relação com os outros módulos
-
-A Agency não deve funcionar isoladamente.
-
-Ela depende da integração entre os principais componentes do Virtual Brain:
-
-```text
-PERCEPTION
-    ↓
-MEMORY
-    ↓
-REASONING
-    ↓
 AGENCY
-    ↓
-ACTION
-    ↓
-FEEDBACK
-    ↓
-LEARNING
-```
+→ decide e emite intenção.
 
-### Memory
+ACTION SYSTEM
+→ traduz intenção em operações executáveis.
 
-Fornece experiências passadas, conhecimentos e contexto.
-
-### Reasoning
-
-Analisa possibilidades, consequências e estratégias.
-
-### Goals
-
-Define estados desejados que o sistema pretende alcançar.
-
-### Motivation
-
-Determina a importância relativa dos objetivos.
-
-### Decision Making
-
-Compara possíveis ações.
-
-### Action Selection
-
-Seleciona a ação mais apropriada.
-
-### Execution
-
-Executa a ação no ambiente.
-
-### Feedback
-
-Avalia o resultado da ação.
-
-### Learning
-
-Atualiza o comportamento futuro com base nos resultados.
-
----
-
-# 4. Agency não é apenas execução
-
-Um agente não é simplesmente um sistema que executa comandos.
-
-A diferença fundamental é a capacidade de **iniciar processos por conta própria**.
-
-### Sistema reativo
-
-```text
-Humano:
-"Pesquise sobre X."
-
-IA:
-Executa pesquisa.
-```
-
-### Sistema com Agency
-
-```text
-IA:
-Detecta que existe uma lacuna de conhecimento.
-
-IA:
-Define que precisa aprender sobre X.
-
-IA:
-Cria um objetivo.
-
-IA:
-Cria uma estratégia.
-
-IA:
-Busca informações.
-
-IA:
-Analisa os resultados.
-
-IA:
-Armazena conhecimento relevante.
-
-IA:
-Reavalia seu modelo interno.
-```
-
-A segunda arquitetura possui comportamento autônomo.
-
----
-
-# 5. Autonomous Loop
-
-O núcleo da Agency deve ser um ciclo contínuo.
-
-```text
-┌─────────────────────┐
-│      PERCEIVE       │
-│   Observar mundo    │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│      INTERPRET      │
-│ Compreender estado  │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│       REASON        │
-│ Avaliar possibilidades│
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│       GOALS         │
-│ Avaliar objetivos   │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│       DECIDE        │
-│ Escolher estratégia │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│        ACT          │
-│ Executar ação       │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│      OBSERVE        │
-│ Verificar resultado │
-└──────────┬──────────┘
-           ↓
-┌─────────────────────┐
-│      LEARN          │
-│ Atualizar sistema   │
-└──────────┬──────────┘
-           │
-           └──────────────→ NOVO CICLO
-```
-
-Esse ciclo é o coração da autonomia do Virtual Brain.
-
----
-
-# 6. Objetivos
-
-A Agency deve trabalhar com diferentes níveis de objetivos.
-
-## Objetivos de longo prazo
-
-Representam estados que o sistema deseja alcançar em períodos extensos.
-
-Exemplo:
-
-```text
-OBJETIVO:
-Aumentar conhecimento em determinado domínio.
-```
-
-## Objetivos de médio prazo
-
-Representam etapas necessárias para alcançar objetivos maiores.
-
-```text
-OBJETIVO:
-Estudar determinado conceito.
-```
-
-## Objetivos de curto prazo
-
-Representam ações imediatas.
-
-```text
-AÇÃO:
-Pesquisar uma fonte.
-```
-
-A hierarquia pode ser:
-
-```text
-LONG-TERM GOAL
-      ↓
-MID-TERM GOAL
-      ↓
-SHORT-TERM GOAL
-      ↓
-TASK
-      ↓
-ACTION
+VIRTUAL ORGANISM
+→ percebe e atua no ambiente.
 ```
 
 ---
 
-# 7. Motivação
-
-Objetivos não são suficientes.
-
-O sistema precisa determinar quais objetivos são mais importantes.
-
-A Motivation funciona como um mecanismo de prioridade.
-
-Exemplo:
+# 1. Estrutura
 
 ```text
-GOAL A
-Prioridade: 0.90
-
-GOAL B
-Prioridade: 0.60
-
-GOAL C
-Prioridade: 0.30
+AGENCY
+│
+├── MOTIVATION CONTEXT
+├── GOAL MANAGEMENT
+├── PRIORITIZATION
+├── PLANNING
+├── DECISION MAKING
+├── RISK EVALUATION
+└── ACTION INTENT GENERATION
 ```
 
-A prioridade pode considerar:
+---
 
+# 2. Self, Agency e Workspace
+
+```text
+SELF
+→ valores, princípios e compromissos de identidade.
+
+AGENCY
+→ objetivos, prioridades e decisões operacionais.
+
+WORKSPACE
+→ objetivo ativo e contexto atual.
+```
+
+Agency pode ser influenciada pelo Self, mas não é responsável por manter identidade.
+
+---
+
+# 3. Goal Management
+
+Agency organiza objetivos em diferentes horizontes:
+
+```text
+LONG-TERM GOALS
+      ↓
+MEDIUM-TERM GOALS
+      ↓
+SHORT-TERM GOALS
+      ↓
+ACTIVE GOAL
+```
+
+Objetivos operacionais podem ser criados, priorizados, suspensos, concluídos ou abandonados.
+
+---
+
+# 4. Prioritization
+
+A prioridade de um objetivo pode considerar:
+
+- valores do Self;
 - urgência;
 - importância;
 - risco;
-- benefício esperado;
-- custo;
 - recursos disponíveis;
-- impacto futuro;
-- coerência com objetivos superiores.
+- dependências;
+- custo;
+- probabilidade de sucesso;
+- consequências futuras.
+
+```text
+GOALS
+    ↓
+EVALUATION
+    ↓
+PRIORITIZATION
+    ↓
+ACTIVE GOAL
+```
 
 ---
 
-# 8. Decision Making
+# 5. Cognition e Agency
 
-A decisão deve considerar múltiplas alternativas.
+Cognition e Agency possuem responsabilidades diferentes:
 
 ```text
-SITUAÇÃO
-    ↓
-GERAR POSSIBILIDADES
-    ↓
-AVALIAR CONSEQUÊNCIAS
-    ↓
-CALCULAR CUSTOS
-    ↓
-CALCULAR BENEFÍCIOS
-    ↓
-AVALIAR RISCOS
-    ↓
-ESCOLHER AÇÃO
+COGNITION
+→ explora possibilidades.
+→ simula consequências.
+→ raciocina sobre alternativas.
+→ estima incertezas.
+
+AGENCY
+→ escolhe objetivos.
+→ prioriza.
+→ decide.
+→ emite Action Intent.
 ```
 
-Uma decisão pode ser representada conceitualmente como:
+Fluxo:
 
 ```text
-DECISION =
+ACTIVE GOAL + CONTEXT
+        ↓
+COGNITION
+        ↓
+OPTIONS + PREDICTIONS + EVALUATIONS
+        ↓
+AGENCY
+        ↓
+DECISION
+```
+
+Agency pode solicitar novos processos cognitivos quando a informação disponível é insuficiente.
+
+---
+
+# 6. Planning
+
+Planning transforma objetivos em sequências possíveis de ações.
+
+```text
 GOAL
-+
-CONTEXT
-+
-MEMORY
-+
-REASONING
-+
-RISK
-+
-COST
-+
-EXPECTED_OUTCOME
+  ↓
+CURRENT STATE
+  ↓
+PLANNING
+  ↓
+PLAN
+  ↓
+CANDIDATE ACTIONS
+```
+
+O planejamento pode ser feito em conjunto com Cognition, que fornece simulações e previsões.
+
+---
+
+# 7. Decision Making
+
+A decisão seleciona uma alternativa com base em objetivos, valores, evidências, riscos e consequências esperadas.
+
+```text
+OPTIONS
+   ↓
+EVALUATE
+   ↓
+COMPARE
+   ↓
+DECIDE
+   ↓
+ACTION INTENT
+```
+
+Uma decisão pode incluir:
+
+```text
+DECISION
+├── GOAL
+├── SELECTED OPTION
+├── RATIONALE
+├── EXPECTED OUTCOME
+├── CONFIDENCE
+├── RISK
+└── REVERSIBILITY
 ```
 
 ---
 
-# 9. Feedback
+# 8. Action Intent
 
-Nenhuma ação deve ser considerada completa sem avaliação do resultado.
+O produto final de Agency é uma intenção estruturada de ação.
 
-O sistema precisa comparar:
+```text
+ACTION INTENT
+├── GOAL
+├── ACTION
+├── TARGET
+├── EXPECTED OUTCOME
+├── CONSTRAINTS
+├── RISK LEVEL
+├── AUTHORIZATION
+└── SUCCESS CRITERIA
+```
+
+Agency termina aqui.
+
+```text
+AGENCY
+    ↓
+ACTION INTENT
+    ↓
+ACTION SYSTEM
+```
+
+---
+
+# 9. Action System
+
+O Action System é responsável por transformar intenção em execução.
+
+```text
+ACTION INTENT
+    ↓
+ACTION SYSTEM
+    ├── VALIDATION
+    ├── PERMISSION CHECK
+    ├── TOOL SELECTION
+    ├── EXECUTION
+    └── RESULT CAPTURE
+    ↓
+VIRTUAL ORGANISM
+```
+
+Agency não controla diretamente APIs, ferramentas, hardware ou atuadores.
+
+---
+
+# 10. Virtual Organism
+
+O Virtual Organism conecta o Virtual Brain ao ambiente.
+
+```text
+VIRTUAL BRAIN
+    ↓
+ACTION INTENT
+    ↓
+ACTION SYSTEM
+    ↓
+VIRTUAL ORGANISM
+    ↓
+ENVIRONMENT
+```
+
+O Organism executa operações e retorna observações.
+
+---
+
+# 11. Feedback e Learning
+
+Após uma ação:
 
 ```text
 EXPECTED OUTCOME
-        vs
+        ↓
+ACTION
+        ↓
 ACTUAL OUTCOME
-```
-
-Isso permite identificar:
-
-```text
-SUCESSO
-FALHA
-SUCESSO PARCIAL
-RESULTADO INESPERADO
-```
-
-O resultado retorna para:
-
-```text
-MEMORY
-REASONING
+        ↓
+OBSERVATION
+        ↓
+EXPERIENCE
+        ↓
 LEARNING
-AGENCY
 ```
 
-Assim, uma ação modifica o comportamento futuro do sistema.
+Learning avalia a experiência e pode atualizar Memory, World Models, Self Model e estratégias.
+
+Agency não é responsável por executar Learning.
 
 ---
 
-# 10. Self-Direction
+# 12. Ciclo global único
 
-Um dos objetivos mais avançados do Virtual Brain é permitir que o próprio sistema descubra quais ações são necessárias para atingir seus objetivos.
-
-Em vez de:
+Agency participa de um único ciclo arquitetural:
 
 ```text
-Humano → Tarefa → IA
-```
-
-o sistema deve ser capaz de:
-
-```text
-Objetivo
-   ↓
-Análise
-   ↓
-Planejamento
-   ↓
-Criação de subtarefas
-   ↓
-Execução
-   ↓
-Avaliação
-   ↓
-Replanejamento
-```
-
-Isso permite que o Virtual Brain transforme objetivos abstratos em sequências concretas de ações.
-
----
-
-# 11. Agency e autonomia
-
-A autonomia deve ser gradual.
-
-### Nível 0 — Reativo
-
-O sistema apenas responde a comandos.
-
-### Nível 1 — Execução
-
-O sistema executa tarefas previamente definidas.
-
-### Nível 2 — Planejamento
-
-O sistema cria planos para atingir objetivos.
-
-### Nível 3 — Adaptação
-
-O sistema modifica planos quando encontra obstáculos.
-
-### Nível 4 — Proatividade
-
-O sistema identifica oportunidades e problemas sem receber comandos explícitos.
-
-### Nível 5 — Autonomia contínua
-
-O sistema mantém objetivos, monitora o ambiente, aprende e decide continuamente.
-
-A arquitetura do Virtual Brain deve evoluir progressivamente nessa direção.
-
----
-
-# 12. Princípio fundamental
-
-A Agency não deve significar simplesmente:
-
-> "Fazer tudo sozinho."
-
-O objetivo é:
-
-> **Ter capacidade de decidir quando agir, por que agir, como agir e quando não agir.**
-
-Um sistema verdadeiramente autônomo precisa possuir também a capacidade de:
-
-```text
-AGIR
-NÃO AGIR
-ESPERAR
-PEDIR INFORMAÇÃO
-PEDIR AJUDA
-REPLANEJAR
-CANCELAR UMA AÇÃO
-```
-
-A capacidade de **não agir** é tão importante quanto a capacidade de agir.
-
----
-
-# 13. Arquitetura conceitual
-
-A Agency pode ser representada como:
-
-```text
-                ┌───────────────┐
-                │    GOALS      │
-                └───────┬───────┘
-                        ↓
-                ┌───────────────┐
-                │  MOTIVATION   │
-                └───────┬───────┘
-                        ↓
-┌──────────┐     ┌───────────────┐
-│ MEMORY   │ ──→ │   REASONING   │
-└──────────┘     └───────┬───────┘
-                          ↓
-                  ┌───────────────┐
-                  │   DECISION    │
-                  └───────┬───────┘
-                          ↓
-                  ┌───────────────┐
-                  │ ACTION SELECT │
-                  └───────┬───────┘
-                          ↓
-                  ┌───────────────┐
-                  │   EXECUTION   │
-                  └───────┬───────┘
-                          ↓
-                  ┌───────────────┐
-                  │   FEEDBACK    │
-                  └───────┬───────┘
-                          ↓
-                  ┌───────────────┐
-                  │    LEARNING   │
-                  └───────┬───────┘
-                          │
-                          └────→ NOVO CICLO
-```
-
----
-
-# 14. Integração com o Virtual Organism
-
-A Agency não representa apenas a decisão abstrata. Ela deve ser a camada responsável por converter intenção em comportamento através do **Virtual Organism**.
-
-```text
-VIRTUAL BRAIN
-      ↓
-GOAL
-      ↓
-REASONING
-      ↓
-AGENCY
-      ↓
-ACTION
-      ↓
-VIRTUAL ORGANISM
-      ↓
 ENVIRONMENT
-      ↓
-FEEDBACK
-      ↓
-VIRTUAL BRAIN
-```
-
-O Virtual Brain decide **o que e por que fazer**; a camada de ação e o Virtual Organism tornam essa decisão operacional no ambiente.
-
----
-
-# 15. Princípios de segurança e controle
-
-Autonomia deve ser acompanhada por mecanismos de controle.
-
-A Agency deve considerar:
-
-- limites de ação;
-- permissões e capacidades disponíveis;
-- avaliação de risco;
-- reversibilidade das ações;
-- necessidade de confirmação humana em ações críticas;
-- monitoramento contínuo;
-- possibilidade de interrupção;
-- registro das decisões e resultados.
-
-Quanto maior o impacto potencial de uma ação, maior deve ser o nível de avaliação e controle exigido.
-
----
-
-# 16. Objetivo final
-
-O objetivo do módulo Agency é permitir que o Virtual Brain evolua de:
-
-```text
-SISTEMA QUE RESPONDE
-```
-
-para:
-
-```text
-SISTEMA QUE PENSA
-```
-
-depois:
-
-```text
-SISTEMA QUE PLANEJA
-```
-
-depois:
-
-```text
-SISTEMA QUE AGE
-```
-
-e finalmente:
-
-```text
-SISTEMA QUE OBSERVA,
-PENSA,
-DECIDE,
-AGE,
-APRENDE
-E CONTINUA EVOLUINDO.
-```
-
-A Agency é, portanto, o componente que transforma o Virtual Brain de um sistema cognitivo passivo em um **agente autônomo**.
-
----
-
-# 17. Próximo passo
-
-O próximo módulo lógico da arquitetura é **06_LEARNING**.
-
-A cadeia cognitiva passa a ser:
-
-```text
-MEMORY
     ↓
-REASONING
+VIRTUAL ORGANISM
+    ↓
+PERCEPTION
+    ↓
+WORKSPACE
+    ↕
+MEMORY ↔ COGNITION
     ↓
 AGENCY
     ↓
-ACTION
+ACTION INTENT
     ↓
-FEEDBACK
+ACTION SYSTEM
     ↓
-LEARNING
+VIRTUAL ORGANISM
     ↓
-MEMORY
+ENVIRONMENT
 ```
 
-Esse ciclo será usado para investigar como o Virtual Brain pode aprender com a experiência sem destruir ou desaprender conhecimento previamente consolidado.
+Não existe um segundo ciclo independente de `Perceive → Reason → Act → Learn` dentro de Agency.
+
+---
+
+# 13. Autonomia
+
+Autonomia não significa ausência de controle.
+
+Agency deve considerar:
+
+- permissões disponíveis;
+- limites de ação;
+- avaliação de risco;
+- reversibilidade;
+- impacto potencial;
+- necessidade de confirmação humana;
+- monitoramento;
+- possibilidade de interrupção;
+- registro de decisões e resultados.
+
+```text
+LOW RISK
+→ execução automática possível.
+
+HIGH RISK
+→ avaliação adicional.
+
+CRITICAL
+→ confirmação ou bloqueio conforme política.
+```
+
+---
+
+# 14. Contrato de Agency
+
+```text
+SELF
+→ fornece valores e princípios.
+
+WORKSPACE
+→ fornece contexto e objetivo ativo.
+
+MEMORY
+→ fornece histórico e conhecimento recuperável.
+
+COGNITION
+→ fornece opções, previsões e avaliações.
+
+AGENCY
+→ prioriza, decide e emite Action Intent.
+
+ACTION SYSTEM
+→ executa a intenção.
+
+LEARNING
+→ avalia os resultados e atualiza o sistema.
+```
+
+> **Agency transforma intenção em decisão e decisão em Action Intent. Ela torna o Virtual Brain capaz de escolher um curso de ação, mas não é a camada de execução.**
