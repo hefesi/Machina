@@ -25,19 +25,19 @@ Este documento define o **contrato conceitual central**. Não define ainda a imp
 O Machina é dividido em três entidades conceituais:
 
 ```text
-                         MACHINA
-                    SER ARTIFICIAL
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-              ▼                         ▼
-       VIRTUAL BRAIN              VIRTUAL ORGANISM
-              │                         │
-              │                         │
-              └────────────┬────────────┘
-                           │
-                           ▼
-                       ENVIRONMENT
+                          MACHINA
+                     SER ARTIFICIAL
+                            │
+               ┌────────────┴────────────┐
+               │                         │
+               ▼                         ▼
+        VIRTUAL BRAIN              VIRTUAL ORGANISM
+               │                         │
+               │                         │
+               └────────────┬────────────┘
+                            │
+                            ▼
+                        ENVIRONMENT
 ```
 
 ## Virtual Brain
@@ -397,6 +397,47 @@ KNOWLEDGE / BELIEF / STRATEGY CHANGE
     └──→ AGENCY POLICY / STRATEGY
 ```
 
+### Learning e Agency Policy
+
+Learning não altera diretamente políticas de agência de forma irrestrita. Mudanças que afetem o comportamento de Agency passam por uma etapa explícita de validação.
+
+```text
+EXPERIENCE
+    ↓
+LEARNING
+    ↓
+POLICY UPDATE PROPOSAL
+    ↓
+VALIDATION
+    ↓
+AGENCY POLICY / STRATEGY
+```
+
+A validação considera, conforme o caso:
+
+- evidência e qualidade da fonte;
+- proveniência;
+- confiança;
+- risco e impacto;
+- consistência com políticas superiores;
+- possibilidade de reversão;
+- necessidade de aprovação adicional.
+
+A separação de responsabilidades é:
+
+```text
+LEARNING
+→ descobre e propõe mudanças.
+
+VALIDATION
+→ verifica se a mudança é justificada e segura.
+
+AGENCY
+→ utiliza políticas validadas para governar decisões.
+```
+
+Isso permite que o sistema aprenda sem conceder ao processo de aprendizado autoridade irrestrita para modificar suas próprias regras de decisão.
+
 ### Aprendizado contínuo
 
 O aprendizado deve preservar conhecimento anterior, registrar proveniência das mudanças e permitir reversão ou recuperação quando uma atualização causar regressão.
@@ -485,71 +526,95 @@ O Action System traduz intenções em operações executáveis. Isso evita que A
 
 ---
 
-# 12. O Ciclo Cognitivo Completo
+# 12. Os Três Ciclos Arquiteturais
 
-O ciclo principal do Machina é recorrente:
+A arquitetura distingue três processos relacionados. Eles não devem ser confundidos.
 
-```text
-                         ENVIRONMENT
-                              │
-                              ▼
-                       VIRTUAL ORGANISM
-                              │
-                              ▼
-                    PERCEPTION INTERFACE
-                              │
-                              ▼
-                  CONSCIOUS WORKSPACE
-                              │
-                    ┌─────────┴─────────┐
-                    │                   │
-                    ▼                   ▼
-                 MEMORY             COGNITION
-                    │                   │
-                    └─────────┬─────────┘
-                              ▼
-                           AGENCY
-                              │
-                         ACTION INTENT
-                              │
-                              ▼
-                        ACTION SYSTEM
-                              │
-                              ▼
-                       VIRTUAL ORGANISM
-                              │
-                              ▼
-                         ENVIRONMENT
-                              │
-                              ▼
-                         NEW STATE
-                              │
-                              ▼
-                         OBSERVATION
-                              │
-                              ▼
-                         WORKSPACE
-```
+## 12.1 Interaction Loop — Brain ↔ Organism ↔ Environment
 
-O Self atua como eixo transversal:
+É o ciclo externo de interação com o mundo.
 
 ```text
-                 SELF
-              ↙   ↓   ↘
-          MEMORY  │  AGENCY
-              ↘   │   ↙
-             WORKSPACE
-                 │
-             COGNITION
-                 │
-              LEARNING
-                 │
-              SELF MODEL
-                 │
-                 └────→ SELF
+ENVIRONMENT
+    ↓
+VIRTUAL ORGANISM
+    ↓
+PERCEPTION INTERFACE
+    ↓
+VIRTUAL BRAIN
+    ↓
+ACTION INTENT
+    ↓
+ACTION SYSTEM
+    ↓
+VIRTUAL ORGANISM
+    ↓
+ENVIRONMENT
 ```
 
-Learning não é uma etapa linear única. Ele pode ocorrer em diferentes escalas temporais, a partir das experiências produzidas pelo ciclo.
+Esse loop descreve a relação causal entre o sistema e o ambiente.
+
+## 12.2 Cognitive Cycle — processamento interno do Brain
+
+É o ciclo funcional no qual o presente cognitivo é atualizado e processado.
+
+```text
+WORKSPACE
+    ↕
+MEMORY ↔ COGNITION
+    ↓
+AGENCY
+    ↓
+ACTION INTENT
+    ↓
+ACTION SYSTEM
+```
+
+O Workspace integra o presente; Memory fornece informação persistente; Cognition compreende e raciocina; Agency decide e produz a intenção. O Action System representa a ponte de execução para o Organism.
+
+O Cognitive Cycle não é um pipeline rígido. Memory e Cognition podem interagir iterativamente através do Workspace, e Agency pode solicitar novas análises antes de emitir uma intenção.
+
+## 12.3 Learning Process — transformação entre ciclos
+
+Learning não é um estágio linear obrigatório dentro do Cognitive Cycle. Ele opera sobre experiências produzidas pelo Interaction Loop e altera o sistema que participará dos ciclos futuros.
+
+```text
+EXPERIENCE
+    ↓
+LEARNING
+    ├──→ MEMORY
+    ├──→ WORLD MODEL
+    ├──→ SELF MODEL
+    └──→ STRATEGY / POLICY UPDATE PROPOSAL
+```
+
+Quando uma mudança afeta políticas de Agency:
+
+```text
+POLICY UPDATE PROPOSAL
+    ↓
+VALIDATION
+    ↓
+AGENCY POLICY / STRATEGY
+```
+
+Portanto, a relação global é:
+
+```text
+INTERACTION LOOP
+    ↕
+COGNITIVE CYCLE
+    ↓
+EXPERIENCE
+    ↓
+LEARNING PROCESS
+    ↓
+PERSISTENT MODEL CHANGES
+    ↓
+NEXT CYCLE
+```
+
+O Self é transversal a esses processos: mantém identidade e continuidade, disponibiliza o Self State ao Workspace e recebe atualizações do Self Model produzidas por Learning.
 
 ---
 
@@ -674,6 +739,11 @@ A identidade distingue:
 SELF CORE
     │
     ├── continuidade relativamente estável
+    │
+    ▼
+SELF MODEL
+    │
+    ├── modelo persistente e evolutivo
     │
     ▼
 SELF STATE
@@ -821,6 +891,14 @@ O estado atual influencia a ação, a ação altera o ambiente e a nova observa�
 
 Aprendizado e atualização de modelos devem manter proveniência e permitir avaliação e recuperação de regressões.
 
+### 13. Os ciclos possuem níveis diferentes.
+
+Interaction Loop descreve a interação Brain ↔ Organism ↔ Environment. Cognitive Cycle descreve o processamento interno do Brain. Learning Process transforma experiências em mudanças que afetam ciclos futuros. Eles são relacionados, mas não são três pipelines independentes concorrentes.
+
+### 14. Learning não possui autoridade irrestrita sobre Agency.
+
+Mudanças aprendidas que afetam políticas de Agency passam por propostas e validação proporcional ao risco antes de se tornarem políticas ativas.
+
 ---
 
 # 21. Contrato Final entre os Sistemas
@@ -845,7 +923,10 @@ ACTION SYSTEM
 → transforma intenções em operações executáveis.
 
 LEARNING
-→ transforma experiências em mudanças persistentes.
+→ transforma experiências em mudanças persistentes e propostas de atualização.
+
+VALIDATION
+→ avalia mudanças que exigem controle antes de serem incorporadas, especialmente políticas de Agency.
 
 SELF
 → mantém continuidade e autorrepresentação ao longo dessas mudanças.
@@ -856,4 +937,4 @@ VIRTUAL ORGANISM
 
 A arquitetura do Machina pode ser resumida como:
 
-> **Perception informa. Workspace integra. Memory preserva. Cognition simula. Agency decide. Action System executa. Learning transforma. Self mantém continuidade. Organism conecta o sistema ao mundo.**
+> **Perception informa. Workspace integra. Memory preserva. Cognition simula. Agency decide. Action System executa. Learning transforma. Validation controla mudanças críticas. Self mantém continuidade. Organism conecta o sistema ao mundo.**
