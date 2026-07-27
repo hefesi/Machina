@@ -1,626 +1,365 @@
-# 03 — MEMORY
+# 03 — Memory
 
-## Objetivo
+## Persistência, recuperação e organização da experiência
 
-O módulo `MEMORY` é responsável por armazenar, organizar, recuperar e consolidar informações utilizadas pelo Virtual Brain.
+> **Pergunta fundamental:** O que o Virtual Brain preserva, recupera e utiliza de sua história?
 
-A memória não deve ser apenas um banco de dados. Ela deve funcionar como um sistema cognitivo capaz de influenciar o pensamento, o aprendizado, a tomada de decisões e a formação de identidade.
+Memory é o sistema responsável por preservar e recuperar informações ao longo do tempo. Ela fornece continuidade informacional para Cognition, Workspace, Self e Learning.
 
----
-
-# Visão Geral
-
-A memória do Virtual Brain será dividida em diferentes sistemas especializados:
+Memory não é Working Memory, não é Cognition e não é Learning.
 
 ```text
-                    ┌─────────────────────┐
-                    │      PERCEPÇÃO      │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │  MEMÓRIA DE TRABALHO│
-                    └──────────┬──────────┘
-                               │
-                ┌──────────────┼──────────────┐
-                ▼              ▼              ▼
-         ┌───────────┐  ┌────────────┐  ┌────────────┐
-         │ EPISÓDICA │  │ SEMÂNTICA  │  │ PROCEDURAL │
-         └───────────┘  └────────────┘  └────────────┘
-                │              │              │
-                └──────────────┼──────────────┘
-                               ▼
-                    ┌─────────────────────┐
-                    │     CONSOLIDAÇÃO    │
-                    └──────────┬──────────┘
-                               │
-                               ▼
-                    ┌─────────────────────┐
-                    │   MODELO DO MUNDO   │
-                    └─────────────────────┘
+MEMORY
+→ preserva e recupera.
+
+WORKSPACE
+→ mantém o presente ativo.
+
+COGNITION
+→ interpreta e transforma informação.
+
+LEARNING
+→ decide e produz mudanças persistentes a partir da experiência.
 ```
 
 ---
 
-# Tipos de Memória
-
-## 1. Memória de Trabalho
-
-Mantém temporariamente as informações necessárias para o pensamento atual.
-
-Exemplos:
-
-- objetivo atual;
-- contexto da situação;
-- informações relevantes recuperadas;
-- hipóteses;
-- problemas em resolução;
-- estado emocional;
-- plano de ação atual.
-
-A memória de trabalho possui capacidade limitada e deve ser constantemente atualizada.
-
----
-
-## 2. Memória Episódica
-
-Armazena experiências e acontecimentos.
-
-Cada episódio pode conter:
+# 1. Arquitetura
 
 ```text
-ID
-Timestamp
-Contexto
-Percepções
-Ações
-Resultados
-Emoções
-Importância
-Entidades envolvidas
-Consequências
-```
-
-Exemplo:
-
-```json
-{
-  "type": "episode",
-  "context": "execução de uma tarefa",
-  "action": "tentativa de solução",
-  "result": "falha",
-  "importance": 0.8,
-  "lesson": "estratégia inadequada"
-}
-```
-
-A memória episódica permite que o sistema responda:
-
-> "O que aconteceu?"
-
----
-
-## 3. Memória Semântica
-
-Armazena conhecimentos generalizados.
-
-Exemplos:
-
-- conceitos;
-- fatos;
-- relações;
-- regras;
-- modelos;
-- conhecimentos adquiridos.
-
-A memória semântica responde:
-
-> "O que eu sei?"
-
-O conhecimento deve possuir relações entre entidades.
-
-Exemplo:
-
-```text
-Brasil
- ├── localizado_em → América do Sul
- ├── idioma_principal → Português
- └── possui_capital → Brasília
-```
-
----
-
-## 4. Memória Procedural
-
-Armazena habilidades e procedimentos.
-
-Responde:
-
-> "Como fazer?"
-
-Exemplos:
-
-- como resolver um problema;
-- como executar uma tarefa;
-- como utilizar uma ferramenta;
-- como seguir um procedimento.
-
-Uma habilidade pode evoluir com a experiência.
-
-```text
-Habilidade
-    ↓
-Tentativa
-    ↓
-Resultado
-    ↓
-Avaliação
-    ↓
-Ajuste
-    ↓
-Habilidade melhorada
-```
-
----
-
-## 5. Memória Autobiográfica
-
-Representa a história do próprio Virtual Brain.
-
-Deve armazenar:
-
-- origem;
-- experiências importantes;
-- mudanças;
-- objetivos;
-- decisões;
-- sucessos;
-- falhas;
-- evolução;
-- relações significativas.
-
-Essa memória é importante para a construção de uma identidade contínua.
-
-Ela permite que o sistema mantenha uma narrativa interna:
-
-> "Quem eu sou?"
-
----
-
-## 6. Memória Emocional / Valor
-
-Associa experiências a valores internos.
-
-```text
-Experiência
-    ↓
-Resultado
-    ↓
-Avaliação
-    ├── positivo
-    ├── negativo
-    └── neutro
-```
-
-Isso permite priorizar memórias relevantes.
-
-Uma experiência importante deve possuir maior probabilidade de ser recuperada do que uma experiência irrelevante.
-
----
-
-## 7. Memória Prospectiva
-
-Armazena intenções e compromissos futuros.
-
-Exemplos:
-
-- tarefas planejadas;
-- objetivos futuros;
-- ações que precisam ser executadas;
-- promessas e compromissos;
-- condições que devem disparar uma ação.
-
-Responde:
-
-> "O que eu pretendia fazer?"
-
-Essa memória conecta planejamento, continuidade e autonomia.
-
----
-
-# Estrutura de uma Memória
-
-Cada memória deve possuir metadados.
-
-```text
-Memory
+MEMORY
 │
-├── id
-├── type
-├── content
-├── timestamp
-├── source
-├── context
-├── importance
-├── confidence
-├── emotional_value
-├── access_count
-├── last_accessed
-├── associations
-├── embedding
-└── provenance
+├── EPISODIC MEMORY
+│   └── experiências e eventos vividos
+│
+├── SEMANTIC MEMORY
+│   └── fatos, conceitos e conhecimento
+│
+├── PROCEDURAL MEMORY
+│   └── habilidades e procedimentos
+│
+├── AUTOBIOGRAPHICAL MEMORY
+│   └── eventos relevantes para a história do Self
+│
+└── PROSPECTIVE MEMORY
+    └── compromissos e intenções persistentes
 ```
 
-A propriedade `provenance` deve permitir rastrear de onde veio uma informação e como ela foi transformada ao longo do tempo.
+A Working Memory não está nesta árvore. Ela pertence ao Conscious Workspace.
 
 ---
 
-# Formação de Memórias
+# 2. Episodic Memory
 
-O fluxo básico será:
+Preserva experiências contextualizadas:
 
 ```text
-PERCEPÇÃO
-    ↓
-EXPERIÊNCIA
-    ↓
-AVALIAÇÃO
-    ↓
-CODIFICAÇÃO
-    ↓
-ARMAZENAMENTO
-    ↓
-ASSOCIAÇÃO
-    ↓
-CONSOLIDAÇÃO
+EPISODE
+├── TIME
+├── CONTEXT
+├── OBSERVATION
+├── ACTION
+├── EXPECTED OUTCOME
+├── ACTUAL OUTCOME
+├── CONSEQUENCE
+└── EVALUATION
 ```
 
-Nem toda informação deve ser armazenada permanentemente.
+A experiência pode ser registrada antes de qualquer interpretação completa.
+
+---
+
+# 3. Semantic Memory
+
+Preserva conhecimento generalizado:
 
 ```text
-Informação
-    │
-    ├── irrelevante → descartar
-    │
-    ├── temporária → memória de trabalho
-    │
-    ├── relevante → memória de longo prazo
-    │
-    └── muito importante → memória prioritária
+CONCEPT
+├── PROPOSITION
+├── EVIDENCE
+├── SOURCES
+├── CONFIDENCE
+├── CONTEXT
+├── TIMESTAMP
+└── REVISION HISTORY
+```
+
+Conhecimento pode possuir diferentes graus de confiança e não deve ser tratado como certeza absoluta.
+
+---
+
+# 4. Procedural Memory
+
+Preserva formas aprendidas de executar tarefas:
+
+```text
+SKILL
+├── PRECONDITIONS
+├── STEPS
+├── EXPECTED OUTCOMES
+├── SUCCESS RATE
+├── FAILURE MODES
+└── CONTEXT OF VALIDITY
+```
+
+Procedural Memory pode ser atualizada por Learning, mas a decisão de que uma habilidade foi aprendida pertence ao processo de Learning.
+
+---
+
+# 5. Autobiographical Memory
+
+Preserva episódios que possuem relevância para a história pessoal do sistema.
+
+```text
+AUTOBIOGRAPHICAL MEMORY
+        ↓
+SELF MODEL
+        ↓
+SELF STATE
+```
+
+A distinção é:
+
+```text
+MEMORY
+→ "O que aconteceu comigo?"
+
+SELF MODEL
+→ "O que isso diz sobre quem eu sou?"
+
+IDENTITY CONTINUITY
+→ "Como isso se relaciona causalmente com minha trajetória?"
 ```
 
 ---
 
-# Recuperação de Memória
+# 6. Prospective Memory
 
-A recuperação não deve depender apenas de busca por similaridade.
-
-O sistema deve considerar:
+Preserva compromissos e intenções que precisam sobreviver ao tempo.
 
 ```text
-Relevância
-+
-Recência
-+
-Importância
-+
-Contexto
-+
-Frequência de acesso
-+
-Confiança
-+
-Associação
+AGENCY
+→ cria objetivos e planos ativos.
+
+PROSPECTIVE MEMORY
+→ persiste compromissos e intenções relevantes.
+
+AGENCY
+→ recupera e reativa quando apropriado.
 ```
 
-Modelo conceitual:
-
-```text
-QUERY
-  ↓
-RECUPERAÇÃO
-  ↓
-RANKING
-  ↓
-FILTRAGEM
-  ↓
-CONTEXTO PARA O PENSAMENTO
-```
+Prospective Memory não substitui Agency.
 
 ---
 
-# Associação de Memórias
-
-Memórias devem formar uma rede.
+# 7. Memory e Workspace
 
 ```text
-Memória A
-   │
-   ├── relacionada → Memória B
-   │
-   ├── causada_por → Memória C
-   │
-   ├── contradiz → Memória D
-   │
-   └── reforçada_por → Memória E
+MEMORY
+    ↓ retrieval
+WORKSPACE
+    ↓ active manipulation
+COGNITION
+    ↓ result
+WORKSPACE
 ```
 
-Isso permite que uma memória ative outras memórias relacionadas.
-
-O objetivo é construir uma espécie de **grafo cognitivo**.
+O Workspace possui Working Memory temporária. Memory fornece conteúdo persistente quando solicitado ou quando mecanismos de recuperação consideram relevante.
 
 ---
 
-# Consolidação
+# 8. Memory e Cognition
 
-A consolidação transforma experiências temporárias em conhecimento estável.
+Cognition consulta Memory para:
+
+- recuperar experiências semelhantes;
+- obter conhecimento;
+- consultar habilidades;
+- recuperar informações autobiográficas;
+- encontrar evidências para hipóteses;
+- comparar situações atuais com experiências anteriores.
 
 ```text
-Experiências
+COGNITION
+    ↓ query
+MEMORY
+    ↓ retrieval
+WORKSPACE
     ↓
-Agrupamento
-    ↓
-Identificação de padrões
-    ↓
-Generalização
-    ↓
-Conhecimento semântico
+COGNITION
 ```
 
-Exemplo:
+Memory não raciocina. Ela fornece material para o raciocínio.
+
+---
+
+# 9. Memory e Learning
+
+A separação fundamental é:
 
 ```text
-Experiência 1 → tentativa falhou
-Experiência 2 → tentativa falhou
-Experiência 3 → tentativa falhou
+MEMORY
+= preserva e recupera.
 
+LEARNING
+= avalia experiências e produz mudanças.
+```
+
+Uma experiência pode ser armazenada como episódio mesmo antes de qualquer aprendizado consolidado.
+
+```text
+EXPERIENCE
+   ├──→ EPISODIC MEMORY
+   │
+   └──→ LEARNING
           ↓
-
-Padrão identificado
-
-          ↓
-
-Conhecimento:
-
-"Estratégia X apresenta baixa eficácia
-neste contexto."
+      CHANGE PROPOSAL
+          ├──→ SEMANTIC MEMORY
+          ├──→ PROCEDURAL MEMORY
+          ├──→ SELF MODEL
+          └──→ WORLD MODEL
 ```
+
+Learning não é simplesmente uma etapa posterior de armazenamento. É o processo que determina o que deve mudar e por quê.
 
 ---
 
-# Esquecimento
+# 10. Consolidação
 
-O esquecimento é uma função necessária.
-
-A memória deve permitir:
-
-- redução de prioridade;
-- compressão;
-- arquivamento;
-- remoção de informações redundantes;
-- substituição por conhecimento mais atualizado.
-
-Porém, o sistema deve evitar apagar informações importantes sem rastreabilidade.
-
-Sempre que possível:
+Memory pode executar mecanismos de consolidação, mas a decisão de que uma experiência representa conhecimento aprendido pertence a Learning.
 
 ```text
-Memória antiga
+EXPERIENCE
     ↓
-Nova informação
+EPISODIC MEMORY
     ↓
-Atualização
+LEARNING
     ↓
-Histórico preservado
+VALIDATED CHANGE
+    ↓
+MEMORY CONSOLIDATION
+    ↓
+LONG-TERM KNOWLEDGE
 ```
 
-O sistema deve preferir **evoluir o conhecimento** em vez de simplesmente sobrescrevê-lo.
+Assim:
+
+```text
+LEARNING
+→ decide a mudança.
+
+MEMORY
+→ persiste e organiza o resultado.
+```
 
 ---
 
-# Contradições
+# 11. Estados de informação
 
-Quando duas memórias entram em conflito:
+Uma informação pode possuir estados epistemológicos:
 
 ```text
-Conhecimento A
-      │
-      ├── conflito
-      │
-Conhecimento B
+RAW
+ ↓
+UNVERIFIED
+ ↓
+VALIDATED
+ ↓
+CONFIRMED
+ ↓
+CONSOLIDATED
 ```
 
-O sistema deve:
+O sistema deve distinguir:
 
-1. detectar a contradição;
-2. registrar o conflito;
-3. avaliar a confiança de cada memória;
-4. buscar novas evidências;
-5. atualizar o conhecimento;
-6. preservar o histórico da mudança.
-
-Isso evita que o cérebro simplesmente "esqueça" que já acreditava em algo diferente.
+- o que sabe;
+- o que acredita;
+- o que suspeita;
+- o que não sabe.
 
 ---
 
-# Memória e Aprendizado
-
-O aprendizado deve modificar a memória.
+# 12. Belief Updating
 
 ```text
-EXPERIÊNCIA
-     ↓
-MEMÓRIA
-     ↓
-AVALIAÇÃO
-     ↓
-APRENDIZADO
-     ↓
-ATUALIZAÇÃO DO MODELO
-     ↓
-NOVO COMPORTAMENTO
+BELIEF
+    +
+NEW EVIDENCE
+    ↓
+EVALUATION
+    ↓
+BELIEF UPDATE
 ```
 
-O sistema deve aprender tanto com:
+A confiança pode aumentar, diminuir, permanecer estável ou ser invalidada.
 
-- sucesso;
-- falha;
-- erro;
-- feedback;
-- observação;
-- experimentação;
-- reflexão.
+Belief updating é uma operação de Cognition/Learning que pode resultar em atualização da Semantic Memory.
 
 ---
 
-# Memória e Pensamento
+# 13. Forgetting
 
-O pensamento deve consultar a memória dinamicamente.
-
-```text
-OBJETIVO
-   ↓
-PENSAMENTO
-   ↓
-GERAR QUERY
-   ↓
-RECUPERAR MEMÓRIAS
-   ↓
-AVALIAR RELEVÂNCIA
-   ↓
-INTEGRAR CONTEXTO
-   ↓
-RACIOCINAR
-   ↓
-AGIR
-   ↓
-REGISTRAR RESULTADO
-```
-
-Isso cria um ciclo contínuo:
+Esquecer não precisa significar apagar.
 
 ```text
-PENSAR
+ACTIVE
   ↓
-AGIR
+LOW PRIORITY
   ↓
-EXPERIMENTAR
-  ↓
-APRENDER
-  ↓
-MEMORIZAR
-  ↓
-PENSAR MELHOR
+ARCHIVED
 ```
+
+O sistema pode reduzir:
+
+- acessibilidade;
+- prioridade;
+- relevância;
+- confiança.
+
+O histórico pode permanecer preservado mesmo quando deixa de ser facilmente acessível.
 
 ---
 
-# Memória e Identidade
+# 14. Reconsolidation
 
-A continuidade do Virtual Brain depende da capacidade de manter uma história coerente de suas experiências sem impedir a evolução do conhecimento.
-
-A identidade deve emergir da interação entre:
+Uma memória recuperada pode ser reinterpretada à luz de novas evidências.
 
 ```text
-Memórias autobiográficas
-        +
-Valores e preferências
-        +
-Objetivos persistentes
-        +
-Experiências
-        +
-Aprendizado
-        +
-Modelo de si mesmo
+MEMORY
+    ↓
+RECALL
+    ↓
+REINTERPRETATION
+    ↓
+LEARNING
+    ↓
+RECONSOLIDATION
 ```
 
-O sistema deve distinguir entre:
-
-- fatos sobre o mundo;
-- crenças atuais;
-- experiências vividas pelo próprio sistema;
-- interpretações e hipóteses;
-- objetivos futuros.
-
-Essa separação reduz confusão entre realidade, crença, memória e imaginação.
+A reconsolidação deve preservar proveniência e histórico de revisão quando a informação original possui valor histórico.
 
 ---
 
-# Memória e Sonhos / Simulação
-
-Em estágios futuros, o sistema poderá reutilizar memórias durante períodos de processamento interno para:
-
-- simular situações futuras;
-- testar estratégias;
-- combinar conceitos distantes;
-- identificar padrões ocultos;
-- explorar hipóteses;
-- consolidar aprendizados.
-
-Isso cria uma ponte entre memória, imaginação, planejamento e possíveis mecanismos de sonho artificial.
-
----
-
-# Princípio Fundamental
-
-A memória do Virtual Brain não deve ser tratada como um simples armazenamento de dados.
-
-Ela deve funcionar como:
-
-> **Um sistema dinâmico de experiências, conhecimentos, habilidades, associações e identidade que influencia continuamente o pensamento e o comportamento do cérebro virtual.**
-
----
-
-# Evolução Futura
-
-A arquitetura inicial deve permitir futuramente:
-
-- memória de longo prazo;
-- memória de curto prazo;
-- memória de trabalho;
-- memória episódica;
-- memória semântica;
-- memória procedural;
-- memória autobiográfica;
-- memória emocional;
-- memória prospectiva;
-- grafo de conhecimento;
-- recuperação contextual;
-- consolidação automática;
-- esquecimento adaptativo;
-- detecção de contradições;
-- reconstrução de memórias;
-- reflexão sobre experiências;
-- sonhos e simulações internas;
-- aprendizado contínuo.
-
----
-
-# Objetivo do Módulo
-
-Construir uma memória capaz de responder a quatro perguntas fundamentais:
+# 15. Contrato de Memory
 
 ```text
-O que aconteceu?
-        ↓
-Memória Episódica
+WORKSPACE
+→ mantém Working Memory temporária.
 
-O que eu sei?
-        ↓
-Memória Semântica
+MEMORY
+→ persiste e recupera informação.
 
-Como eu faço?
-        ↓
-Memória Procedural
+COGNITION
+→ interpreta e raciocina sobre informação recuperada.
 
-Quem eu sou?
-        ↓
-Memória Autobiográfica
+LEARNING
+→ avalia experiências e propõe mudanças.
 
-O que eu pretendia fazer?
-        ↓
-Memória Prospectiva
+SELF
+→ utiliza memória autobiográfica para manter continuidade.
+
+AGENCY
+→ utiliza memória para informar objetivos e decisões.
 ```
 
-Esses sistemas, integrados ao raciocínio, percepção, aprendizado e ação, formarão a base da continuidade cognitiva do Virtual Brain.
+> **Memory preserva a história informacional do Virtual Brain. Ela não é o lugar onde o sistema pensa; é o sistema que permite que o pensamento tenha passado.**
