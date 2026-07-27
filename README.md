@@ -25,18 +25,18 @@ O objetivo inicial é construir o **Virtual Brain v0.1**, uma fundação cogniti
 O Machina possui três entidades de alto nível:
 
 ```text
-                         MACHINA
-                    SER ARTIFICIAL
-                           │
-              ┌────────────┴────────────┐
-              │                         │
-              ▼                         ▼
-       VIRTUAL BRAIN              VIRTUAL ORGANISM
-              │                         │
-              └────────────┬────────────┘
-                           │
-                           ▼
-                       ENVIRONMENT
+                          MACHINA
+                     SER ARTIFICIAL
+                            │
+               ┌────────────┴────────────┐
+               │                         │
+               ▼                         ▼
+        VIRTUAL BRAIN              VIRTUAL ORGANISM
+               │                         │
+               └────────────┬────────────┘
+                            │
+                            ▼
+                        ENVIRONMENT
 ```
 
 O **Virtual Brain** contém seis sistemas conceituais:
@@ -91,54 +91,111 @@ O Self atua como eixo de continuidade e autorrepresentação, enquanto Learning 
 | **Action System** | Tradução de intenções em operações executáveis |
 | **Virtual Organism** | Percepção, execução e interfaces com o ambiente |
 
-## Ciclo cognitivo
+## Ciclos arquiteturais
+
+O Machina distingue três níveis relacionados, mas não idênticos:
+
+### 1. Interaction Loop — Brain ↔ Organism ↔ Environment
+
+É o ciclo externo de interação com o mundo.
 
 ```text
-Environment
+ENVIRONMENT
     ↓
-Virtual Organism
+VIRTUAL ORGANISM
     ↓
-Perception Interface
+PERCEPTION INTERFACE
     ↓
-Conscious Workspace
+VIRTUAL BRAIN
+    ↓
+ACTION INTENT
+    ↓
+ACTION SYSTEM
+    ↓
+VIRTUAL ORGANISM
+    ↓
+ENVIRONMENT
+```
+
+### 2. Cognitive Cycle — processamento interno do Brain
+
+É o ciclo funcional no qual o presente cognitivo é atualizado e processado.
+
+```text
+WORKSPACE
     ↕
-Memory ↔ Cognition
+MEMORY ↔ COGNITION
     ↓
-Agency
+AGENCY
     ↓
-Action Intent
+ACTION INTENT
     ↓
-Action System
-    ↓
-Virtual Organism
-    ↓
-Environment
-    ↓
-New Observation
-    ↓
-Workspace
+ACTION SYSTEM
 ```
 
-Learning atua sobre as experiências produzidas por esse ciclo:
+O Workspace integra o presente; Memory fornece informação persistente; Cognition compreende e raciocina; Agency decide e produz a intenção. O Action System pertence à interface de execução com o Organism.
+
+### 3. Learning Process — transformação entre ciclos
+
+Learning não é um estágio linear obrigatório dentro do ciclo cognitivo. Ele opera sobre experiências produzidas pela interação e altera o sistema que participará dos ciclos futuros.
 
 ```text
-Experience
+EXPERIENCE
     ↓
-Learning
-    ├──→ Memory
-    ├──→ World Models
-    ├──→ Self Model
-    └──→ Strategies
+LEARNING
+    ├──→ MEMORY
+    ├──→ WORLD MODELS
+    ├──→ SELF MODEL
+    └──→ STRATEGIES / POLICY UPDATE PROPOSALS
 ```
 
-O Self atravessa o ciclo como eixo de continuidade:
+Portanto:
 
 ```text
-Self
- ↕
-Memory ↔ Workspace ↔ Cognition ↔ Agency
- ↕                                      ↕
-Learning ────────────────────────────────┘
+INTERACTION LOOP
+    ↕
+COGNITIVE CYCLE
+    ↓
+EXPERIENCE
+    ↓
+LEARNING PROCESS
+    ↓
+PERSISTENT MODEL CHANGES
+    ↓
+NEXT CYCLE
+```
+
+O Self é transversal a esses processos: mantém identidade e continuidade, disponibiliza o Self State ao Workspace e recebe atualizações do Self Model produzidas por Learning.
+
+## Learning e Agency Policy
+
+Learning não deve alterar diretamente políticas de agência de forma irrestrita.
+
+```text
+EXPERIENCE
+    ↓
+LEARNING
+    ↓
+POLICY UPDATE PROPOSAL
+    ↓
+VALIDATION
+    ↓
+AGENCY POLICY / STRATEGY
+```
+
+A validação deve considerar evidência, proveniência, risco, confiança, impacto e possibilidade de reversão. Mudanças em políticas de alto impacto podem exigir aprovação adicional ou permanecer apenas como propostas.
+
+Isso mantém a separação entre:
+
+```text
+LEARNING
+→ descobre e propõe mudanças.
+
+VALIDATION
+→ verifica se a mudança é segura e justificada.
+
+AGENCY
+→ utiliza políticas validadas para governar decisões.
 ```
 
 ## Princípios
