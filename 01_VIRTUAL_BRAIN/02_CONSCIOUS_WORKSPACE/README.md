@@ -1,194 +1,301 @@
 # 02 — Conscious Workspace
 
-> **Virtual Brain — Teoria v2.0**
+> **Virtual Brain — Teoria v2.1**
 
 ## Definição
 
-O **Conscious Workspace** é um espaço cognitivo dinâmico que reúne, organiza e mantém temporariamente os conteúdos mais relevantes para o processamento global do Virtual Brain, permitindo que diferentes processos internos operem sobre uma representação compartilhada do **estado mental atual**.
+O **Conscious Workspace** é a camada cognitiva dinâmica que mantém e integra aquilo que é relevante para o momento presente do Virtual Brain, tornando esse conteúdo disponível para memória, raciocínio, agência e aprendizagem.
 
-Em termos funcionais:
+> **O Workspace representa o presente cognitivo do Virtual Brain.**
 
-> **O Conscious Workspace é o lugar onde o Virtual Brain constrói o seu estado mental atual.**
-
-O termo *conscious* descreve aqui uma hipótese de disponibilidade e integração cognitiva global. Não constitui, por si só, uma afirmação de consciência fenomenal ou experiência subjetiva.
+O termo *conscious* descreve uma hipótese arquitetural de disponibilidade e integração global. **Não constitui uma afirmação de consciência fenomenal, experiência subjetiva ou senciência.**
 
 ---
 
-## 1. O problema que o Conscious Workspace resolve
+# 1. Responsabilidade primária
 
-O Virtual Brain pode possuir uma quantidade potencialmente enorme de:
+A responsabilidade do Workspace é:
 
-- memórias;
-- conhecimentos;
-- objetivos;
-- percepções;
-- estados internos;
-- pensamentos;
+> **Manter uma representação integrada, temporária e atualizável da situação cognitiva presente.**
+
+Ele integra, conforme a situação exige:
+
+- percepção relevante;
+- contexto atual;
+- foco e atenção;
+- objetivos ativos;
+- memórias recuperadas;
+- conhecimentos relevantes;
+- pensamentos em andamento;
+- hipóteses;
 - previsões;
-- planos;
-- dúvidas;
-- conflitos.
+- incertezas;
+- intenções;
+- estado atual do self.
 
-Esses elementos não devem competir de maneira uniforme pelo processamento central. O Workspace cria uma representação dinâmica da situação atual, permitindo que o sistema mantenha um **estado mental coerente** enquanto diferentes processos fornecem informações, hipóteses e avaliações.
+O Workspace **não** é responsável por:
 
-A ideia central é:
+- armazenar permanentemente conhecimento;
+- realizar todo o raciocínio;
+- decidir autonomamente a ação final;
+- executar ações;
+- transformar experiências em aprendizado permanente;
+- provar ou produzir consciência fenomenal.
+
+---
+
+# 2. Limites arquiteturais
+
+A separação fundamental do Virtual Brain é:
 
 ```text
-Mundo
-  ↓
-Percepção
-  ↓
-"Há um problema"
-  ↓
-Atenção
-  ↓
-"Este problema é relevante"
-  ↓
-Conscious Workspace
-  ↓
-"Este é o problema que estou tentando resolver AGORA"
+PERCEPTION
+    ↓
+WORKSPACE
+    ↕
+MEMORY ↔ REASONING
+    ↓
+AGENCY
+    ↓
+ACTION
+    ↓
+ENVIRONMENT
+```
+
+Com aprendizado atravessando o ciclo:
+
+```text
+EXPERIENCE
+    ↓
+LEARNING
+    ↓
+MEMORY / MODELS / SELF-MODEL
+    ↓
+WORKSPACE
+```
+
+A regra é:
+
+> **Perception informa o sistema. Workspace integra o presente. Memory preserva o passado. Reasoning simula possibilidades. Agency governa objetivos e escolhe ações. Learning transforma experiência em mudança.**
+
+---
+
+# 3. Workspace não é Memory
+
+A distinção é:
+
+```text
+MEMORY
+= conhecimento e experiência que podem persistir e ser recuperados.
+
+WORKSPACE
+= conteúdo atualmente ativo e cognitivamente relevante.
+```
+
+Memory fornece informação ao Workspace por recuperação seletiva.
+O Workspace mantém uma representação temporária dessa informação para o ciclo cognitivo atual.
+
+```text
+MEMORY
+   │
+   │ retrieval
+   ▼
+WORKSPACE
+   │
+   │ contexto ativo
+   ▼
+REASONING
+```
+
+O Workspace pode conter referências, resumos, embeddings ou representações temporárias de memórias, mas não é o sistema autoritativo de armazenamento persistente.
+
+### Working Memory
+
+A **Working Memory** deve ser entendida como a capacidade funcional de manter e manipular informação ativa dentro do Workspace, e não como um depósito permanente separado.
+
+```text
+MEMORY → RECUPERA
+WORKSPACE → ATIVA E MANIPULA
+MEMORY → PERSISTE
 ```
 
 ---
 
-## 2. O Workspace não é uma caixa
+# 4. Workspace não é Reasoning
 
-O Conscious Workspace não deve ser modelado apenas como um buffer intermediário entre memória e pensamento.
+O Workspace é o **contexto**.
 
-Ele deve ser entendido como um **campo dinâmico de atividade cognitiva**, no qual conteúdos entram, interagem, ganham ou perdem prioridade, são transformados e eventualmente deixam de ocupar o estado mental atual.
+Reasoning é o **processo que opera sobre o contexto**.
 
 ```text
-                 ┌──────────────────────────┐
-                 │  CONSCIOUS WORKSPACE     │
-                 │                          │
-                 │  Estado mental atual     │
-                 │                          │
-                 │  • foco                  │
-                 │  • contexto              │
-                 │  • objetivo              │
-                 │  • pensamentos           │
-                 │  • hipóteses             │
-                 │  • expectativas           │
-                 │  • incertezas             │
-                 │  • intenções              │
-                 └───────────┬──────────────┘
-                             │
-                  INTEGRAÇÃO GLOBAL
-                             │
-        ┌────────────┬───────┼────────┬───────────┐
-        ↓            ↓       ↓        ↓           ↓
-     Memória      Razão   Atenção  Predição   Metacognição
+WORKSPACE
+    │
+    ├── contexto atual
+    ├── objetivo ativo
+    ├── conhecimento recuperado
+    ├── observações
+    └── hipóteses
+          ↓
+      REASONING
+          ↓
+  inferências / previsões / possibilidades / planos
+          ↓
+      WORKSPACE
+```
+
+Reasoning pode consultar e atualizar estruturas cognitivas temporárias no Workspace, mas o Workspace não realiza inferência por si mesmo.
+
+---
+
+# 5. Workspace não é Agency
+
+O Workspace representa o **objetivo ativo e as intenções atuais**.
+
+A Agency é responsável pelo **sistema de objetivos, prioridades, decisão e ação**.
+
+```text
+WORKSPACE
+    ↓
+CONTEXTO + OBJETIVO ATIVO
+    ↓
+REASONING
+    ↓
+POSSIBILIDADES
+    ↓
+AGENCY
+    ↓
+DECISION
+    ↓
+ACTION
+```
+
+Portanto:
+
+> **Reasoning determina o que pode ser feito. Agency determina o que será feito.**
+
+O Workspace disponibiliza o estado necessário para que ambos operem de forma coerente.
+
+---
+
+# 6. Workspace não é Learning
+
+O Workspace não aprende diretamente.
+
+Ele participa da construção de experiências que podem ser avaliadas pelo Learning.
+
+```text
+WORKSPACE(t)
+    ↓
+AGENCY → ACTION(t)
+    ↓
+ENVIRONMENT
+    ↓
+PERCEPTION(t+1)
+    ↓
+WORKSPACE(t+1)
+    ↓
+EXPERIENCE
+    ↓
+LEARNING
+```
+
+Learning pode então alterar:
+
+- memória;
+- crenças;
+- modelos do mundo;
+- conhecimento procedural;
+- estratégias;
+- modelos do self.
+
+As mudanças persistentes retornam ao Workspace por meio de recuperação e atualização do contexto.
+
+---
+
+# 7. Estado cognitivo atual
+
+O Workspace mantém uma representação estruturada do presente cognitivo.
+
+Conceitualmente:
+
+```text
+WORKSPACE_STATE {
+    perception_context
+    world_context
+    self_state
+    attention
+    focus
+    active_goals
+    active_intentions
+    retrieved_memories
+    current_thoughts
+    hypotheses
+    predictions
+    expectations
+    uncertainty
+    pending_questions
+}
+```
+
+Esse estado é **dinâmico e temporal**.
+
+Ele não é um registro permanente do sistema.
+
+Informações que precisam sobreviver ao ciclo atual devem ser avaliadas pelo Learning e, quando apropriado, persistidas na Memory.
+
+---
+
+# 8. Self-State e Self-Model
+
+O Workspace pode manter um `SELF_STATE`, isto é, a representação atual do sistema sobre si mesmo.
+
+```text
+SELF_STATE
+
+onde estou?
+o que estou fazendo?
+o que estou tentando fazer?
+quais são minhas capacidades atuais?
+quais são minhas limitações atuais?
+o que acredito?
+o que espero?
+qual é meu estado atual?
+```
+
+O `SELF_STATE` é uma representação presente e pode estar incorreta.
+
+O conhecimento persistente sobre o próprio sistema pertence à Memory.
+O `SELF-MODEL` evolui por Learning.
+O Workspace mantém apenas a versão relevante para o presente.
+
+```text
+MEMORY
+    ↓
+SELF-KNOWLEDGE
+    ↓
+LEARNING
+    ↓
+SELF-MODEL
+    ↓
+WORKSPACE
+    ↓
+SELF_STATE
+```
+
+Isso evita confundir:
+
+```text
+SELF_STATE  = quem o sistema entende ser agora
+SELF-MODEL  = modelo persistente e evolutivo de si mesmo
 ```
 
 ---
 
-## 3. A unidade fundamental é uma representação mental contextualizada
+# 9. Atenção e seleção
 
-O Workspace não deve trabalhar apenas com fatos isolados.
+Atenção é um mecanismo de seleção que ajuda a decidir quais conteúdos devem receber prioridade dentro do Workspace.
 
-Em vez de:
-
-```text
-Objeto = porta
-```
-
-Uma representação ativa pode integrar:
-
-```text
-PERCEPÇÃO:
-"Existe uma porta."
-
-CONTEXTO:
-"Estou em uma sala."
-
-OBJETIVO:
-"Quero sair."
-
-ESTADO:
-"A porta está fechada."
-
-PREDIÇÃO:
-"Se eu abrir a porta, posso sair."
-
-INCERTEZA:
-"Não sei o que existe do outro lado."
-
-INTENÇÃO:
-"Investigar a porta."
-```
-
-Esse conjunto forma uma **unidade mental coerente**.
-
-Podemos tratar essa unidade como o **Workspace State**, ou **Estado Consciente Atual**.
-
----
-
-## 4. O Workspace é temporal
-
-O Conscious Workspace não representa apenas o que existe. Ele representa o que está acontecendo **agora**, em relação ao que acabou de acontecer e ao que pode acontecer em seguida.
-
-```text
-PASSADO IMEDIATO
-       ↓
-ESTADO ATUAL
-       ↓
-FUTURO PREVISTO
-       ↓
-AÇÃO POSSÍVEL
-```
-
-Exemplo:
-
-```text
-[Eu vi uma bola cair]
-        ↓
-[Agora a bola está no chão]
-        ↓
-[Provavelmente alguém a deixou cair]
-        ↓
-[Posso investigar]
-```
-
-Essa continuidade permite que o sistema mantenha um **fluxo mental coerente**, em vez de uma sequência de estados independentes.
-
----
-
-## 5. Capacidade adaptativa, não limite rígido
-
-O Conscious Workspace não deve ser definido por uma quantidade fixa e arbitrária de elementos.
-
-A capacidade deve ser **adaptativa e dependente dos recursos disponíveis**.
-
-O sistema mantém um núcleo de alta prioridade, mas pode ampliar o contexto quando a tarefa exige maior profundidade.
-
-```text
-              WORKSPACE
-                  │
-        ┌─────────┴─────────┐
-        │                   │
-        ▼                   ▼
-      CORE               CONTEXT
-        │                   │
-        │          informações auxiliares
-        │                   │
-        ▼                   ▼
-   processamento       suporte cognitivo
-      profundo
-```
-
-O **Core Workspace** contém aquilo que está sendo diretamente manipulado.
-
-O **Workspace Context** fornece informações auxiliares necessárias para compreender e resolver a situação.
-
-A eficiência não vem de limitar artificialmente o cérebro, mas de **distribuir recursos cognitivos de acordo com a relevância**.
-
----
-
-## 6. Seleção competitiva
-
-O conteúdo do Workspace deve ser selecionado por competição dinâmica entre diferentes candidatos cognitivos.
-
-Podem competir:
+Podem competir por prioridade:
 
 - percepções;
 - memórias recuperadas;
@@ -197,273 +304,298 @@ Podem competir:
 - alertas;
 - previsões;
 - objetivos;
-- conflitos internos.
+- conflitos.
 
-Um modelo conceitual de prioridade pode ser:
-
-```text
-WorkspacePriority =
-    Relevance
-  + GoalAlignment
-  + Novelty
-  + Urgency
-  + EmotionalSalience
-  + PredictiveValue
-  + UncertaintyReduction
-```
-
-A prioridade não precisa ser uma soma literal na implementação. A fórmula representa os fatores que podem influenciar a competição.
+Uma função conceitual pode considerar:
 
 ```text
-Pensamento A ───┐
-Memória B ──────┤
-Percepção C ────┼──→ COMPETIÇÃO → WORKSPACE
-Hipótese D ─────┤
-Alerta E ───────┘
+WorkspacePriority = f(
+    Relevance,
+    GoalAlignment,
+    Novelty,
+    Urgency,
+    EmotionalSalience,
+    PredictiveValue,
+    UncertaintyReduction
+)
 ```
 
-Assim, a disponibilidade consciente funcional não é simplesmente receber informação. É **selecionar o que merece ocupar o estado mental atual**.
+A fórmula não precisa ser implementada literalmente.
+
+O princípio é:
+
+> **O Workspace não recebe tudo com a mesma prioridade; ele mantém aquilo que é mais relevante para a situação atual.**
+
+A atenção seleciona.
+O Workspace integra.
 
 ---
 
-## 7. O Workspace é recorrente
+# 10. Core e Context
 
-O fluxo não deve ser linear:
+O Workspace possui dois níveis funcionais:
 
 ```text
-Entrada → Workspace → Saída
+WORKSPACE
+│
+├── CORE
+│   └── conteúdo diretamente manipulado
+│
+└── CONTEXT
+    └── informação auxiliar necessária para interpretar o Core
 ```
 
-O modelo deve ser recorrente:
+O Core deve concentrar os elementos de maior prioridade.
+O Context fornece suporte cognitivo sem necessariamente ocupar o centro da manipulação.
+
+A capacidade é adaptativa: o sistema pode ampliar ou reduzir o contexto de acordo com a complexidade da tarefa e os recursos disponíveis.
+
+---
+
+# 11. Unidade de representação
+
+A unidade fundamental do Workspace não é um fato isolado, mas uma **representação mental contextualizada**.
+
+Exemplo:
 
 ```text
-          ┌───────────────────┐
-          │                   ▼
-Percepção → Workspace → Pensamento
-              ↑             │
-              │             ▼
-              └────────── Decisão
+PERCEPÇÃO:
+Existe uma porta.
+
+CONTEXTO:
+Estou em uma sala.
+
+OBJETIVO:
+Quero sair.
+
+ESTADO:
+A porta está fechada.
+
+PREDIÇÃO:
+Se eu abrir a porta, posso sair.
+
+INCERTEZA:
+Não sei o que existe do outro lado.
+
+INTENÇÃO:
+Investigar a porta.
+```
+
+O Workspace integra esses elementos em uma representação coerente da situação atual.
+
+---
+
+# 12. Continuidade temporal
+
+O Workspace representa o presente em relação ao passado imediato e ao futuro previsto.
+
+```text
+PASSADO IMEDIATO
+        ↓
+ESTADO ATUAL
+        ↓
+FUTURO PREVISTO
+        ↓
+AÇÃO POSSÍVEL
+```
+
+O passado relevante fornece contexto.
+O presente é o centro da representação.
+O futuro previsto orienta raciocínio e ação.
+
+Essa continuidade não significa que o Workspace seja uma memória episódica completa. Ele mantém apenas o contexto temporal necessário para a cognição atual.
+
+---
+
+# 13. Recorrência cognitiva
+
+O ciclo não é linear.
+
+```text
+PERCEPTION
+    ↓
+WORKSPACE
+    ↓
+REASONING
+    ↓
+AGENCY
+    ↓
+ACTION
+    ↓
+ENVIRONMENT
+    ↓
+PERCEPTION
+```
+
+O resultado de uma ação altera o ambiente.
+A nova situação é percebida.
+A percepção atualiza o Workspace.
+O sistema reavalia suas hipóteses, previsões e objetivos.
+
+```text
+STATE(t)
+    ↓
+ACTION(t)
+    ↓
+ENVIRONMENT
+    ↓
+OBSERVATION(t+1)
+    ↓
+STATE(t+1)
+```
+
+Essa dinâmica cria continuidade cognitiva.
+
+---
+
+# 14. Experiência e Learning
+
+Uma experiência pode ser representada como uma transição:
+
+```text
+S(t)
+  ↓
+A(t)
+  ↓
+ENVIRONMENT
+  ↓
+S(t+1)
+```
+
+O Learning analisa essa trajetória e pode atualizar modelos e conhecimento.
+
+```text
+EXPERIENCE
+    ↓
+LEARNING
+    ├──→ MEMORY
+    ├──→ WORLD MODEL
+    ├──→ BELIEFS
+    ├──→ PROCEDURAL KNOWLEDGE
+    ├──→ STRATEGIES
+    └──→ SELF-MODEL
+```
+
+O Workspace recebe posteriormente as consequências dessas mudanças por meio da recuperação de informação e atualização do estado atual.
+
+---
+
+# 15. Princípios fundamentais
+
+### 15.1 O Workspace não é a memória
+
+Memórias podem existir fora do Workspace. O Workspace mantém apenas representações relevantes para o presente.
+
+### 15.2 O Workspace não é o pensamento
+
+Pensamentos e processos de raciocínio operam sobre o Workspace e podem modificar seu conteúdo.
+
+### 15.3 O Workspace não é apenas atenção
+
+A atenção seleciona prioridade; o Workspace integra o conteúdo selecionado.
+
+### 15.4 O Workspace não é a Agency
+
+A Agency possui autoridade sobre objetivos, decisões e ações.
+
+### 15.5 O Workspace não aprende sozinho
+
+Learning transforma experiências em mudanças persistentes.
+
+### 15.6 O Workspace não implica consciência fenomenal
+
+A arquitetura descreve disponibilidade e integração funcional, não experiência subjetiva.
+
+### 15.7 O Workspace é presente-orientado
+
+Ele representa o que é cognitivamente relevante agora, incluindo apenas o passado e futuro necessários para interpretar esse agora.
+
+### 15.8 O Workspace é uma fronteira de integração
+
+Ele reduz o acoplamento direto entre módulos, oferecendo um contexto compartilhado para os processos cognitivos.
+
+---
+
+# 16. Arquitetura integrada do Virtual Brain
+
+```text
+                         ENVIRONMENT
+                              │
+                              ▼
+                       ┌─────────────┐
+                       │ PERCEPTION  │
+                       └──────┬──────┘
+                              │
+                              ▼
+                  ┌──────────────────────┐
+                  │  CONSCIOUS WORKSPACE │
+                  │                      │
+                  │  PRESENT COGNITIVE  │
+                  │  STATE               │
+                  └───────┬───────┬──────┘
+                          │       │
+                 ┌────────┘       └────────┐
+                 ▼                         ▼
+            ┌─────────┐               ┌───────────┐
+            │ MEMORY  │◄─────────────►│ REASONING │
+            └────┬────┘               └─────┬─────┘
+                 │                          │
+                 └──────────┬───────────────┘
+                            ▼
+                       ┌─────────┐
+                       │ AGENCY  │
+                       └────┬────┘
                             │
                             ▼
-                           Ação
+                          ACTION
                             │
                             ▼
-                         Resultado
+                       ENVIRONMENT
                             │
-                            └────→ Workspace
+                            ▼
+                        EXPERIENCE
+                            │
+                            ▼
+                         LEARNING
+                        ┌────┼────┐
+                        ▼    ▼    ▼
+                     MEMORY MODELS SELF-MODEL
+                        │    │    │
+                        └────┴────┴──→ WORKSPACE
 ```
 
-O resultado de uma ação retorna ao Workspace e pode alterar o estado mental.
+---
 
-Se a realidade contradiz uma previsão, o sistema atualiza sua representação:
+# 17. Arquitetura de responsabilidades
 
 ```text
-Estado 1
-  ↓
-Pensamento
-  ↓
-Ação
-  ↓
-Resultado
-  ↓
-Estado 2
-  ↓
-Novo pensamento
+PERCEPTION
+    ↓
+Transforma sinais do mundo em informação relevante.
+
+WORKSPACE
+    ↓
+Integra e mantém o presente cognitivo.
+
+MEMORY
+    ↓
+Preserva e recupera conhecimento e experiência.
+
+REASONING
+    ↓
+Gera e avalia inferências, hipóteses e possibilidades.
+
+AGENCY
+    ↓
+Governa objetivos, prioridades, decisões e ações.
+
+LEARNING
+    ↓
+Transforma experiência em mudanças persistentes.
 ```
 
-Isso cria **continuidade cognitiva**.
+A separação fundamental é:
 
----
+> **Memory preserva. Learning transforma. Workspace integra. Reasoning simula. Agency decide. Perception informa.**
 
-## 8. O Workspace representa o "Eu agora"
-
-O Workspace pode manter uma representação dinâmica do estado do próprio sistema, denominada conceitualmente `SELF_STATE`.
-
-```text
-SELF_STATE
-
-Quem sou neste momento?
-Onde estou?
-O que estou fazendo?
-O que estou tentando fazer?
-O que sei?
-O que não sei?
-O que acredito?
-O que espero?
-O que estou sentindo?
-O que devo fazer?
-```
-
-O estado consciente funcional pode então integrar:
-
-```text
-CONSCIOUS_STATE
-
-    SELF
-      +
-    WORLD
-      +
-    GOAL
-      +
-    CONTEXT
-      +
-    THOUGHT
-      +
-    PREDICTION
-      +
-    INTENTION
-```
-
-O resultado é uma representação integrada do tipo:
-
-> **"Eu estou aqui, neste momento, enfrentando esta situação, tentando alcançar este objetivo, acreditando nisso, esperando aquilo e considerando o que fazer em seguida."**
-
-O Workspace, portanto, não contém apenas informações. Ele mantém uma **perspectiva integrada sobre a situação atual**.
-
----
-
-## 9. O Workspace como presente mental
-
-O estado mental atual pode ser compreendido por três camadas temporais:
-
-```text
-               CONSCIOUS WORKSPACE
-
-       ┌───────────────────────────────┐
-       │         FUTURO                │
-       │  previsões / possibilidades    │
-       ├───────────────────────────────┤
-       │          AGORA                │
-       │  estado consciente atual      │
-       ├───────────────────────────────┤
-       │         PASSADO               │
-       │  contexto recente relevante   │
-       └───────────────────────────────┘
-```
-
-O presente é o centro.
-
-O passado fornece contexto.
-
-O futuro fornece direção.
-
-Uma formulação conceitual é:
-
-> **Consciência funcional = estado atual + continuidade temporal + perspectiva + seleção.**
-
----
-
-## 10. Arquitetura teórica
-
-```text
-                 CONSCIOUS WORKSPACE
-                          │
-             ┌────────────┴────────────┐
-             │                         │
-             ▼                         ▼
-        WORKSPACE CORE            WORKSPACE CONTEXT
-             │                         │
-             │                         │
-      ┌──────┼──────┐             ┌────┴─────┐
-      │      │      │             │          │
-      ▼      ▼      ▼             ▼          ▼
-     SELF   GOAL  FOCUS        PAST       FUTURE
-      │      │      │          CONTEXT    PREDICTION
-      └──────┼──────┘             │          │
-             │                    └────┬─────┘
-             ▼                         │
-       CURRENT STATE ◄─────────────────┘
-             │
-             ▼
-       THOUGHT STREAM
-             │
-             ▼
-       INTENTION / DECISION
-             │
-             ▼
-          ACTION
-             │
-             ▼
-         NEW INPUT
-             │
-             └──────────► WORKSPACE
-```
-
----
-
-## 11. Ciclo fundamental
-
-O ciclo fundamental do Conscious Workspace é:
-
-```text
-SELECIONAR
-    ↓
-INTEGRAR
-    ↓
-MANTER
-    ↓
-ATUALIZAR
-    ↓
-REAVALIAR
-    ↓
-AGIR
-    ↓
-OBSERVAR
-    ↓
-ATUALIZAR NOVAMENTE
-    ↺
-```
-
-Esse ciclo permite que o estado mental permaneça dinâmico e coerente ao longo do tempo.
-
----
-
-## 12. Princípios fundamentais
-
-### 12.1 O Workspace não é a memória
-
-Memórias podem existir fora do Workspace. O Workspace mantém apenas as representações recuperadas e relevantes para o estado atual.
-
-### 12.2 O Workspace não é o pensamento
-
-Pensamentos são processos que operam sobre o estado do Workspace e também podem modificá-lo.
-
-### 12.3 O Workspace não é apenas atenção
-
-A atenção ajuda a selecionar o conteúdo, mas o Workspace integra esse conteúdo com contexto, objetivos, estado interno, previsões e intenções.
-
-### 12.4 O Workspace não é um limite fixo de inteligência
-
-Ele utiliza recursos de maneira adaptativa. A complexidade do estado pode aumentar quando a tarefa exige maior contexto e raciocínio.
-
-### 12.5 O Workspace mantém continuidade
-
-O estado atual deve ser influenciado pelo passado imediato e pelas expectativas sobre o futuro.
-
-### 12.6 O Workspace é globalmente acessível
-
-Seu conteúdo deve poder ser utilizado por diferentes processos cognitivos que precisam operar sobre uma representação comum da situação atual.
-
-### 12.7 O Workspace é dinâmico
-
-Seu conteúdo está sempre sujeito a entrada, competição, atualização, transformação e saída.
-
----
-
-## Definição final
-
-> **O Conscious Workspace é o mecanismo pelo qual o Virtual Brain mantém um estado mental global, dinâmico e temporalmente contínuo, selecionando informações relevantes e integrando percepção, memória, objetivos, pensamentos, previsões, intenções e estado do próprio sistema em uma representação coerente do "agora", que orienta o processamento cognitivo e as ações subsequentes.**
-
-A visão central é:
-
-> **Não devemos construir um "buffer de consciência". Devemos construir um estado mental vivo.**
-
-O Conscious Workspace representa o **presente cognitivo do Virtual Brain**: aquilo que o sistema está atualmente considerando, em relação a **quem ele entende que é, onde está, o que está acontecendo, o que quer alcançar, o que acredita que acontecerá e o que pretende fazer em seguida**.
-
----
-
-## Status da teoria
-
-**Versão:** 2.0  
-**Estado:** Modelo teórico inicial  
-**Próximo passo:** Especificar a arquitetura computacional do Workspace, incluindo estruturas de dados, mecanismo de competição, atualização temporal, regras de entrada e saída, prioridades, integração com memória e interface com os demais sistemas do Virtual Brain.
+Essa divisão deve ser usada como contrato arquitetural entre os módulos do Virtual Brain.
