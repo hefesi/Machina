@@ -6,7 +6,7 @@
 
 **Cognition** é o sistema responsável por interpretar informação, construir representações internas, raciocinar, inferir, simular possibilidades e resolver problemas.
 
-Reasoning não é um módulo arquitetural separado. **Reasoning é um dos processos internos de Cognition.**
+**Reasoning não é um módulo arquitetural separado. Reasoning é um dos processos internos de Cognition.**
 
 ```text
 COGNITION
@@ -32,22 +32,22 @@ MEMORY
 → fornece informação persistente.
 
 WORKSPACE
-→ mantém o contexto ativo.
+→ mantém o contexto ativo e o estado cognitivo transitório.
 
 COGNITION
-→ interpreta, transforma e simula.
+→ interpreta, transforma, raciocina, infere e simula.
 
 AGENCY
-→ escolhe objetivos e decisões operacionais.
+→ escolhe objetivos, prioriza e decide.
 
 ACTION SYSTEM
 → executa intenções.
 
 LEARNING
-→ transforma experiências em mudanças persistentes.
+→ avalia experiências e produz mudanças persistentes.
 ```
 
-Cognition pode produzir opções e recomendações, mas não decide autonomamente qual objetivo perseguir. Essa responsabilidade pertence a Agency.
+Cognition pode produzir opções, recomendações, previsões e planos candidatos, mas não possui autoridade final para escolher qual objetivo perseguir ou qual intenção operacional emitir. Essa responsabilidade pertence a Agency.
 
 ---
 
@@ -55,21 +55,24 @@ Cognition pode produzir opções e recomendações, mas não decide autonomament
 
 ```text
 WORKSPACE
-    ↓
+    ↓ contexto + evidências + estado
 COGNITION
     ├── compreensão
     ├── inferência
     ├── hipóteses
     ├── raciocínio
     ├── simulação
-    └── solução de problemas
-    ↓
+    ├── soluções
+    └── avaliações
+    ↓ resultados cognitivos
 WORKSPACE
-    ↓
+    ↓ opções + previsões + avaliações
 AGENCY
 ```
 
-Cognition opera sobre o presente cognitivo e devolve resultados para o Workspace.
+Cognition opera sobre o presente cognitivo disponibilizado pelo Workspace e devolve resultados para o Workspace.
+
+O Workspace é o meio de integração; Cognition é o processo que transforma o conteúdo.
 
 ---
 
@@ -114,7 +117,7 @@ Pode incluir:
 - raciocínio causal;
 - raciocínio analógico.
 
-Reasoning é um componente de Cognition, não uma camada paralela entre Memory e Agency.
+Reasoning é um processo de Cognition, não uma camada paralela entre Memory e Agency.
 
 ---
 
@@ -233,9 +236,9 @@ Uma hipótese não deve ser tratada como conhecimento confirmado apenas por ter 
 
 ---
 
-# 11. Causal Modeling
+# 11. Causal Modeling e World Model
 
-Cognition deve ser capaz de representar relações causais:
+Cognition deve ser capaz de construir e utilizar modelos causais:
 
 ```text
 CAUSE
@@ -247,7 +250,32 @@ EFFECT
 
 Isso permite prever consequências de ações e explicar resultados observados.
 
-Causal models podem ser atualizados por Learning quando novas experiências fornecem evidência suficiente.
+O **World Model** não é um módulo independente adicional do Virtual Brain. É um modelo persistente compartilhado que Cognition ajuda a construir, interpretar e utilizar.
+
+```text
+WORLD MODEL
+    ↓ contextualization
+WORLD STATE
+    ↓
+WORKSPACE
+    ↓
+COGNITION
+    ↓
+PREDICTIONS / SIMULATIONS / EXPLANATIONS
+```
+
+Cognition pode produzir atualizações candidatas para o World Model. Learning avalia evidências e determina quais mudanças devem persistir.
+
+```text
+COGNITION
+→ constrói, interpreta e utiliza modelos.
+
+LEARNING
+→ avalia evidências e atualiza modelos persistentes.
+
+MEMORY
+→ preserva evidências, experiências e conhecimento que sustentam os modelos.
+```
 
 ---
 
@@ -287,19 +315,23 @@ COGNITION
 MEMORY
     ↓ retrieval
 WORKSPACE
-    ↓
+    ↓ contextualized information
 COGNITION
 ```
 
 Memory fornece experiências, conhecimento e habilidades. Cognition determina como essas informações serão interpretadas e combinadas.
 
+Memory não raciocina. Ela fornece material para o raciocínio.
+
 ---
 
 # 14. Cognition e Self
 
-O Self fornece contexto de autorrepresentação:
+O Self fornece contexto de autorrepresentação através do Workspace:
 
 ```text
+SELF MODEL
+    ↓
 SELF STATE
     ↓
 WORKSPACE
@@ -351,7 +383,49 @@ Agency pode solicitar novos raciocínios ou simulações quando a decisão exige
 
 ---
 
-# 16. Cognition e Learning
+# 16. Planning: fronteira entre Cognition e Agency
+
+Planning é uma responsabilidade compartilhada, mas com funções diferentes.
+
+```text
+COGNITION
+→ gera e explora planos candidatos.
+→ simula consequências.
+→ compara alternativas.
+→ identifica riscos e dependências.
+
+AGENCY
+→ seleciona o plano adotado.
+→ prioriza.
+→ assume compromisso com o curso de ação.
+→ emite Action Intent.
+```
+
+Fluxo:
+
+```text
+GOAL
+    ↓
+CURRENT STATE
+    ↓
+COGNITION
+    ↓
+CANDIDATE PLANS
+    ↓
+SIMULATION / EVALUATION
+    ↓
+AGENCY
+    ↓
+SELECTED PLAN
+    ↓
+ACTION INTENT
+```
+
+Assim, Cognition é responsável pela **exploração e avaliação de possibilidades**, enquanto Agency é responsável pelo **compromisso decisório**.
+
+---
+
+# 17. Cognition e Learning
 
 Learning pode utilizar resultados de Cognition para atualizar modelos.
 
@@ -367,11 +441,24 @@ LEARNING
 MODEL UPDATE
 ```
 
-Cognition produz interpretações e hipóteses; Learning avalia evidências e determina quais mudanças devem persistir.
+Cognition produz interpretações, hipóteses e explicações; Learning avalia evidências e determina quais mudanças devem persistir.
+
+A fronteira é:
+
+```text
+COGNITION
+→ produz compreensão e hipóteses.
+
+LEARNING
+→ avalia a experiência e decide quais mudanças são justificadas.
+
+PERSISTENT SYSTEMS
+→ recebem mudanças aprovadas.
+```
 
 ---
 
-# 17. Limites e incerteza
+# 18. Limites e incerteza
 
 Cognition deve representar incerteza explicitamente.
 
@@ -400,26 +487,55 @@ Isso reduz o risco de transformar inferências frágeis em crenças rígidas.
 
 ---
 
-# 18. Contrato de Cognition
+# 19. Contrato de Cognition
 
 ```text
 WORKSPACE
-→ fornece contexto ativo.
+→ fornece contexto ativo, evidências e estado contextual.
 
 MEMORY
-→ fornece informação recuperada.
+→ fornece informação persistente recuperada.
 
-SELF
+SELF STATE
 → fornece autorrepresentação contextual.
 
+WORLD STATE
+→ fornece representação contextual relevante do mundo.
+
 COGNITION
-→ compreende, raciocina, infere e simula.
+→ compreende, raciocina, infere, simula e produz possibilidades.
 
 AGENCY
-→ escolhe entre possibilidades e emite intenção.
+→ escolhe entre possibilidades, prioriza e emite intenção.
 
 LEARNING
-→ utiliza experiências e resultados para atualizar modelos.
+→ utiliza experiências e resultados para atualizar modelos persistentes.
 ```
 
-> **Cognition é o sistema que transforma informação em modelos, possibilidades e compreensão. Ele pensa sobre o que fazer, mas Agency decide o que perseguir e Action System executa a intenção.**
+Cognition é responsável por:
+
+```text
+INTERPRETAR
+REPRESENTAR
+RACIOCINAR
+INFERIR
+SIMULAR
+IMAGINAR
+ABSTRAIR
+GERAR HIPÓTESES
+RESOLVER PROBLEMAS
+MONITORAR O PRÓPRIO PROCESSAMENTO
+```
+
+Cognition não é responsável por:
+
+```text
+PERSISTIR MEMÓRIAS
+MANTER IDENTIDADE
+ESCOLHER OBJETIVOS FINAIS
+EMITIR AÇÃO POR CONTA PRÓPRIA
+EXECUTAR FERRAMENTAS
+DECIDIR O QUE DEVE SER APRENDIDO
+```
+
+> **Cognition é o sistema que transforma informação em compreensão, modelos e possibilidades. Ele pensa sobre o que pode ser feito, mas Agency decide o que perseguir, Action System executa a intenção e Learning transforma a experiência em mudanças persistentes.**
