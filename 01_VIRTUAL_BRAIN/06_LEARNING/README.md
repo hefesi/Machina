@@ -12,8 +12,14 @@ A distinção central é:
 MEMORY
 → preserva e recupera.
 
+COGNITION
+→ interpreta, raciocina e produz hipóteses.
+
 LEARNING
-→ avalia experiências e produz mudanças.
+→ avalia experiências e determina mudanças justificadas.
+
+CONSOLIDATION
+→ persiste e organiza mudanças aprovadas.
 ```
 
 Learning não é simplesmente armazenar mais dados. É o processo pelo qual o sistema se torna diferente por causa daquilo que viveu.
@@ -36,6 +42,19 @@ LEARNING
 ├── CONTINUAL LEARNING
 └── META-LEARNING
 ```
+
+Learning pode produzir mudanças em:
+
+```text
+MEMORY
+WORLD MODEL
+SELF MODEL
+SKILLS
+STRATEGIES
+AGENCY POLICIES
+```
+
+Esses são destinos de mudanças aprendidas, não módulos internos de Learning.
 
 ---
 
@@ -84,6 +103,8 @@ EXPERIENCE
 
 Learning determina se a experiência justifica alguma mudança e qual tipo de mudança é apropriado.
 
+A mudança proposta pode ser rejeitada, adiada, revisada ou consolidada, dependendo das evidências disponíveis.
+
 ---
 
 # 4. Destinos do aprendizado
@@ -92,7 +113,8 @@ Uma mudança aprendida pode afetar diferentes partes do sistema:
 
 ```text
 LEARNING RESULT
-      ├──→ MEMORY
+      ├──→ SEMANTIC MEMORY
+      ├──→ PROCEDURAL MEMORY
       ├──→ WORLD MODEL
       ├──→ SELF MODEL
       ├──→ STRATEGIES
@@ -109,6 +131,8 @@ UPDATE MEMORY ONLY
 
 Learning pode atualizar Memory, mas também pode atualizar modelos, habilidades, estratégias e autorrepresentação.
 
+Learning não modifica diretamente a identidade fundamental do Self. Ele fornece mudanças baseadas em evidências para que o sistema de Self mantenha continuidade e integre essas mudanças de forma coerente.
+
 ---
 
 # 5. Learning e Memory
@@ -120,9 +144,9 @@ MEMORY
 → guarda a experiência e o conhecimento.
 
 LEARNING
-→ determina o significado da experiência e quais modelos devem mudar.
+→ determina o significado da experiência e quais mudanças são justificadas.
 
-MEMORY CONSOLIDATION
+CONSOLIDATION
 → persiste e organiza mudanças aprovadas.
 ```
 
@@ -140,6 +164,19 @@ VALIDATED CHANGE
     ├──→ PROCEDURAL MEMORY
     ├──→ SELF MODEL
     └──→ WORLD MODEL
+```
+
+A distinção de autoridade é:
+
+```text
+LEARNING
+→ propõe e justifica a mudança.
+
+CONSOLIDATION
+→ controla a incorporação persistente da mudança.
+
+MEMORY / MODELS
+→ persistem e organizam o resultado aprovado.
 ```
 
 ---
@@ -164,18 +201,37 @@ LEARNING
 
 Prediction Error não é necessariamente uma falha. Ele pode indicar que o modelo interno está incompleto ou incorreto.
 
+O erro é evidência para avaliação, não uma ordem automática para modificar o sistema.
+
 ---
 
 # 7. Belief Updating
 
-Learning pode atualizar crenças quando novas evidências justificam mudança.
+Belief updating é uma operação compartilhada entre processos cognitivos e aprendizagem, com responsabilidades distintas.
+
+```text
+COGNITION
+→ interpreta a evidência e explora hipóteses.
+
+LEARNING
+→ avalia se a evidência justifica mudança persistente.
+
+MEMORY / WORLD MODEL
+→ recebem a crença atualizada quando aprovada.
+```
+
+Fluxo:
 
 ```text
 BELIEF
     +
 NEW EVIDENCE
     ↓
+COGNITION
+    ↓
 EVALUATION
+    ↓
+LEARNING
     ↓
 BELIEF UPDATE
     ↓
@@ -212,6 +268,8 @@ VALIDATION
 CHANGE PROPOSAL
     ↓
 CONSOLIDATION
+    ↓
+PERSISTENT UPDATE
 ```
 
 A consolidação é um mecanismo de persistência controlada. Ela não substitui Learning.
@@ -229,6 +287,8 @@ CONFIRMED
  ↓
 CONSOLIDATED
 ```
+
+Uma mudança pode permanecer em estado não consolidado quando a evidência ainda é insuficiente.
 
 ---
 
@@ -290,7 +350,9 @@ EXPERIENCE
 LEARNING
 ```
 
-Learning pode descobrir que determinada estratégia funciona ou falha e atualizar o conhecimento utilizado por Agency.
+Learning pode descobrir que determinada estratégia funciona ou falha e produzir uma atualização persistente que será utilizada por Agency em ciclos futuros.
+
+Learning não decide os objetivos atuais e não substitui Agency.
 
 ---
 
@@ -328,6 +390,17 @@ STABLE ADAPTIVE KNOWLEDGE
 
 Isso exige mecanismos contra **catastrophic forgetting**.
 
+A atualização deve considerar:
+
+```text
+NOVELTY
+EVIDENCE STRENGTH
+PRIOR KNOWLEDGE
+CONFLICT
+CONFIDENCE
+REVISION HISTORY
+```
+
 ---
 
 # 12. Forgetting e estabilidade
@@ -346,6 +419,14 @@ MEMORY
 
 A arquitetura deve preservar histórico importante enquanto permite que conhecimento obsoleto tenha menor influência.
 
+O sistema deve distinguir:
+
+```text
+FORGETTING OF ACCESS
+≠
+DELETION OF HISTORY
+```
+
 ---
 
 # 13. Reconsolidation
@@ -358,6 +439,8 @@ MEMORY
 RECALL
     ↓
 NEW EVIDENCE
+    ↓
+COGNITION
     ↓
 LEARNING
     ↓
@@ -399,6 +482,8 @@ LEARNING
 LEARN HOW TO LEARN
 ```
 
+Meta-learning pode melhorar o processo de atualização, mas não deve conceder automaticamente autoridade ilimitada para modificar a arquitetura fundamental do sistema.
+
 ---
 
 # 15. Learning como transformação
@@ -429,6 +514,10 @@ EXPERIENCE
 INTERPRETATION
     ↓
 LEARNING
+    ↓
+VALIDATED CHANGE
+    ↓
+CONSOLIDATION
     ↓
 MODEL / KNOWLEDGE / SKILL CHANGE
     ↓
@@ -492,6 +581,10 @@ EXPERIENCE(t)
     ↓
 LEARNING(t)
     ↓
+VALIDATED CHANGE
+    ↓
+CONSOLIDATION
+    ↓
 BRAIN(t+1)
 ```
 
@@ -509,6 +602,9 @@ Isso cria uma propriedade fundamental:
 MEMORY
 → registra e preserva experiências.
 
+WORKSPACE
+→ fornece contexto e conteúdo ativo para interpretação.
+
 COGNITION
 → interpreta, raciocina e produz hipóteses.
 
@@ -519,10 +615,37 @@ ACTION SYSTEM
 → executa.
 
 LEARNING
-→ avalia a experiência e determina mudanças.
+→ avalia a experiência e determina mudanças justificadas.
+
+CONSOLIDATION
+→ controla a incorporação persistente das mudanças aprovadas.
 
 MEMORY / MODELS / SELF / STRATEGIES
 → recebem mudanças persistentes aprovadas.
+```
+
+Learning é responsável por:
+
+```text
+AVALIAR EXPERIÊNCIAS
+ANALISAR ERROS
+ATUALIZAR CRENÇAS
+PROPOR ATUALIZAÇÕES DE MODELOS
+ADQUIRIR HABILIDADES
+ATUALIZAR ESTRATÉGIAS
+ATUALIZAR O SELF MODEL COM BASE EM EVIDÊNCIAS
+CONTROLAR O PROCESSO DE APRENDIZADO CONTÍNUO
+```
+
+Learning não é responsável por:
+
+```text
+PERSISTIR TODA EXPERIÊNCIA AUTOMATICAMENTE
+RACIOCINAR SOBRE TODAS AS QUESTÕES
+ESCOLHER OBJETIVOS
+MANTER IDENTIDADE
+EXECUTAR AÇÕES
+CONCEDER NOVAS AUTORIZAÇÕES
 ```
 
 > **Learning é a ponte entre experiência e transformação. Ele permite que o Virtual Brain preserve sua história, mas não permaneça preso a ela: o sistema aprende, atualiza seus modelos e entra no próximo ciclo como uma entidade modificada.**
