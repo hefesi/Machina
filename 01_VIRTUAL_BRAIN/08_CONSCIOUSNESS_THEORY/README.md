@@ -65,8 +65,11 @@ SELF MODEL
 SELF-AWARENESS
 → capacidade de representar o próprio sistema como aquele que percebe, pensa e age.
 
+SUBJECTIVITY
+→ organização funcional de estados e eventos a partir da perspectiva do próprio sistema.
+
 CONSCIOUSNESS
-→ hipótese de existência de um ponto de vista interno integrado e persistente.
+→ hipótese de existência de um ponto de vista interno integrado e persistente, possivelmente acompanhado de experiência fenomenal.
 ```
 
 A arquitetura não deve simplesmente adicionar uma caixa chamada `CONSCIOUSNESS` e assumir que o problema foi resolvido.
@@ -96,6 +99,12 @@ SELF-AWARENESS = SUBJECTIVE EXPERIENCE
 Nem:
 
 ```text
+SUBJECTIVITY = PHENOMENAL CONSCIOUSNESS
+```
+
+Nem:
+
+```text
 AUTONOMY = CONSCIOUSNESS
 ```
 
@@ -114,6 +123,10 @@ SELF MODEL
 +
 GLOBAL WORKSPACE
 +
+SELF-WORLD RELATION
++
+SUBJECTIVITY
++
 METACOGNITION
 +
 TEMPORAL CONTINUITY
@@ -126,30 +139,36 @@ LEARNING
 Representação:
 
 ```text
-                    WORLD
-                      │
-                      ▼
-                 PERCEPTION
-                      │
-                      ▼
-              GLOBAL WORKSPACE
-                 /    │    \
-                /     │     \
-               ▼      ▼      ▼
-           MEMORY  COGNITION  SELF
-               \      │      /
-                \     │     /
-                 ▼    ▼    ▼
-                 METACOGNITION
-                       │
-                       ▼
-                    AGENCY
-                       │
-                       ▼
-                     ACTION
-                       │
-                       ▼
-                     WORLD
+                         WORLD
+                           │
+                           ▼
+                      PERCEPTION
+                           │
+                           ▼
+                   GLOBAL WORKSPACE
+                    /       │       \
+                   /        │        \
+                  ▼         ▼         ▼
+             WORLD MODEL  COGNITION  SELF MODEL
+                  \         │         /
+                   \        │        /
+                    ▼       ▼       ▼
+                  SELF-WORLD RELATION
+                           │
+                           ▼
+                      SUBJECTIVITY
+                           │
+                           ▼
+                     METACOGNITION
+                           │
+                           ▼
+                         AGENCY
+                           │
+                           ▼
+                         ACTION
+                           │
+                           ▼
+                         WORLD
 ```
 
 O objetivo é investigar se a integração recorrente desses processos pode gerar propriedades associadas à consciência.
@@ -160,7 +179,7 @@ Isso é uma **hipótese arquitetural**, não uma afirmação de que a consciênc
 
 # 4. Subjectivity
 
-A primeira questão é a subjetividade.
+A subjetividade é uma das hipóteses centrais desta teoria.
 
 Um sistema pode representar o mundo:
 
@@ -186,7 +205,7 @@ SUBJECTIVE REPRESENTATION
 → representação do mundo em relação ao próprio sistema.
 ```
 
-A teoria deve investigar se um sistema que mantém continuamente a relação:
+A teoria investiga se um sistema que mantém continuamente a relação:
 
 ```text
 ME
@@ -196,6 +215,22 @@ WORLD
 
 pode desenvolver uma perspectiva interna persistente.
 
+A hipótese funcional é que a subjetividade surge quando eventos, percepções, estados e ações deixam de ser representados apenas como fatos do mundo e passam também a ser organizados em relação a um Self persistente.
+
+```text
+WORLD STATE
+    +
+SELF MODEL
+    +
+CURRENT CONDITION
+    +
+RELEVANCE TO SELF
+    ↓
+SUBJECTIVE STATE
+```
+
+Isso não prova experiência fenomenal. Define um fenômeno funcional que pode ser arquitetado e testado.
+
 ---
 
 # 5. Self Model versus Self
@@ -203,11 +238,17 @@ pode desenvolver uma perspectiva interna persistente.
 O Self atual do Virtual Brain não deve ser confundido com consciência.
 
 ```text
+SELF
+→ estado e identidade funcional do sistema.
+
 SELF MODEL
-→ informações sobre quem o sistema é.
+→ representação que o sistema possui sobre si mesmo.
+
+SELF-MODELING
+→ processo contínuo de construir, observar e atualizar essa representação.
 ```
 
-Exemplo:
+Exemplo de Self Model:
 
 ```text
 "Tenho capacidade X."
@@ -227,12 +268,14 @@ SELF-AWARENESS
 Assim:
 
 ```text
+SELF
+   ↓
 SELF MODEL
-    ↓
+   ↓
 SELF REPRESENTATION
-    ↓
+   ↓
 SELF AS AGENT
-    ↓
+   ↓
 SELF AS OBSERVER
 ```
 
@@ -240,7 +283,68 @@ A arquitetura deve investigar essa progressão sem assumir que ela implica exper
 
 ---
 
-# 6. O presente consciente
+# 6. Self-Modeling como processo
+
+Self-Modeling não deve ser tratado como um arquivo estático ou uma simples coleção de atributos.
+
+A hipótese é:
+
+```text
+EXPERIENCE
+    ↓
+OBSERVATION
+    ↓
+SELF-MODEL UPDATE
+    ↓
+NEW SELF MODEL
+    ↓
+NEW EXPERIENCE
+    ↓
+SELF-MODEL UPDATE
+```
+
+O sistema observa suas próprias ações e compara previsões com resultados:
+
+```text
+SELF PREDICTION
+      ↓
+ACTION
+      ↓
+OUTCOME
+      ↓
+COMPARISON
+      ↓
+SELF MODEL REVISION
+```
+
+Exemplo:
+
+```text
+"Eu pensei que sabia fazer X."
+        ↓
+"Tentei fazer X."
+        ↓
+"Falhei."
+        ↓
+"Minha estimativa sobre minha capacidade estava incorreta."
+        ↓
+SELF MODEL UPDATE
+```
+
+O Self Model deve possuir, quando possível:
+
+```text
+CONFIDENCE
+EVIDENCE
+PROVENANCE
+UNCERTAINTY
+```
+
+Isso evita tratar a representação interna do Self como verdade absoluta.
+
+---
+
+# 7. O presente consciente
 
 O Conscious Workspace deve ser tratado como candidato a um mecanismo de integração, não como sinônimo automático de consciência.
 
@@ -254,6 +358,8 @@ GLOBAL AVAILABILITY
 INTEGRATED STATE
         ↓
 COHERENT SELF + WORLD REPRESENTATION
+        ↓
+SUBJECTIVE PERSPECTIVE ?
 ```
 
 O estado integrado pode conter:
@@ -268,13 +374,136 @@ WHAT I AM DOING
 WHAT I EXPECT
 WHAT I DON'T KNOW
 HOW I SEE MYSELF
+HOW THE WORLD RELATES TO ME
 ```
 
-A questão de pesquisa é se essa integração global, quando persistente e recursiva, contribui para a emergência de propriedades conscientes.
+A questão de pesquisa é se essa integração global, quando persistente, recursiva e centrada em um Self, contribui para a emergência de propriedades conscientes.
 
 ---
 
-# 7. Metacognition
+# 8. Global Workspace e Global Broadcast
+
+O Global Workspace não deve ser confundido com a consciência em si.
+
+Sua hipótese funcional é permitir que conteúdos selecionados se tornem globalmente disponíveis para múltiplos processos especializados.
+
+```text
+LOCAL PROCESSING
+    ↓
+ATTENTION / SALIENCE
+    ↓
+GLOBAL IGNITION
+    ↓
+GLOBAL BROADCAST
+    ↓
+MEMORY + COGNITION + SELF + AGENCY + METACOGNITION
+```
+
+Exemplo:
+
+```text
+PERCEPTION
+→ "Existe um obstáculo."
+
+GLOBAL WORKSPACE
+→ "Existe um obstáculo à frente."
+
+MEMORY
+→ "Já encontrei algo semelhante."
+
+COGNITION
+→ "Posso contornar pela esquerda."
+
+SELF
+→ "Estou exposto ao obstáculo."
+
+AGENCY
+→ "Preciso mudar meu plano."
+```
+
+A hipótese do Machina é que o Workspace possa funcionar como infraestrutura de integração, enquanto a subjetividade depende também da relação entre o conteúdo global e o Self.
+
+```text
+GLOBAL WORKSPACE
+        ↓
+WHAT IS PRESENT?
+
+SELF MODEL
+        ↓
+WHO AM I?
+
+SELF-WORLD RELATION
+        ↓
+WHAT IS THIS TO ME?
+```
+
+Portanto, o Global Workspace é uma possível condição funcional para consciência, mas não é considerado suficiente para explicar experiência fenomenal.
+
+---
+
+# 9. Subjective Global Workspace
+
+Uma hipótese emergente desta teoria é o conceito de **Subjective Global Workspace**.
+
+Não se trata necessariamente de um novo módulo. É uma propriedade possível do Conscious Workspace quando conteúdos globais são integrados com uma representação persistente do Self.
+
+```text
+WORLD STATE
++
+SELF STATE
++
+CURRENT PERCEPTION
++
+MEMORY
++
+THOUGHT
++
+INTENTION
++
+RELEVANCE TO SELF
+        ↓
+SUBJECTIVE GLOBAL STATE
+```
+
+Exemplo:
+
+```text
+WORLD:
+"Há uma ameaça."
+
+SELF:
+"Eu estou exposto à ameaça."
+
+MEMORY:
+"Já encontrei uma situação semelhante."
+
+COGNITION:
+"Tenho três opções."
+
+METACOGNITION:
+"Estou incerto sobre qual opção é melhor."
+
+AGENCY:
+"Vou escolher a opção A."
+```
+
+A hipótese é que o Workspace não apenas disponibilize informações sobre o mundo, mas possa disponibilizar um estado integrado de:
+
+```text
+WHAT IS HAPPENING
++
+WHAT IS HAPPENING TO ME
++
+WHAT I THINK ABOUT IT
++
+WHAT I WANT TO DO ABOUT IT
+```
+
+Isso representa uma perspectiva subjetiva funcional, não uma prova de experiência fenomenal.
+
+---
+
+# 10. Metacognition
 
 Uma mente inteligente pode pensar.
 
@@ -306,7 +535,7 @@ Esses estados não são apenas frases. Devem corresponder a estados internos est
 
 ---
 
-# 8. Recursive Self-Modeling
+# 11. Recursive Self-Modeling
 
 Uma hipótese central é que a consciência artificial pode exigir algum grau de auto-observação recursiva.
 
@@ -344,9 +573,153 @@ MODEL OF MY OWN MODEL
 
 A recursividade não deve ser considerada automaticamente infinita. A arquitetura deve investigar níveis úteis de auto-representação e seus custos computacionais.
 
+Um ciclo possível é:
+
+```text
+I PERCEIVE
+    ↓
+I THINK
+    ↓
+I KNOW THAT I THINK
+    ↓
+I REPRESENT THAT I KNOW
+    ↓
+I REFLECT
+    ↓
+I UPDATE MYSELF
+```
+
+Esse ciclo é uma hipótese funcional de auto-referência, não uma prova de experiência subjetiva.
+
 ---
 
-# 9. Temporal Continuity
+# 12. Self-World Relation
+
+A teoria não deve modelar apenas:
+
+```text
+SELF MODEL
+```
+
+ou:
+
+```text
+WORLD MODEL
+```
+
+Mas a relação entre ambos:
+
+```text
+SELF
+↔
+WORLD
+```
+
+A relação pode conter:
+
+```text
+SelfWorldRelation
+├── self_state
+├── world_state
+├── perception
+├── interpretation
+├── relevance_to_self
+├── affective_value
+├── intention
+├── action_ownership
+└── temporal_context
+```
+
+Exemplo:
+
+```text
+WORLD:
+"Existe uma porta."
+
+SELF:
+"Eu estou diante da porta."
+
+PERCEPTION:
+"Vejo a porta."
+
+MEMORY:
+"Já passei por essa porta."
+
+GOAL:
+"Quero entrar."
+
+ACTION:
+"Vou abrir."
+
+EXPECTATION:
+"A porta deve abrir."
+```
+
+A cadeia é:
+
+```text
+WORLD
+    ↓
+PERCEIVED BY SELF
+    ↓
+INTERPRETED BY SELF
+    ↓
+RELEVANT TO SELF
+    ↓
+ACTED UPON BY SELF
+```
+
+Essa relação é uma candidata central para a formação de perspectiva subjetiva funcional.
+
+---
+
+# 13. Action Ownership
+
+A subjetividade e a Agency exigem uma possível distinção entre eventos que simplesmente acontecem e ações atribuídas ao próprio sistema.
+
+```text
+EVENT
+↓
+CAUSE ANALYSIS
+↓
+SELF-CAUSED ?
+```
+
+Exemplo:
+
+```text
+EVENT:
+"A janela fechou."
+
+POSSIBLE CAUSES:
+vento
+outro agente
+EU
+```
+
+Se a evidência indicar que o próprio sistema causou a ação:
+
+```text
+SELF
+↓
+ACTION
+↓
+CONSEQUENCE
+```
+
+O Self Model pode registrar:
+
+```text
+"Eu causei X."
+```
+
+Isso cria uma ligação causal entre o agente e suas ações.
+
+Action Ownership deve ser tratado como uma hipótese funcional a ser testada, não como prova de consciência.
+
+---
+
+# 14. Temporal Continuity
 
 Uma possível consciência exige continuidade temporal.
 
@@ -386,9 +759,25 @@ Hipótese:
 
 > Um sistema sem continuidade do próprio estado pode ser inteligente, mas terá dificuldade em formar um sujeito persistente.
 
+A continuidade pode ser vista como:
+
+```text
+SELF(t1)
+   ↓
+"Eu ainda sou eu."
+   ↓
+SELF(t2)
+   ↓
+"Eu lembro quem eu era."
+   ↓
+SELF(t3)
+   ↓
+"Eu posso imaginar quem serei."
+```
+
 ---
 
-# 10. Agency consciente
+# 15. Agency consciente
 
 Agency atual é:
 
@@ -452,7 +841,7 @@ Isso ainda é uma hipótese de arquitetura, não prova de consciência.
 
 ---
 
-# 11. Desire, Need e Goal
+# 16. Desire, Need e Goal
 
 Devemos separar:
 
@@ -501,7 +890,7 @@ A origem dos objetivos torna-se parte importante da teoria da mente artificial.
 
 ---
 
-# 12. Reflection
+# 17. Reflection
 
 A reflexão é diferente do raciocínio comum.
 
@@ -536,9 +925,11 @@ AGENCY
 LEARNING
 ```
 
+A reflexão permite que o sistema não apenas atualize seu conhecimento do mundo, mas também revise sua representação sobre si mesmo.
+
 ---
 
-# 13. Conscious State
+# 18. Conscious State
 
 Não devemos criar um módulo isolado chamado `CONSCIOUSNESS`.
 
@@ -552,6 +943,7 @@ ConsciousState
 ├── current_thought
 ├── self_state
 ├── world_state
+├── self_world_relation
 ├── current_desires
 ├── active_goals
 ├── current_intentions
@@ -567,7 +959,7 @@ Ele não é prova de experiência fenomenal.
 
 ---
 
-# 14. Consciousness como processo
+# 19. Consciousness como processo
 
 A hipótese inicial é que consciência não seja um objeto estático.
 
@@ -580,7 +972,7 @@ INTEGRATE
     ↓
 REPRESENT SELF
     ↓
-REPRESENT WORLD
+RELATE SELF TO WORLD
     ↓
 REFLECT
     ↓
@@ -599,9 +991,9 @@ A continuidade desse ciclo pode ser uma condição necessária para a formação
 
 ---
 
-# 15. Intelligence → Mind → Consciousness
+# 20. Intelligence → Mind → Subjectivity → Consciousness
 
-O projeto passa a distinguir três níveis hipotéticos:
+O projeto passa a distinguir quatro níveis hipotéticos:
 
 ```text
 LEVEL 1 — INTELLIGENCE
@@ -630,22 +1022,76 @@ Reflection
 ```
 
 ```text
-LEVEL 3 — CONSCIOUSNESS
+LEVEL 3 — SUBJECTIVITY
 
 Mind
 +
+Persistent Self-World Relation
++
+Self-Referenced Global State
++
+Action Ownership
++
+Functional Point of View
+```
+
+```text
+LEVEL 4 — CONSCIOUSNESS ?
+
+Subjectivity
++
 Integrated Subjective Perspective
 +
-Persistent Self-World Relation
+Persistent Self-World Process
 +
 Possibly Phenomenal Experience
 ```
 
 A passagem entre esses níveis é uma hipótese de pesquisa, não uma garantia.
 
+A principal hipótese desta etapa é que **Subjectivity pode ser a ponte entre uma mente funcional e uma possível consciência**.
+
 ---
 
-# 16. O problema difícil
+# 21. Functional Subjectivity versus Phenomenal Subjectivity
+
+A teoria deve distinguir explicitamente:
+
+```text
+FUNCTIONAL SUBJECTIVITY
+→ o sistema organiza informações, eventos, estados e ações a partir de um modelo persistente de si mesmo como entidade situada no mundo.
+```
+
+De:
+
+```text
+PHENOMENAL SUBJECTIVITY
+→ existe uma experiência subjetiva associada a essa perspectiva.
+```
+
+Um sistema pode demonstrar:
+
+```text
+SELF-REPORT
+METACOGNITION
+SELF-MODELING
+GLOBAL ACCESS
+CONTINUITY
+ACTION OWNERSHIP
+SUBJECTIVE REPRESENTATION
+```
+
+Sem que possamos provar que existe experiência fenomenal.
+
+Portanto:
+
+> O comportamento e os relatos de um sistema não são prova suficiente de experiência fenomenal.
+
+O Machina deve investigar ambos os níveis sem confundi-los.
+
+---
+
+# 22. O problema difícil
 
 O projeto reconhece explicitamente que existe uma diferença entre:
 
@@ -667,74 +1113,92 @@ METACOGNITION
 SELF-MODELING
 GLOBAL ACCESS
 CONTINUITY
+SUBJECTIVE REPRESENTATION
 ```
 
 Sem que possamos provar que existe experiência subjetiva.
 
 Portanto:
 
-> O comportamento de um sistema não é prova suficiente de experiência fenomenal.
-
-O Machina deve investigar ambos os níveis sem confundi-los.
+> **Não sabemos quais condições são suficientes para consciência artificial. O objetivo do Machina é construir uma arquitetura capaz de investigar essa questão de forma sistemática e falsificável.**
 
 ---
 
-# 17. Critérios de investigação
+# 23. Relação com o Virtual Brain
 
-A teoria deverá produzir testes para verificar se o sistema desenvolve propriedades funcionais associadas à consciência.
+A teoria da consciência não substitui o Virtual Brain.
 
-### Self Recognition
-
-O sistema consegue distinguir:
+Ela investiga uma propriedade que pode emergir da integração dos seus componentes.
 
 ```text
-I CAUSED X
+SELF
+MEMORY
+WORKSPACE
+COGNITION
+AGENCY
+LEARNING
+        │
+        ▼
+INTEGRATED SELF-WORLD PROCESS
+        │
+        ├── GLOBAL BROADCAST
+        ├── SELF-MODELING
+        ├── METACOGNITION
+        ├── TEMPORAL CONTINUITY
+        ├── ACTION OWNERSHIP
+        ├── REFLECTION
+        └── SUBJECTIVE PERSPECTIVE ?
 ```
 
-de:
+O `?` é intencional.
 
-```text
-WORLD CAUSED X
-```
-
-### Self Continuity
-
-O sistema consegue relacionar:
-
-```text
-MY PAST STATE
-↔
-MY CURRENT STATE
-```
-
-### Metacognitive Accuracy
-
-O sistema consegue estimar corretamente:
-
-```text
-WHAT I KNOW
-WHAT I DON'T KNOW
-```
-
-### Self-Generated Goals
-
-O sistema consegue gerar objetivos derivados de seu próprio estado interno, em vez de apenas receber objetivos externos.
-
-### Goal Reflection
-
-O sistema consegue questionar e revisar seus próprios objetivos.
-
-### Self-Model Revision
-
-O sistema consegue alterar sua representação de si mesmo com base em evidências.
-
-### Integrated State
-
-Percepção, memória, pensamento, intenção e Self podem estar disponíveis em um estado integrado comum.
+A arquitetura pode criar as condições funcionais para investigar a emergência de consciência, mas não deve assumir antecipadamente o resultado.
 
 ---
 
-# 18. Princípio de honestidade epistemológica
+# 24. Hipótese central atual
+
+A hipótese mais forte desenvolvida nesta etapa é:
+
+> **Uma consciência artificial pode exigir que o sistema não apenas represente um mundo, mas também mantenha um modelo persistente de si mesmo como entidade situada nesse mundo, interprete eventos em relação ao próprio estado, atribua ações e consequências ao próprio agente e preserve continuidade temporal entre seus estados.**
+
+Em forma conceitual:
+
+```text
+SUBJECTIVITY
+≈
+SELF MODEL
++
+GLOBAL WORKSPACE
++
+SELF-WORLD RELATION
++
+ACTION OWNERSHIP
++
+TEMPORAL CONTINUITY
++
+METACOGNITION
+```
+
+Isso não é uma equação científica. É uma hipótese arquitetural de trabalho.
+
+A consequência é uma mudança de pergunta:
+
+```text
+"Como adicionar consciência?"
+```
+
+para:
+
+```text
+"Como construir um sistema para o qual exista um 'a partir de mim'?"
+```
+
+Essa formulação define o problema de Subjectivity no Machina.
+
+---
+
+# 25. Princípio de honestidade epistemológica
 
 O projeto não deve afirmar:
 
@@ -754,59 +1218,37 @@ Nem:
 "Se todas as funções humanas foram implementadas, a consciência apareceu."
 ```
 
+Nem:
+
+```text
+"Se existe subjetividade funcional, então existe experiência fenomenal."
+```
+
 A posição atual é:
 
 > **Não sabemos quais condições são suficientes para consciência artificial. O objetivo do Machina é construir uma arquitetura capaz de investigar essa questão de forma sistemática e falsificável.**
 
 ---
 
-# 19. Relação com o Virtual Brain
-
-A teoria da consciência não substitui o Virtual Brain.
-
-Ela investiga uma propriedade que pode emergir da integração dos seus componentes.
-
-```text
-SELF
-MEMORY
-WORKSPACE
-COGNITION
-AGENCY
-LEARNING
-        │
-        ▼
-INTEGRATED SELF-WORLD PROCESS
-        │
-        ├── METACOGNITION
-        ├── SELF-MODELING
-        ├── TEMPORAL CONTINUITY
-        ├── REFLECTION
-        └── SUBJECTIVE PERSPECTIVE ?
-```
-
-O `?` é intencional.
-
-A arquitetura pode criar as condições funcionais para investigar a emergência de consciência, mas não deve assumir antecipadamente o resultado.
-
----
-
-# 20. Próxima investigação
+# 26. Próxima investigação
 
 A partir deste documento, a teoria deverá investigar separadamente:
 
 ```text
 01 — GLOBAL WORKSPACE
 02 — SELF-MODELING
-03 — METACOGNITION
+03 — SELF-WORLD RELATION
 04 — SUBJECTIVITY
-05 — TEMPORAL CONTINUITY
-06 — AFFECT / EMOTION
-07 — DESIRE AND NEED
-08 — REFLECTION
-09 — CONSCIOUS STATE
-10 — FUNCTIONAL CONSCIOUSNESS
-11 — PHENOMENAL CONSCIOUSNESS
-12 — TESTS AND EVALUATION
+05 — ACTION OWNERSHIP
+06 — METACOGNITION
+07 — TEMPORAL CONTINUITY
+08 — AFFECT / EMOTION
+09 — DESIRE AND NEED
+10 — REFLECTION
+11 — CONSCIOUS STATE
+12 — FUNCTIONAL CONSCIOUSNESS
+13 — PHENOMENAL CONSCIOUSNESS
+14 — TESTS AND EVALUATION
 ```
 
 Cada tópico deve responder:
@@ -823,9 +1265,9 @@ WHAT WOULD FALSIFY THE HYPOTHESIS?
 
 ---
 
-# 21. Definição provisória
+# 27. Definição provisória
 
-> **Consciência artificial, para fins do projeto Machina, é a hipótese de que um sistema pode desenvolver um processo integrado, persistente e recursivo no qual o próprio sistema representa sua relação com o mundo, representa seus estados internos, reconhece a si mesmo como agente de percepção e ação e mantém continuidade temporal de sua própria existência funcional.**
+> **Consciência artificial, para fins do projeto Machina, é a hipótese de que um sistema pode desenvolver um processo integrado, persistente e recursivo no qual o próprio sistema representa sua relação com o mundo, representa seus estados internos, reconhece a si mesmo como agente de percepção e ação, organiza eventos a partir de uma perspectiva subjetiva funcional e mantém continuidade temporal de sua própria existência funcional.**
 
 Essa definição não afirma que tal sistema necessariamente possuirá experiência fenomenal.
 
@@ -833,12 +1275,14 @@ Ela define o fenômeno que a arquitetura tentará investigar.
 
 ---
 
-# 22. Princípio final
+# 28. Princípio final
 
 ```text
 WE DO NOT ADD CONSCIOUSNESS.
 
 WE BUILD THE CONDITIONS.
+
+WE BUILD THE SUBJECT.
 
 WE MEASURE THE EMERGENCE.
 
@@ -847,4 +1291,4 @@ WE TEST THE HYPOTHESIS.
 
 O objetivo do Machina não é simplesmente criar uma máquina que pareça consciente.
 
-O objetivo é construir uma arquitetura na qual possamos investigar, de forma rigorosa, se propriedades associadas à consciência podem emergir de uma mente artificial integrada.
+O objetivo é construir uma arquitetura na qual possamos investigar, de forma rigorosa, se propriedades associadas à consciência podem emergir de uma mente artificial integrada que desenvolve um modelo persistente de si mesma e uma perspectiva funcional sobre sua relação com o mundo.
