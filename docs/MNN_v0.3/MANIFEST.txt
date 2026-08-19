@@ -1,0 +1,6 @@
+MNN v0.3 package manifest
+==========================
+01_Machina_V2/
+02_MNN_v0.1/
+03_MNN_v0.3/MNN_v0.3_Dinamica_e_Propagacao.md
+README.md
