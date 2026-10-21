@@ -453,12 +453,20 @@ class VirtualBrain:
                 if self._stop_if_requested(cycle_id, "model.updated", stop_after):
                     return None
 
-            if callable(getattr(self.cognition, "apply_evaluated_outcome", None)):
-                self._stage(
+            if callable(getattr(self.cognition, "propose_evaluated_outcome", None)):
+                plasticity = self._stage(
                     cycle_id,
                     "mnn.plasticity_applied",
                     lambda: self._mnn_plasticity_update(evaluation, validation),
                 )
+                # Commit only the snapshot that is already durable. If this is
+                # a resumed cycle, _stage returns the existing event and this
+                # restoration does not apply the learning update a second time.
+                restore_snapshot = getattr(self.cognition, "restore_from_snapshot", None)
+                change = plasticity.data.get("change", {})
+                snapshot = change.get("snapshot") if isinstance(change, Mapping) else None
+                if callable(restore_snapshot) and isinstance(snapshot, Mapping):
+                    restore_snapshot(snapshot)
                 if self._stop_if_requested(cycle_id, "mnn.plasticity_applied", stop_after):
                     return None
 
@@ -915,10 +923,10 @@ class VirtualBrain:
         self, evaluation: Artifact, validation: Artifact
     ) -> Artifact:
         """Persist an optional MNN plasticity update after outcome evaluation."""
-        apply_outcome = getattr(self.cognition, "apply_evaluated_outcome", None)
-        if not callable(apply_outcome):
-            raise RuntimeError("MNN plasticity hook is not available")
-        change = dict(apply_outcome(evaluation=evaluation, validation=validation))
+        propose_outcome = getattr(self.cognition, "propose_evaluated_outcome", None)
+        if not callable(propose_outcome):
+            raise RuntimeError("MNN plasticity proposal hook is not available")
+        change = dict(propose_outcome(evaluation=evaluation, validation=validation))
         prior_updates = self.store.artifacts_for_event_types(("mnn.plasticity_applied",))
         previous_version = len(prior_updates)
         reward = change.get("reward", 0.0)
