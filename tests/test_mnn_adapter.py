@@ -145,6 +145,39 @@ class MNNCognitionAdapterTests(unittest.TestCase):
             brain.store.verify_integrity()
             brain.close()
 
+    def test_resume_after_plasticity_does_not_apply_reward_twice(self):
+        with tempfile.TemporaryDirectory() as directory:
+            network = self.make_network()
+            adapter = MNNCognitionAdapter(
+                network,
+                input_features={"text": "text_length"},
+            )
+            brain = VirtualBrain(Path(directory) / "brain.sqlite", cognition=adapter)
+            cycle_id = brain.start_cycle("Persist the learning boundary.", "Test resume")
+            paused = brain.advance(cycle_id, stop_after="mnn.plasticity_applied")
+            self.assertIsNone(paused)
+            weight_after_update = adapter.network.connections["text-to-signal"].weight
+            events_after_pause = [
+                event for event in brain.store.events_for_cycle(cycle_id)
+                if event.event_type == "mnn.plasticity_applied"
+            ]
+            self.assertEqual(len(events_after_pause), 1)
+
+            result = brain.resume(cycle_id)
+            self.assertEqual(result.status, "completed")
+            self.assertEqual(
+                adapter.network.connections["text-to-signal"].weight,
+                weight_after_update,
+            )
+            events_after_resume = [
+                event for event in brain.store.events_for_cycle(cycle_id)
+                if event.event_type == "mnn.plasticity_applied"
+            ]
+            self.assertEqual(len(events_after_resume), 1)
+            self.assertTrue(brain.audit_cycle(cycle_id).valid)
+            brain.store.verify_integrity()
+            brain.close()
+
 
 if __name__ == "__main__":
     unittest.main()
