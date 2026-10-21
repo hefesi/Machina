@@ -6,6 +6,7 @@ stores the trace in the normal cognitive artifact.
 '''
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
 
