@@ -66,7 +66,7 @@ class MNNCognitionAdapter:
         goal_text = _text(goal.data["description"])
         features = {
             "text_length": min(len(text), 1000) / 1000.0,
-            "token_count": min(len(re.findall(r"[\\wÀ-ÿ]+", text)), 200) / 200.0,
+            "token_count": min(len(re.findall(r"[\wÀ-ÿ]+", text)), 200) / 200.0,
             "digit_count": min(sum(char.isdigit() for char in text), 100) / 100.0,
             "punctuation_count": min(sum(not char.isalnum() and not char.isspace() for char in text), 100) / 100.0,
             "goal_length": min(len(goal_text), 1000) / 1000.0,
