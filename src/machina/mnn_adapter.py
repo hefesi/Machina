@@ -51,18 +51,19 @@ class MNNCognitionAdapter:
         if self.learning_rate < 0 or not math.isfinite(self.learning_rate):
             raise ValueError("learning_rate must be finite and non-negative")
 
-    def apply_evaluated_outcome(
+    def propose_evaluated_outcome(
         self, *, evaluation: Artifact, validation: Artifact
     ) -> Mapping[str, object]:
-        """Apply bounded Hebbian plasticity after an outcome is evaluated.
+        """Compute a bounded plasticity proposal without mutating live state.
 
-        Successful outcomes provide positive reward; failed outcomes provide
-        negative reward. This changes neural weights only and does not override
-        the separate semantic-memory validation decision.
+        The orchestrator first persists this proposal in the append-only journal,
+        then commits the saved snapshot back into the adapter. This ordering
+        avoids changing in-memory weights if the journal append fails.
         """
         succeeded = bool(evaluation.data["success"])
         reward = 1.0 if succeeded else -1.0
-        weight_deltas = self.network.apply_hebbian(
+        candidate = MNN.from_snapshot(self.network.snapshot())
+        weight_deltas = candidate.apply_hebbian(
             learning_rate=self.learning_rate,
             reward=reward,
         )
@@ -71,7 +72,7 @@ class MNNCognitionAdapter:
             "reward": reward,
             "validation_status": validation.data["status"],
             "weight_deltas": weight_deltas,
-            "snapshot": self.network.snapshot(),
+            "snapshot": candidate.snapshot(),
         }
 
     def restore_from_snapshot(self, snapshot: Mapping[str, object]) -> None:
