@@ -80,9 +80,10 @@ Supported features are `text_length`, `token_count`, `digit_count`,
 `punctuation_count`, `goal_length`, `memory_count`, and
 `source_reliability`. This is a diagnostic integration: the existing cognition
 engine still generates plans, and the numeric MNN signal does not yet control
-decisions. The snapshot is stored in the event journal, but automatic
-restoration of adapter state across a new process and reward-driven MNN updates
-from cycle outcomes are not implemented yet.
+decisions. The snapshot is stored in the event journal. Before a new cognitive cycle, the
+VirtualBrain restores the latest available MNN snapshot through the adapter's
+optional restoration hook; a regression test covers a process restart. The
+adapter still does not apply reward-driven MNN updates from cycle outcomes.
 
 ## Current limits
 
