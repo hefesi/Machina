@@ -563,6 +563,20 @@ class VirtualBrain:
         goal: Artifact,
         request: Artifact,
     ) -> Artifact:
+        # Optional stateful cognition plugins may expose a snapshot-restoration
+        # hook. Restore the latest persisted MNN trace before advancing a new
+        # cycle so process restarts do not silently reset neural state.
+        restore_snapshot = getattr(self.cognition, "restore_from_snapshot", None)
+        if callable(restore_snapshot):
+            prior_results = self.store.artifacts_for_event_types(("cognition.completed",))
+            for prior in reversed(prior_results):
+                understanding = prior.data.get("understanding", {})
+                trace = understanding.get("mnn_signal", {}) if isinstance(understanding, Mapping) else {}
+                snapshot = trace.get("snapshot") if isinstance(trace, Mapping) else None
+                if isinstance(snapshot, Mapping):
+                    restore_snapshot(snapshot)
+                    break
+
         return Artifact.create(
             ContractKind.COGNITIVE_RESULT,
             cycle_id=request.cycle_id,
