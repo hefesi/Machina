@@ -453,6 +453,15 @@ class VirtualBrain:
                 if self._stop_if_requested(cycle_id, "model.updated", stop_after):
                     return None
 
+            if callable(getattr(self.cognition, "apply_evaluated_outcome", None)):
+                self._stage(
+                    cycle_id,
+                    "mnn.plasticity_applied",
+                    lambda: self._mnn_plasticity_update(evaluation, validation),
+                )
+                if self._stop_if_requested(cycle_id, "mnn.plasticity_applied", stop_after):
+                    return None
+
             self._stage(
                 cycle_id,
                 "cycle.completed",
@@ -568,11 +577,16 @@ class VirtualBrain:
         # cycle so process restarts do not silently reset neural state.
         restore_snapshot = getattr(self.cognition, "restore_from_snapshot", None)
         if callable(restore_snapshot):
-            prior_results = self.store.artifacts_for_event_types(("cognition.completed",))
+            prior_results = self.store.artifacts_for_event_types(
+                ("cognition.completed", "mnn.plasticity_applied")
+            )
             for prior in reversed(prior_results):
                 understanding = prior.data.get("understanding", {})
                 trace = understanding.get("mnn_signal", {}) if isinstance(understanding, Mapping) else {}
                 snapshot = trace.get("snapshot") if isinstance(trace, Mapping) else None
+                if not isinstance(snapshot, Mapping):
+                    change = prior.data.get("change", {})
+                    snapshot = change.get("snapshot") if isinstance(change, Mapping) else None
                 if isinstance(snapshot, Mapping):
                     restore_snapshot(snapshot)
                     break
@@ -894,6 +908,37 @@ class VirtualBrain:
             source_refs=proposal.source_refs,
             epistemic_status=EpistemicStatus.BELIEVED,
             confidence=proposal.confidence,
+            status="committed",
+        )
+
+    def _mnn_plasticity_update(
+        self, evaluation: Artifact, validation: Artifact
+    ) -> Artifact:
+        """Persist an optional MNN plasticity update after outcome evaluation."""
+        apply_outcome = getattr(self.cognition, "apply_evaluated_outcome", None)
+        if not callable(apply_outcome):
+            raise RuntimeError("MNN plasticity hook is not available")
+        change = dict(apply_outcome(evaluation=evaluation, validation=validation))
+        prior_updates = self.store.artifacts_for_event_types(("mnn.plasticity_applied",))
+        previous_version = len(prior_updates)
+        reward = change.get("reward", 0.0)
+        return Artifact.create(
+            ContractKind.MODEL_UPDATE,
+            cycle_id=evaluation.cycle_id,
+            producer="mnn_plasticity",
+            data={
+                "target": "mnn",
+                "previous_version": previous_version,
+                "new_version": previous_version + 1,
+                "change": change,
+                "evidence_refs": [evaluation.id, validation.id],
+                "reason": f"Outcome evaluation applied reward {reward}.",
+                "created_by": "MNNCognitionAdapter",
+            },
+            input_refs=[evaluation.id, validation.id],
+            source_refs=evaluation.source_refs,
+            epistemic_status=EpistemicStatus.INFERRED,
+            confidence=evaluation.confidence,
             status="committed",
         )
 
