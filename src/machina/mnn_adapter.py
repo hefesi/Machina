@@ -6,6 +6,7 @@ stores the trace in the normal cognitive artifact.
 '''
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping
 
@@ -33,6 +34,7 @@ class MNNCognitionAdapter:
         *,
         input_features: Mapping[str, str],
         base_engine: CognitionEngine | None = None,
+        learning_rate: float = 0.01,
     ) -> None:
         if not input_features:
             raise ValueError("input_features must map at least one unit to a feature")
@@ -45,6 +47,32 @@ class MNNCognitionAdapter:
         self.network = network
         self.input_features = dict(input_features)
         self.base_engine = base_engine or DeterministicCognition()
+        self.learning_rate = float(learning_rate)
+        if self.learning_rate < 0 or not math.isfinite(self.learning_rate):
+            raise ValueError("learning_rate must be finite and non-negative")
+
+    def apply_evaluated_outcome(
+        self, *, evaluation: Artifact, validation: Artifact
+    ) -> Mapping[str, object]:
+        """Apply bounded Hebbian plasticity after an outcome is evaluated.
+
+        Successful outcomes provide positive reward; failed outcomes provide
+        negative reward. This changes neural weights only and does not override
+        the separate semantic-memory validation decision.
+        """
+        succeeded = bool(evaluation.data["success"])
+        reward = 1.0 if succeeded else -1.0
+        weight_deltas = self.network.apply_hebbian(
+            learning_rate=self.learning_rate,
+            reward=reward,
+        )
+        return {
+            "success": succeeded,
+            "reward": reward,
+            "validation_status": validation.data["status"],
+            "weight_deltas": weight_deltas,
+            "snapshot": self.network.snapshot(),
+        }
 
     def restore_from_snapshot(self, snapshot: Mapping[str, object]) -> None:
         """Restore a persisted MNN snapshot before processing the next cycle."""

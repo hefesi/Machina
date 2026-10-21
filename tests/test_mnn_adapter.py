@@ -17,7 +17,7 @@ class MNNCognitionAdapterTests(unittest.TestCase):
     def make_network(self) -> MNN:
         network = MNN()
         network.add_unit(Unit("text", activation="identity"))
-        network.add_unit(Unit("signal", activation="tanh"))
+        network.add_unit(Unit("signal", bias=0.5, activation="tanh"))
         network.add_connection(Connection("text-to-signal", "text", "signal", 1.0))
         return network
 
@@ -43,6 +43,16 @@ class MNNCognitionAdapterTests(unittest.TestCase):
             self.assertEqual(trace["snapshot"]["schema_version"], 1)
             self.assertIn("signal", trace["activations"])
             self.assertIn("numeric diagnostic", trace["interpretation"])
+            plasticity = next(
+                event.artifact
+                for event in result.events
+                if event.event_type == "mnn.plasticity_applied"
+            )
+            self.assertEqual(plasticity.data["change"]["reward"], 1.0)
+            self.assertGreater(
+                plasticity.data["change"]["snapshot"]["connections"][0]["weight"],
+                trace["snapshot"]["connections"][0]["weight"],
+            )
             self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
             brain.store.verify_integrity()
             brain.close()
@@ -71,6 +81,12 @@ class MNNCognitionAdapterTests(unittest.TestCase):
             )
             first_snapshot = first_cognitive.data["understanding"]["mnn_signal"]["snapshot"]
             self.assertEqual(first_snapshot["timestep"], 1)
+            first_plasticity = next(
+                event.artifact
+                for event in first_result.events
+                if event.event_type == "mnn.plasticity_applied"
+            )
+            persisted_snapshot = first_plasticity.data["change"]["snapshot"]
             first_brain.close()
 
             restarted_network = self.make_network()
@@ -89,11 +105,45 @@ class MNNCognitionAdapterTests(unittest.TestCase):
             self.assertEqual(second_snapshot["timestep"], 2)
             self.assertEqual(
                 second_snapshot["connections"][0]["weight"],
-                first_snapshot["connections"][0]["weight"],
+                persisted_snapshot["connections"][0]["weight"],
             )
             self.assertTrue(restarted_brain.audit_cycle(second_result.cycle_id).valid)
             restarted_brain.store.verify_integrity()
             restarted_brain.close()
+
+    def test_failed_outcome_applies_negative_reward_without_semantic_consolidation(self):
+        class FailingExecutor:
+            def execute(self, intent):
+                raise RuntimeError("controlled test failure")
+
+        with tempfile.TemporaryDirectory() as directory:
+            network = self.make_network()
+            adapter = MNNCognitionAdapter(
+                network,
+                input_features={"text": "text_length"},
+            )
+            brain = VirtualBrain(
+                Path(directory) / "brain.sqlite",
+                cognition=adapter,
+                action_executor=FailingExecutor(),
+            )
+            result = brain.run_cycle("A failed observation action.", "Observe failure")
+            plasticity = next(
+                event.artifact
+                for event in result.events
+                if event.event_type == "mnn.plasticity_applied"
+            )
+            validation = next(
+                event.artifact
+                for event in result.events
+                if event.event_type == "consolidation.validated"
+            )
+            self.assertEqual(validation.data["status"], "rejected")
+            self.assertEqual(plasticity.data["change"]["reward"], -1.0)
+            self.assertEqual(plasticity.data["change"]["validation_status"], "rejected")
+            self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+            brain.store.verify_integrity()
+            brain.close()
 
 
 if __name__ == "__main__":
