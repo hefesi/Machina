@@ -62,6 +62,39 @@ class MNNCoreTests(unittest.TestCase):
         self.assertEqual(net.step()["output"], 0.0)
         self.assertEqual(net.apply_hebbian(learning_rate=1.0), {})
 
+    def test_structural_growth_adds_edge_with_bounded_weight(self):
+        net = self.make_network()
+        edge = net.grow_connection("new-edge", "output", "input", weight=10.0)
+        self.assertEqual(edge.weight, net.weight_limit)
+        self.assertIn("new-edge", net.connections)
+        with self.assertRaises(ValueError):
+            net.grow_connection("duplicate-pair", "output", "input")
+
+    def test_structural_pruning_is_bounded_and_deterministic(self):
+        net = self.make_network()
+        net.add_connection(Connection("weak-b", "input", "output", weight=0.1))
+        net.add_connection(Connection("weak-a", "output", "input", weight=-0.1))
+        removed = net.prune_connections(min_abs_weight=0.2, max_remove=1)
+        self.assertEqual(removed, ["weak-a"])
+        self.assertIn("weak-b", net.connections)
+        self.assertEqual(net.prune_connections(min_abs_weight=0.2), ["weak-b"])
+
+    def test_unit_removal_requires_explicit_cascade(self):
+        net = self.make_network()
+        with self.assertRaises(ValueError):
+            net.remove_unit("input")
+        removed = net.remove_unit("input", cascade=True)
+        self.assertEqual(removed.id, "input")
+        self.assertNotIn("edge", net.connections)
+        self.assertNotIn("input", net.units)
+
+    def test_pruning_rejects_invalid_limits(self):
+        net = self.make_network()
+        with self.assertRaises(ValueError):
+            net.prune_connections(min_abs_weight=-1.0)
+        with self.assertRaises(ValueError):
+            net.prune_connections(min_abs_weight=1.0, max_remove=-1)
+
 
 if __name__ == "__main__":
     unittest.main()

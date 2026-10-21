@@ -69,6 +69,8 @@ class MNN:
     Inputs are clamped as unit states for the current step. All non-input units
     update synchronously from the previous state snapshot, so recurrent graphs
     are deterministic and do not depend on connection insertion order.
+    Structural edits are explicit operations; this class does not autonomously
+    invent a topology or claim that pruning/growth is a complete learning rule.
     """
     def __init__(self, *, weight_limit: float = 5.0) -> None:
         self.weight_limit = _finite(weight_limit, "weight_limit")
@@ -90,6 +92,69 @@ class MNN:
             raise ValueError("connection endpoints must exist before adding an edge")
         self.connections[connection.id] = connection
         connection.weight = max(-self.weight_limit, min(self.weight_limit, connection.weight))
+
+    def grow_connection(
+        self, connection_id: str, source: str, target: str, *, weight: float = 1.0
+    ) -> Connection:
+        """Add a new directed edge as an explicit structural-growth operation."""
+        if any(edge.source == source and edge.target == target
+               for edge in self.connections.values()):
+            raise ValueError(f"connection already exists from {source!r} to {target!r}")
+        edge = Connection(connection_id, source, target, weight)
+        self.add_connection(edge)
+        return edge
+
+    def remove_connection(self, connection_id: str) -> Connection:
+        """Remove one edge and return it; fail clearly if the ID is unknown."""
+        try:
+            return self.connections.pop(connection_id)
+        except KeyError as error:
+            raise KeyError(f"unknown connection: {connection_id}") from error
+
+    def remove_unit(self, unit_id: str, *, cascade: bool = False) -> Unit:
+        """Remove a unit; incident edges require explicit cascade=True."""
+        if unit_id not in self.units:
+            raise KeyError(f"unknown unit: {unit_id}")
+        incident = [
+            edge_id for edge_id, edge in self.connections.items()
+            if edge.source == unit_id or edge.target == unit_id
+        ]
+        if incident and not cascade:
+            raise ValueError(
+                f"unit {unit_id!r} has incident connections; pass cascade=True to remove them"
+            )
+        for edge_id in incident:
+            del self.connections[edge_id]
+        return self.units.pop(unit_id)
+
+    def prune_connections(
+        self, *, min_abs_weight: float, max_remove: int | None = None
+    ) -> list[str]:
+        """Prune weakest edges below a threshold in deterministic order.
+
+        Ties are resolved by connection ID. Returns the IDs actually removed.
+        A max_remove of zero is a no-op.
+        """
+        threshold = _finite(min_abs_weight, "min_abs_weight")
+        if threshold < 0:
+            raise ValueError("min_abs_weight cannot be negative")
+        if max_remove is not None and (
+            isinstance(max_remove, bool) or not isinstance(max_remove, int) or max_remove < 0
+        ):
+            raise ValueError("max_remove must be a non-negative integer or None")
+        candidates = sorted(
+            (
+                edge for edge in self.connections.values()
+                if abs(edge.weight) < threshold
+            ),
+            key=lambda edge: (abs(edge.weight), edge.id),
+        )
+        if max_remove is not None:
+            candidates = candidates[:max_remove]
+        removed = [edge.id for edge in candidates]
+        for edge_id in removed:
+            del self.connections[edge_id]
+        return removed
 
     def step(self, inputs: Mapping[str, float] | None = None) -> dict[str, float]:
         inputs = inputs or {}
