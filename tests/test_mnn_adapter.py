@@ -54,6 +54,47 @@ class MNNCognitionAdapterTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MNNCognitionAdapter(network, input_features={"text": "semantic_understanding"})
 
+    def test_mnn_state_restores_from_journal_after_process_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brain.sqlite"
+            first_network = self.make_network()
+            first_adapter = MNNCognitionAdapter(
+                first_network,
+                input_features={"text": "text_length"},
+            )
+            first_brain = VirtualBrain(path, cognition=first_adapter)
+            first_result = first_brain.run_cycle("First observation", "Record it")
+            first_cognitive = next(
+                event.artifact
+                for event in first_result.events
+                if event.event_type == "cognition.completed"
+            )
+            first_snapshot = first_cognitive.data["understanding"]["mnn_signal"]["snapshot"]
+            self.assertEqual(first_snapshot["timestep"], 1)
+            first_brain.close()
+
+            restarted_network = self.make_network()
+            restarted_adapter = MNNCognitionAdapter(
+                restarted_network,
+                input_features={"text": "text_length"},
+            )
+            restarted_brain = VirtualBrain(path, cognition=restarted_adapter)
+            second_result = restarted_brain.run_cycle("Second observation", "Record it")
+            second_cognitive = next(
+                event.artifact
+                for event in second_result.events
+                if event.event_type == "cognition.completed"
+            )
+            second_snapshot = second_cognitive.data["understanding"]["mnn_signal"]["snapshot"]
+            self.assertEqual(second_snapshot["timestep"], 2)
+            self.assertEqual(
+                second_snapshot["connections"][0]["weight"],
+                first_snapshot["connections"][0]["weight"],
+            )
+            self.assertTrue(restarted_brain.audit_cycle(second_result.cycle_id).valid)
+            restarted_brain.store.verify_integrity()
+            restarted_brain.close()
+
 
 if __name__ == "__main__":
     unittest.main()

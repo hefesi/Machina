@@ -46,6 +46,14 @@ class MNNCognitionAdapter:
         self.input_features = dict(input_features)
         self.base_engine = base_engine or DeterministicCognition()
 
+    def restore_from_snapshot(self, snapshot: Mapping[str, object]) -> None:
+        """Restore a persisted MNN snapshot before processing the next cycle."""
+        restored = MNN.from_snapshot(snapshot)
+        missing = set(self.input_features) - restored.units.keys()
+        if missing:
+            raise ValueError(f"snapshot is missing configured input units: {sorted(missing)}")
+        self.network = restored
+
     def analyze(
         self,
         *,
