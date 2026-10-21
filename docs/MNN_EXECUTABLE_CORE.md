@@ -49,7 +49,46 @@ project with `python -m pip install -e .`.
 
 ## Current limits
 
-This is a deterministic graph substrate, not an autonomous learner or AGI.
-It does not implement gradient-based training, an autonomous structural-growth
-policy, asynchronous neural dynamics, task benchmarks, or integration into the
-VirtualBrain cycle. Those should be developed as separate, measured steps.
+## VirtualBrain integration
+
+The optional `MNNCognitionAdapter` wraps the existing cognition component. It
+extracts a small, explicit set of normalized numeric features from an
+observation, goal, and retrieval count, runs one MNN timestep, and attaches the
+activations plus a complete network snapshot to the persisted
+`cognition.completed` artifact.
+
+```python
+from machina import Connection, MNN, MNNCognitionAdapter, Unit, VirtualBrain
+
+network = MNN()
+network.add_unit(Unit("text_input", activation="identity"))
+network.add_unit(Unit("signal", activation="tanh"))
+network.add_connection(Connection("input-to-signal", "text_input", "signal", 0.8))
+
+adapter = MNNCognitionAdapter(
+    network,
+    input_features={"text_input": "text_length"},
+)
+brain = VirtualBrain("machina.sqlite", cognition=adapter)
+try:
+    result = brain.run_cycle("An observation", "Record it")
+finally:
+    brain.close()
+```
+
+Supported features are `text_length`, `token_count`, `digit_count`,
+`punctuation_count`, `goal_length`, `memory_count`, and
+`source_reliability`. This is a diagnostic integration: the existing cognition
+engine still generates plans, and the numeric MNN signal does not yet control
+decisions. The snapshot is stored in the event journal, but automatic
+restoration of adapter state across a new process and reward-driven MNN updates
+from cycle outcomes are not implemented yet.
+
+## Current limits
+
+This remains an experimental graph substrate, not an autonomous learner or
+AGI. It does not implement gradient-based training, autonomous structural
+growth policy, asynchronous neural dynamics, or validated task benchmarks.
+The adapter is the first observable bridge into the VirtualBrain cycle; the
+next step is to define and test how persisted MNN state is restored and how
+evaluated outcomes may safely drive plasticity.
