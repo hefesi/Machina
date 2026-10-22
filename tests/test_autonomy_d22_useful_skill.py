@@ -52,7 +52,9 @@ class UsefulSkillTests(unittest.TestCase):
             learner = AdaptiveStrategyLearner(database)
             learner.record_outcome("prose_lookup", "direct", 0.0)
             learner.record_outcome("prose_lookup", "decompose", 1.0)
+            learner.record_outcome("prose_lookup", "checklist", 0.0)
             learner.record_outcome("table_lookup", "direct", 0.0)
+            learner.record_outcome("table_lookup", "decompose", 0.0)
             learner.record_outcome("table_lookup", "checklist", 1.0)
             learner.close()
 
