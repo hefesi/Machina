@@ -8,6 +8,7 @@ action executor without changing the durable loop.
 from .brain import CycleAudit, CycleResult, VirtualBrain
 from .contracts import Artifact, ContractError, ContractKind
 from .event_store import EventStore, IntegrityError
+from .fragment_memory import FragmentMemory, MemoryFragment
 from .mnn import Connection, MNN, Unit
 from .mnn_adapter import MNNCognitionAdapter
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
@@ -20,6 +21,8 @@ __all__ = [
     "CycleAudit",
     "CycleResult",
     "EventStore",
+    "FragmentMemory",
+    "MemoryFragment",
     "DuplicateKnowledgeError",
     "KnowledgeDocument",
     "KnowledgeHit",
