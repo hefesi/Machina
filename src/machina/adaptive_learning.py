@@ -67,6 +67,22 @@ class AdaptiveStrategyLearner:
             (task_type,),
         ).fetchall()
         stats = {row["strategy"]: (int(row["trials"]), float(row["mean_reward"])) for row in rows}
+
+        # Transfer learned strategy quality to a task family never seen before.
+        # Task-specific evidence always wins; global estimates are only a fallback.
+        if not stats:
+            rows = self._db.execute(
+                """
+                SELECT strategy, COUNT(*) AS trials, AVG(reward) AS mean_reward
+                FROM strategy_outcomes
+                GROUP BY strategy
+                """
+            ).fetchall()
+            stats = {
+                row["strategy"]: (int(row["trials"]), float(row["mean_reward"]))
+                for row in rows
+            }
+
         unseen = [option for option in options if option not in stats]
         if unseen:
             return min(unseen)
