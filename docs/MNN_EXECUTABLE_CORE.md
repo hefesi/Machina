@@ -1,9 +1,10 @@
 # MNN executable core (experimental)
 
-This module introduces a runnable neural substrate in Machina without
-replacing the existing durable cognitive loop.
+Machina now contains a runnable, stateful graph substrate and an optional
+adapter into the VirtualBrain cognitive cycle. This is an experimental
+research implementation, not evidence of general intelligence.
 
-## Concepts
+## Core model
 
 - **Unit**: stable ID, bias, activation function, and current state.
 - **Connection**: directed edge with a bounded weight and enabled flag.
@@ -13,7 +14,7 @@ replacing the existing durable cognitive loop.
 - **Weight plasticity**: `apply_hebbian(learning_rate, reward)` applies
   `Δw = learning_rate × reward × pre_state × post_state`; weights are clamped
   to `[-weight_limit, +weight_limit]`. This is a simple baseline, not a
-  biologically complete learning rule.
+  biologically complete or generally effective learning rule.
 - **Structural plasticity primitives**:
   - `grow_connection(...)` adds an edge after validating endpoints and
     prevents duplicate directed source/target pairs.
@@ -23,9 +24,31 @@ replacing the existing durable cognitive loop.
     explicitly removes a unit and its incident edges.
   - These are explicit, testable topology-editing operations. The network does
     **not** yet autonomously choose when or where to grow/prune connections.
-- **Persistence boundary**: `snapshot()` returns JSON-compatible topology and
-  state; `from_snapshot()` restores it. The MNN does not silently write into
-  the existing event journal.
+- **Snapshots**: `snapshot()` returns JSON-compatible topology and state;
+  `from_snapshot()` restores it.
+
+## VirtualBrain integration and durable learning
+
+The optional `MNNCognitionAdapter` wraps the existing cognition component. It
+extracts a small set of normalized numeric features from an observation, goal,
+and retrieval count, runs one MNN timestep, and attaches activations and a
+network snapshot to the persisted `cognition.completed` artifact.
+
+The existing cognition engine remains responsible for candidate plans. MNN
+activations are diagnostic and do not independently select actions.
+
+After an evaluation and validation stage, the adapter can propose a reward
+modulated Hebbian update: success receives reward `+1`, failure receives
+reward `-1`. The proposed snapshot and weight deltas are written as an
+`mnn.plasticity_applied` journal event before the live adapter restores that
+snapshot. This journal-first ordering supports recovery and prevents the same
+reward from being applied twice when a cycle resumes. The neural weight update
+is distinct from semantic-memory consolidation; it does not automatically make
+a failed proposal into a trusted memory.
+
+Before the next cognitive cycle, VirtualBrain restores the latest MNN snapshot
+from persisted cognition/plasticity events. Regression tests cover process
+restart and exactly-once recovery behavior.
 
 ## Minimal example
 
@@ -44,52 +67,29 @@ brain.grow_connection("feedback", "integrator", "sensor", weight=0.1)
 checkpoint = brain.snapshot()
 ```
 
-Run tests with `python -m unittest discover -s tests -v` after installing the
-project with `python -m pip install -e .`.
+## Reproducible benchmark
 
-## Current limits
+Run the deterministic toy association experiment from the repository root:
 
-## VirtualBrain integration
-
-The optional `MNNCognitionAdapter` wraps the existing cognition component. It
-extracts a small, explicit set of normalized numeric features from an
-observation, goal, and retrieval count, runs one MNN timestep, and attaches the
-activations plus a complete network snapshot to the persisted
-`cognition.completed` artifact.
-
-```python
-from machina import Connection, MNN, MNNCognitionAdapter, Unit, VirtualBrain
-
-network = MNN()
-network.add_unit(Unit("text_input", activation="identity"))
-network.add_unit(Unit("signal", activation="tanh"))
-network.add_connection(Connection("input-to-signal", "text_input", "signal", 0.8))
-
-adapter = MNNCognitionAdapter(
-    network,
-    input_features={"text_input": "text_length"},
-)
-brain = VirtualBrain("machina.sqlite", cognition=adapter)
-try:
-    result = brain.run_cycle("An observation", "Record it")
-finally:
-    brain.close()
+```bash
+python -m benchmarks.mnn_reward_learning
 ```
 
-Supported features are `text_length`, `token_count`, `digit_count`,
-`punctuation_count`, `goal_length`, `memory_count`, and
-`source_reliability`. This is a diagnostic integration: the existing cognition
-engine still generates plans, and the numeric MNN signal does not yet control
-decisions. The snapshot is stored in the event journal. Before a new cognitive cycle, the
-VirtualBrain restores the latest available MNN snapshot through the adapter's
-optional restoration hook; a regression test covers a process restart. The
-adapter still does not apply reward-driven MNN updates from cycle outcomes.
+It compares initial fixed weights with reward-trained weights on two simple
+contexts and reports accuracy, mean squared error, and final weights as JSON.
+The test suite checks determinism and expected behavior. This is a smoke test
+for the plasticity implementation, **not** a meaningful benchmark of language,
+reasoning, broad generalization, or AGI. The baseline is deliberately simple
+and is not a competitive model. See [MNN reward-learning benchmark](MNN_BENCHMARK.md).
 
-## Current limits
+Run tests with `python -m pip install -e .` followed by
+`python -m unittest discover -s tests -v`.
 
-This remains an experimental graph substrate, not an autonomous learner or
-AGI. It does not implement gradient-based training, autonomous structural
-growth policy, asynchronous neural dynamics, or validated task benchmarks.
-The adapter is the first observable bridge into the VirtualBrain cycle; the
-next step is to define and test how persisted MNN state is restored and how
-evaluated outcomes may safely drive plasticity.
+## Current limitations
+
+This remains an experimental graph substrate. It does not yet implement
+gradient-based training, a validated general-purpose learning objective,
+autonomous structural-growth policy, asynchronous neural dynamics, semantic
+understanding grounded in the MNN signal, or evidence of AGI. The next research
+step is to evaluate learning and generalization on diverse, held-out tasks
+against stronger and clearly specified baselines.
