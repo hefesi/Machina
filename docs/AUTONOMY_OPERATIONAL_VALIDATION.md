@@ -7,12 +7,12 @@ closed and reopened.
 
 ## Run
 
-From the repository root with Python 3.12 and the package installed:
+From the repository root with Python 3.12:
 
 ```bash
 python -m pip install -e .
 python -m examples.autonomy_operational_demo
-python -m unittest tests.test_autonomy_operational_validation
+python -m unittest discover -s tests -p 'test_autonomy_operational_validation.py'
 ```
 
 ## Expected evidence
