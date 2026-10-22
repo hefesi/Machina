@@ -234,7 +234,7 @@ class FragmentMemory:
             tag_bonus = 0.2 if requested and requested.intersection(tag.casefold() for tag in fragment.tags) else 0.0
             score = min(1.0, fragment.importance * decay + usage + tag_bonus)
             if fragment.pinned:
-                score = max(score, 0.95)
+                score = 1.0
             ranked.append((score, fragment))
         ranked.sort(key=lambda pair: (-pair[0], -pair[1].importance, pair[1].id))
         return [self._with_priority(fragment, score) for score, fragment in ranked[:limit]]
@@ -273,7 +273,7 @@ class FragmentMemory:
         # A default display score; active() computes with the configured policy.
         priority = float(row["importance"]) * math.exp(-0.04 * age_days)
         if bool(row["pinned"]):
-            priority = max(priority, 0.95)
+            priority = 1.0
         return MemoryFragment(
             id=str(row["id"]), content=str(row["content"]), kind=str(row["kind"]),
             source_uri=str(row["source_uri"]), importance=float(row["importance"]),
