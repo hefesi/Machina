@@ -127,7 +127,7 @@ class PersistentGoalStore:
         if row is None:
             raise ValueError(f"no open persistent goal found for {goal_id!r}")
         prior_evidence = row["evidence"]
-        new_evidence = prior_evidence + "\\n" + "ABANDONED: " + reason if prior_evidence else "ABANDONED: " + reason
+        new_evidence = prior_evidence + "\n" + "ABANDONED: " + reason if prior_evidence else "ABANDONED: " + reason
         self._db.execute(
             "UPDATE persistent_goals SET status = 'abandoned', evidence = ?, "
             "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
