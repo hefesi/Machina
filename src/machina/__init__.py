@@ -5,6 +5,7 @@ model-specific intelligence. A caller can replace cognition, agency and the
 action executor without changing the durable loop.
 """
 
+from .autonomy import AutonomyContext, AutonomyController, AutonomyDecision, GoalCandidate
 from .brain import CycleAudit, CycleResult, VirtualBrain
 from .contracts import Artifact, ContractError, ContractKind
 from .event_store import EventStore, IntegrityError
@@ -15,6 +16,10 @@ from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit,
 
 __all__ = [
     "Artifact",
+    "AutonomyContext",
+    "AutonomyController",
+    "AutonomyDecision",
+    "GoalCandidate",
     "Connection",
     "ContractError",
     "ContractKind",
