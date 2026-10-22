@@ -218,7 +218,7 @@ class MachinaPrototype:
 
 def run_cli(data_dir: str | Path) -> None:
     print("Machina — protótipo local 0.1")
-    print("Comandos: /remember TEXTO | /recall CONSULTA | /think TEXTO | /autonomy | /goal-feedback success|failure|skip [evidência] | /goal-status [status] | /goal-resume ID | /status | /help | /quit")
+    print("Comandos: /remember TEXTO | /recall CONSULTA | /think TEXTO | /autonomy | /goal-feedback success|failure|skip [evidência] | /goal-status [status] | /goal-resume ID | /goal-abandon ID MOTIVO | /status | /help | /quit")
     with MachinaPrototype(data_dir) as machina:
         while True:
             try:
@@ -241,6 +241,7 @@ def run_cli(data_dir: str | Path) -> None:
                         "/goal-feedback success|failure|skip [evidência]": "Registrar resultado explícito, atualizar prioridades e estado do objetivo",
                         "/goal-status [status]": "Listar objetivos persistentes; status: active, completed, paused, needs_revision, abandoned",
                         "/goal-resume ID": "Reativar objetivo pausado ou que precisa de revisão (ID é o goal_id, por exemplo reflect_on_progress)",
+                        "/goal-abandon ID MOTIVO": "Abandonar explicitamente um objetivo aberto e registrar a justificativa",
                         "/status": "Mostrar estado, memória, autonomia e objetivos persistentes",
                         "/quit": "Encerrar",
                     }
@@ -264,6 +265,11 @@ def run_cli(data_dir: str | Path) -> None:
                     if not goal_id:
                         raise ValueError("use /goal-resume GOAL_ID")
                     output = machina.goal_store.resume(goal_id)
+                elif line.startswith("/goal-abandon "):
+                    parts = line[len("/goal-abandon "):].strip().split(maxsplit=1)
+                    if len(parts) != 2:
+                        raise ValueError("use /goal-abandon GOAL_ID MOTIVO")
+                    output = machina.goal_store.abandon(parts[0], parts[1])
                 elif line == "/status":
                     output = machina.status()
                 elif line.startswith("/remember "):
