@@ -64,6 +64,26 @@ class FragmentMemoryTests(unittest.TestCase):
         self.assertEqual(("cause",), self.memory.get("effect", record_access=False).related_ids)
         self.assertEqual(2, self.memory.count())
 
+    def test_recall_finds_lexical_matches_by_query(self) -> None:
+        self.memory.add("Circuito fechado permite corrente elétrica", source_uri="local://electricity", tags=["física"], fragment_id="electricity")
+        self.memory.add("Receita de bolo de chocolate", source_uri="local://recipe", fragment_id="recipe")
+        results = self.memory.recall("corrente elétrica circuito")
+        self.assertEqual("electricity", results[0].id)
+        self.assertNotIn("recipe", [item.id for item in results])
+
+    def test_recall_can_include_associated_context(self) -> None:
+        self.memory.add("Corrente elétrica", source_uri="local://current", fragment_id="current")
+        self.memory.add("Lei de Ohm relaciona tensão, corrente e resistência", source_uri="local://ohm", fragment_id="ohm")
+        self.memory.link("current", "ohm")
+        results = self.memory.recall("corrente elétrica", include_related=True)
+        self.assertEqual({"current", "ohm"}, {item.id for item in results})
+
+    def test_recall_validates_query_and_limit(self) -> None:
+        with self.assertRaises(ValueError):
+            self.memory.recall("   ")
+        with self.assertRaises(ValueError):
+            self.memory.recall("memória", limit=0)
+
     def test_invalid_values_and_missing_ids_are_rejected(self) -> None:
         with self.assertRaises(ValueError):
             self.memory.add("", source_uri="local://bad")
