@@ -16,7 +16,7 @@ from typing import Any
 
 from machina import (
     AutonomyContext, AutonomyController, AutonomyExperienceStore, Connection, FragmentMemory, MNN,
-    MNNCognitionAdapter, Unit, VirtualBrain,
+    MNNCognitionAdapter, PersistentGoalStore, Unit, VirtualBrain,
 )
 
 
@@ -59,6 +59,7 @@ class MachinaPrototype:
         self.memory = FragmentMemory(self.data_dir / "fragment_memory.sqlite3")
         self.autonomy = AutonomyController()
         self.autonomy_memory = AutonomyExperienceStore(self.data_dir / "autonomy.sqlite3")
+        self.goal_store = PersistentGoalStore(self.data_dir / "persistent_goals.sqlite3")
         self._cycles_since_reflection = 0
         self._cycles_since_memory_review = 0
 
@@ -66,6 +67,7 @@ class MachinaPrototype:
         self.brain.close()
         self.memory.close()
         self.autonomy_memory.close()
+        self.goal_store.close()
 
     def __enter__(self) -> "MachinaPrototype":
         return self
@@ -93,8 +95,6 @@ class MachinaPrototype:
     def recall(self, query: str, *, limit: int = 5) -> list[dict[str, Any]]:
         query_tags = _terms(query)
         fragments = self.memory.active(limit=max(limit, 1), query_tags=query_tags)
-        # Keep only fragments sharing at least one requested token when a query
-        # is provided; an empty query intentionally returns the active view.
         if query_tags:
             requested = set(query_tags)
             fragments = [
@@ -129,38 +129,29 @@ class MachinaPrototype:
             "observation": observation,
             "goal": goal,
             "mnn_signal": understanding.get("mnn_signal", {}),
-            "memory_ids_retrieved": (
-                next(
-                    (
-                        event.artifact.data.get("memory_ids", [])
-                        for event in result.events
-                        if event.event_type == "memory.retrieved"
-                    ),
-                    [],
-                )
+            "memory_ids_retrieved": next(
+                (
+                    event.artifact.data.get("memory_ids", [])
+                    for event in result.events
+                    if event.event_type == "memory.retrieved"
+                ),
+                [],
             ),
             "audit_valid": self.brain.audit_cycle(result.cycle_id).valid,
             "note": "The default cognition is deterministic; MNN activations are diagnostic, not semantic understanding.",
         }
 
     def autonomy_step(self) -> dict[str, Any]:
-        """Let Machina generate and select an internal goal without a user prompt."""
+        """Generate a goal, persist its lifecycle, and execute one local cognitive cycle."""
         fragments = self.memory.active(limit=100)
         important_count = sum(1 for item in fragments if item.importance >= 0.75)
+        history = self.autonomy_memory.summary()
         context = AutonomyContext(
             memory_count=self.memory.count(),
             important_memory_count=important_count,
+            failed_cycles=history["failures"],
             cycles_since_reflection=self._cycles_since_reflection,
             cycles_since_memory_review=self._cycles_since_memory_review,
-        )
-        history = self.autonomy_memory.summary()
-        context = AutonomyContext(
-            memory_count=context.memory_count,
-            important_memory_count=context.important_memory_count,
-            unresolved_questions=context.unresolved_questions,
-            failed_cycles=history["failures"],
-            cycles_since_reflection=context.cycles_since_reflection,
-            cycles_since_memory_review=context.cycles_since_memory_review,
         )
         decision = self.autonomy.step(
             context,
@@ -176,6 +167,7 @@ class MachinaPrototype:
             }
 
         experience_id = self.autonomy_memory.record_selection(selected)
+        persistent_goal = self.goal_store.register(selected)
         self._cycles_since_reflection += 1
         self._cycles_since_memory_review += 1
         if selected.drive == "self_reflection":
@@ -191,12 +183,25 @@ class MachinaPrototype:
             "status": "goal_executed_in_prototype",
             "decision": decision.to_dict(),
             "experience_id": experience_id,
-            "feedback_command": "/goal-feedback success|failure|skip",
+            "persistent_goal": persistent_goal,
+            "feedback_command": "/goal-feedback success|failure|skip [evidence]",
             "cycle": cycle,
             "autonomy_scope": (
                 "The goal was self-generated, but execution remains a local "
                 "cognitive cycle with the acknowledge-only executor."
             ),
+        }
+
+    def record_goal_feedback(self, outcome: str, evidence: str = "") -> dict[str, Any]:
+        """Record feedback in both the selection-learning and goal-lifecycle ledgers."""
+        experience = self.autonomy_memory.record_feedback(outcome)
+        goal = self.goal_store.record_outcome(
+            experience["goal_id"], outcome, evidence or f"Explicit feedback: {outcome}"
+        )
+        return {
+            "feedback_recorded": experience,
+            "persistent_goal": goal,
+            "autonomy_learning": self.autonomy_memory.summary(),
         }
 
     def status(self) -> dict[str, Any]:
@@ -207,12 +212,13 @@ class MachinaPrototype:
             "fragment_database": str(self.data_dir / "fragment_memory.sqlite3"),
             "mnn_timestep": getattr(self.brain.cognition.network, "timestep", 0),
             "autonomy": self.autonomy_memory.summary(),
+            "persistent_goals": self.goal_store.summary(),
         }
 
 
 def run_cli(data_dir: str | Path) -> None:
     print("Machina — protótipo local 0.1")
-    print("Comandos: /remember TEXTO | /recall CONSULTA | /think TEXTO | /autonomy | /goal-feedback success|failure|skip | /status | /help | /quit")
+    print("Comandos: /remember TEXTO | /recall CONSULTA | /think TEXTO | /autonomy | /goal-feedback success|failure|skip [evidência] | /goal-status [status] | /goal-resume ID | /goal-abandon ID MOTIVO | /status | /help | /quit")
     with MachinaPrototype(data_dir) as machina:
         while True:
             try:
@@ -231,19 +237,39 @@ def run_cli(data_dir: str | Path) -> None:
                         "/remember TEXTO": "Salvar um fragmento persistente de memória",
                         "/recall CONSULTA": "Buscar fragmentos pelos termos/tags",
                         "/think TEXTO": "Executar um ciclo cognitivo e mostrar o sinal da MNN",
-                        "/autonomy": "Gerar e executar um objetivo interno sem nova instrução",
-                        "/goal-feedback success|failure|skip": "Avaliar o último objetivo escolhido e ajustar prioridades futuras",
-                        "/status": "Mostrar estado e caminhos dos bancos locais",
+                        "/autonomy": "Gerar e executar um objetivo interno e mantê-lo no diário persistente",
+                        "/goal-feedback success|failure|skip [evidência]": "Registrar resultado explícito, atualizar prioridades e estado do objetivo",
+                        "/goal-status [status]": "Listar objetivos persistentes; status: active, completed, paused, needs_revision, abandoned",
+                        "/goal-resume ID": "Reativar objetivo pausado ou que precisa de revisão (ID é o goal_id, por exemplo reflect_on_progress)",
+                        "/goal-abandon ID MOTIVO": "Abandonar explicitamente um objetivo aberto e registrar a justificativa",
+                        "/status": "Mostrar estado, memória, autonomia e objetivos persistentes",
                         "/quit": "Encerrar",
                     }
                 elif line == "/autonomy":
                     output = machina.autonomy_step()
                 elif line.startswith("/goal-feedback "):
-                    outcome = line[len("/goal-feedback "):].strip().casefold()
+                    parts = line[len("/goal-feedback "):].strip().split(maxsplit=1)
+                    if not parts:
+                        raise ValueError("use /goal-feedback success|failure|skip [evidência]")
+                    evidence = parts[1] if len(parts) > 1 else ""
+                    output = machina.record_goal_feedback(parts[0].casefold(), evidence)
+                elif line.startswith("/goal-status"):
+                    parts = line.split(maxsplit=1)
+                    status_filter = parts[1].strip() if len(parts) > 1 else None
                     output = {
-                        "feedback_recorded": machina.autonomy_memory.record_feedback(outcome),
-                        "autonomy_learning": machina.autonomy_memory.summary(),
+                        "goals": machina.goal_store.list_goals(status=status_filter),
+                        "summary": machina.goal_store.summary(),
                     }
+                elif line.startswith("/goal-resume "):
+                    goal_id = line[len("/goal-resume "):].strip()
+                    if not goal_id:
+                        raise ValueError("use /goal-resume GOAL_ID")
+                    output = machina.goal_store.resume(goal_id)
+                elif line.startswith("/goal-abandon "):
+                    parts = line[len("/goal-abandon "):].strip().split(maxsplit=1)
+                    if len(parts) != 2:
+                        raise ValueError("use /goal-abandon GOAL_ID MOTIVO")
+                    output = machina.goal_store.abandon(parts[0], parts[1])
                 elif line == "/status":
                     output = machina.status()
                 elif line.startswith("/remember "):
@@ -254,10 +280,7 @@ def run_cli(data_dir: str | Path) -> None:
                 elif line.startswith("/think "):
                     output = machina.think(line[len("/think "):])
                 else:
-                    output = {
-                        "error": "Comando não reconhecido. Digite /help.",
-                        "input": line,
-                    }
+                    output = {"error": "Comando não reconhecido. Digite /help.", "input": line}
                 print(json.dumps(output, ensure_ascii=False, indent=2))
             except (ValueError, KeyError, RuntimeError) as error:
                 print(json.dumps({"error": str(error)}, ensure_ascii=False))

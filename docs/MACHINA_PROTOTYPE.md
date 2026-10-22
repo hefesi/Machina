@@ -91,3 +91,33 @@ limitados a ±0,15 e não podem superar as barreiras de risco ou autorização.
 O sistema não considera um ciclo técnico concluído como prova de que o objetivo
 foi alcançado. A avaliação depende de feedback explícito; o mecanismo atual
 aprende preferências simples de seleção, não habilidades gerais nem livre-arbítrio.
+
+
+## Autonomia v0.3 — ciclo de vida persistente dos objetivos
+
+O arquivo `persistent_goals.sqlite3` mantém objetivos ao longo de reinicializações.
+Estados possíveis: `active`, `completed`, `paused`, `needs_revision` e
+`abandoned`. Objetivos do mesmo tipo são reutilizados enquanto ativos; depois
+de concluídos, uma nova ocorrência pode iniciar outro registro.
+
+Comandos novos:
+
+- `/goal-status` — listar objetivos e contadores.
+- `/goal-status active` — filtrar por estado.
+- `/goal-feedback success Evidência observável` — concluir o objetivo com evidência.
+- `/goal-feedback failure Experimento não atingiu a métrica` — registrar falha; após
+  três falhas consecutivas registradas, o objetivo passa a `needs_revision`.
+- `/goal-feedback skip Aguardar dados` — pausar o objetivo.
+- `/goal-resume reflect_on_progress` — reativar um objetivo pausado ou que precisa
+  de revisão. O argumento usa o `goal_id`, não o ID numérico do registro.
+- `/goal-abandon reflect_on_progress Motivo observável` — abandonar explicitamente
+  um objetivo aberto e anexar a justificativa ao histórico. A justificativa é obrigatória.
+
+As evidências são acumuladas no registro do objetivo. Falha repetida não é
+interpretada como sucesso: ela solicita revisão. O estado `abandoned` só é aplicado pelo comando explícito de abandono; a política
+não descarta objetivos automaticamente.
+
+Limitação importante: o executor ainda executa um ciclo cognitivo determinístico
+de reconhecimento, não realiza pesquisa aberta nem comprova que o objetivo foi
+alcançado. O status só muda com feedback explícito; persistência de objetivos é
+continuidade operacional, não consciência nem AGI.
