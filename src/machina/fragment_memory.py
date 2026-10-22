@@ -252,6 +252,59 @@ class FragmentMemory:
             rows = self._db.execute(sql).fetchall()
         return [self._from_row(row) for row in rows]
 
+    def recall(
+        self,
+        query: str,
+        *,
+        limit: int = 5,
+        include_related: bool = True,
+    ) -> list[MemoryFragment]:
+        """Retrieve fragments by lexical overlap and optionally one-hop associations.
+
+        This is an explainable lexical baseline, not semantic understanding. A
+        related fragment may be returned as context even when its own wording
+        does not overlap the query. Retrieval never deletes or rewrites memory.
+        """
+        self._ensure_open()
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query must be a non-empty string")
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive integer")
+        import re
+
+        def tokens(text: str) -> set[str]:
+            return {token.casefold() for token in re.findall(r"\w+", text, flags=re.UNICODE) if len(token) > 1}
+
+        query_tokens = tokens(query)
+        if not query_tokens:
+            return []
+        rows = self._db.execute("SELECT * FROM memory_fragments").fetchall()
+        fragments = {str(row["id"]): self._from_row(row) for row in rows}
+        ranked: list[tuple[float, str]] = []
+        direct_matches: set[str] = set()
+        for fragment in fragments.values():
+            searchable = " ".join((fragment.content, fragment.kind, " ".join(fragment.tags), _json(fragment.metadata)))
+            overlap = len(query_tokens & tokens(searchable)) / len(query_tokens)
+            if overlap > 0:
+                direct_matches.add(fragment.id)
+                tag_overlap = bool(query_tokens & tokens(" ".join(fragment.tags)))
+                score = 0.70 * overlap + 0.15 * fragment.importance + 0.10 * fragment.confidence
+                score += 0.05 if tag_overlap else 0.0
+                ranked.append((score, fragment.id))
+        if include_related and direct_matches:
+            related_ids = {
+                related_id
+                for fragment_id in direct_matches
+                for related_id in fragments[fragment_id].related_ids
+                if related_id in fragments and related_id not in direct_matches
+            }
+            for related_id in related_ids:
+                fragment = fragments[related_id]
+                score = 0.20 + 0.10 * fragment.importance + 0.05 * fragment.confidence
+                ranked.append((score, related_id))
+        ranked.sort(key=lambda item: (-item[0], item[1]))
+        return [fragments[fragment_id] for _, fragment_id in ranked[:limit]]
+
     def count(self) -> int:
         self._ensure_open()
         return int(self._db.execute("SELECT COUNT(*) FROM memory_fragments").fetchone()[0])
