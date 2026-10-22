@@ -36,8 +36,8 @@ class KnowledgeStoreTests(unittest.TestCase):
 
     def test_search_ranks_title_match_and_reports_matched_terms(self) -> None:
         self.store.add_document(
-            title="Memory systems",
-            content="A persistent store records facts and sources.",
+            title="MNN notes",
+            content="A graph network is stored.",
             source_uri="local://memory",
             document_id="memory",
         )
