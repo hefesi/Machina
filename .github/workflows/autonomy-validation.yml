@@ -1,0 +1,33 @@
+name: Operational autonomy validation
+
+on:
+  pull_request:
+    paths:
+      - "src/machina/autonomy.py"
+      - "examples/autonomy_operational_demo.py"
+      - "tests/test_autonomy_operational_validation.py"
+      - "docs/AUTONOMY_OPERATIONAL_VALIDATION.md"
+      - ".github/workflows/autonomy-validation.yml"
+  push:
+    branches:
+      - main
+      - "feat/autonomy-operational-validation"
+
+jobs:
+  validate-d1:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install package
+        run: python -m pip install -e .
+      - name: Run operational autonomy demo
+        run: python -m examples.autonomy_operational_demo
+      - name: Run focused validation test
+        run: python -m unittest discover -s tests -p 'test_autonomy_operational_validation.py'
+      - name: Run existing autonomy tests
+        run: python -m unittest discover -s tests -p 'test_autonomy.py'
