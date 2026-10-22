@@ -16,7 +16,7 @@ from typing import Any
 
 from machina import (
     AutonomyContext, AutonomyController, AutonomyExperienceStore, Connection, FragmentMemory, MNN,
-    MNNCognitionAdapter, PersistentGoalStore, Unit, VirtualBrain,
+    MNNCognitionAdapter, PersistentGoalStore, PersistentPlanStore, Unit, VirtualBrain,
 )
 
 
@@ -60,6 +60,7 @@ class MachinaPrototype:
         self.autonomy = AutonomyController()
         self.autonomy_memory = AutonomyExperienceStore(self.data_dir / "autonomy.sqlite3")
         self.goal_store = PersistentGoalStore(self.data_dir / "persistent_goals.sqlite3")
+        self.plan_store = PersistentPlanStore(self.data_dir / "plans.sqlite3")
         self._cycles_since_reflection = 0
         self._cycles_since_memory_review = 0
 
@@ -68,6 +69,7 @@ class MachinaPrototype:
         self.memory.close()
         self.autonomy_memory.close()
         self.goal_store.close()
+        self.plan_store.close()
 
     def __enter__(self) -> "MachinaPrototype":
         return self
@@ -204,6 +206,17 @@ class MachinaPrototype:
             "autonomy_learning": self.autonomy_memory.summary(),
         }
 
+    def create_plan(self, goal_record_id: int) -> dict[str, Any]:
+        """Create or retrieve a persistent plan for an open goal record."""
+        goal = next(
+            (item for item in self.goal_store.list_goals(limit=10000)
+             if item["id"] == goal_record_id),
+            None,
+        )
+        if goal is None:
+            raise ValueError(f"persistent goal record {goal_record_id} was not found")
+        return self.plan_store.create_plan(goal)
+
     def status(self) -> dict[str, Any]:
         return {
             "prototype": "Machina local prototype 0.1",
@@ -213,12 +226,13 @@ class MachinaPrototype:
             "mnn_timestep": getattr(self.brain.cognition.network, "timestep", 0),
             "autonomy": self.autonomy_memory.summary(),
             "persistent_goals": self.goal_store.summary(),
+            "plans": self.plan_store.summary(),
         }
 
 
 def run_cli(data_dir: str | Path) -> None:
     print("Machina — protótipo local 0.1")
-    print("Comandos: /remember TEXTO | /recall CONSULTA | /think TEXTO | /autonomy | /goal-feedback success|failure|skip [evidência] | /goal-status [status] | /goal-resume ID | /goal-abandon ID MOTIVO | /status | /help | /quit")
+    print("Comandos: /remember TEXTO | /recall CONSULTA | /think TEXTO | /autonomy | /goal-feedback success|failure|skip [evidência] | /goal-status [status] | /goal-resume ID | /goal-abandon ID MOTIVO | /plan GOAL_RECORD_ID | /plans [status] | /plan-next PLAN_ID | /plan-feedback PLAN_ID STEP_ID success|failure|skip [evidência] | /plan-resume PLAN_ID | /status | /help | /quit")
     with MachinaPrototype(data_dir) as machina:
         while True:
             try:
@@ -242,6 +256,11 @@ def run_cli(data_dir: str | Path) -> None:
                         "/goal-status [status]": "Listar objetivos persistentes; status: active, completed, paused, needs_revision, abandoned",
                         "/goal-resume ID": "Reativar objetivo pausado ou que precisa de revisão (ID é o goal_id, por exemplo reflect_on_progress)",
                         "/goal-abandon ID MOTIVO": "Abandonar explicitamente um objetivo aberto e registrar a justificativa",
+                        "/plan GOAL_RECORD_ID": "Decompor um objetivo persistente em etapas ordenadas",
+                        "/plans [status]": "Listar planos persistentes, opcionalmente filtrados por estado",
+                        "/plan-next PLAN_ID": "Mostrar etapas cujas dependências foram concluídas",
+                        "/plan-feedback PLAN_ID STEP_ID success|failure|skip [evidência]": "Avaliar explicitamente uma etapa do plano",
+                        "/plan-resume PLAN_ID": "Retomar um plano pausado ou que precisa de revisão",
                         "/status": "Mostrar estado, memória, autonomia e objetivos persistentes",
                         "/quit": "Encerrar",
                     }
@@ -270,6 +289,33 @@ def run_cli(data_dir: str | Path) -> None:
                     if len(parts) != 2:
                         raise ValueError("use /goal-abandon GOAL_ID MOTIVO")
                     output = machina.goal_store.abandon(parts[0], parts[1])
+                elif line.startswith("/plan-feedback "):
+                    parts = line[len("/plan-feedback "):].strip().split(maxsplit=3)
+                    if len(parts) < 3:
+                        raise ValueError("use /plan-feedback PLAN_ID STEP_ID success|failure|skip [evidência]")
+                    output = machina.plan_store.record_step_outcome(
+                        int(parts[0]), parts[1], parts[2].casefold(),
+                        parts[3] if len(parts) > 3 else "",
+                    )
+                elif line.startswith("/plan-next "):
+                    plan_id = int(line[len("/plan-next "):].strip())
+                    output = {
+                        "plan_id": plan_id,
+                        "ready_steps": machina.plan_store.ready_steps(plan_id),
+                    }
+                elif line.startswith("/plan-resume "):
+                    plan_id = int(line[len("/plan-resume "):].strip())
+                    output = machina.plan_store.resume_plan(plan_id)
+                elif line.startswith("/plans"):
+                    parts = line.split(maxsplit=1)
+                    status_filter = parts[1].strip() if len(parts) > 1 else None
+                    output = {
+                        "plans": machina.plan_store.list_plans(status=status_filter),
+                        "summary": machina.plan_store.summary(),
+                    }
+                elif line.startswith("/plan "):
+                    goal_record_id = int(line[len("/plan "):].strip())
+                    output = machina.create_plan(goal_record_id)
                 elif line == "/status":
                     output = machina.status()
                 elif line.startswith("/remember "):
