@@ -15,7 +15,7 @@ import re
 from typing import Any
 
 from machina import (
-    AutonomyContext, AutonomyController, Connection, FragmentMemory, MNN,
+    AutonomyContext, AutonomyController, AutonomyExperienceStore, Connection, FragmentMemory, MNN,
     MNNCognitionAdapter, Unit, VirtualBrain,
 )
 
@@ -58,12 +58,14 @@ class MachinaPrototype:
         self.brain = VirtualBrain(self.data_dir / "virtual_brain.sqlite3", cognition=adapter)
         self.memory = FragmentMemory(self.data_dir / "fragment_memory.sqlite3")
         self.autonomy = AutonomyController()
+        self.autonomy_memory = AutonomyExperienceStore(self.data_dir / "autonomy.sqlite3")
         self._cycles_since_reflection = 0
         self._cycles_since_memory_review = 0
 
     def close(self) -> None:
         self.brain.close()
         self.memory.close()
+        self.autonomy_memory.close()
 
     def __enter__(self) -> "MachinaPrototype":
         return self
@@ -151,7 +153,20 @@ class MachinaPrototype:
             cycles_since_reflection=self._cycles_since_reflection,
             cycles_since_memory_review=self._cycles_since_memory_review,
         )
-        decision = self.autonomy.step(context)
+        history = self.autonomy_memory.summary()
+        context = AutonomyContext(
+            memory_count=context.memory_count,
+            important_memory_count=context.important_memory_count,
+            unresolved_questions=context.unresolved_questions,
+            failed_cycles=history["failures"],
+            cycles_since_reflection=context.cycles_since_reflection,
+            cycles_since_memory_review=context.cycles_since_memory_review,
+        )
+        decision = self.autonomy.step(
+            context,
+            drive_adjustments=self.autonomy_memory.drive_adjustments(),
+            recent_goal_ids=self.autonomy_memory.recent_goal_ids(),
+        )
         selected = decision.selected_goal
         if selected is None:
             return {
@@ -160,6 +175,7 @@ class MachinaPrototype:
                 "note": "No eligible internal goal was found; no action was executed.",
             }
 
+        experience_id = self.autonomy_memory.record_selection(selected)
         self._cycles_since_reflection += 1
         self._cycles_since_memory_review += 1
         if selected.drive == "self_reflection":
@@ -174,6 +190,8 @@ class MachinaPrototype:
         return {
             "status": "goal_executed_in_prototype",
             "decision": decision.to_dict(),
+            "experience_id": experience_id,
+            "feedback_command": "/goal-feedback success|failure|skip",
             "cycle": cycle,
             "autonomy_scope": (
                 "The goal was self-generated, but execution remains a local "
@@ -188,12 +206,13 @@ class MachinaPrototype:
             "brain_journal": str(self.data_dir / "virtual_brain.sqlite3"),
             "fragment_database": str(self.data_dir / "fragment_memory.sqlite3"),
             "mnn_timestep": getattr(self.brain.cognition.network, "timestep", 0),
+            "autonomy": self.autonomy_memory.summary(),
         }
 
 
 def run_cli(data_dir: str | Path) -> None:
     print("Machina — protótipo local 0.1")
-    print("Comandos: /remember TEXTO | /recall CONSULTA | /think TEXTO | /autonomy | /status | /help | /quit")
+    print("Comandos: /remember TEXTO | /recall CONSULTA | /think TEXTO | /autonomy | /goal-feedback success|failure|skip | /status | /help | /quit")
     with MachinaPrototype(data_dir) as machina:
         while True:
             try:
@@ -213,11 +232,18 @@ def run_cli(data_dir: str | Path) -> None:
                         "/recall CONSULTA": "Buscar fragmentos pelos termos/tags",
                         "/think TEXTO": "Executar um ciclo cognitivo e mostrar o sinal da MNN",
                         "/autonomy": "Gerar e executar um objetivo interno sem nova instrução",
+                        "/goal-feedback success|failure|skip": "Avaliar o último objetivo escolhido e ajustar prioridades futuras",
                         "/status": "Mostrar estado e caminhos dos bancos locais",
                         "/quit": "Encerrar",
                     }
                 elif line == "/autonomy":
                     output = machina.autonomy_step()
+                elif line.startswith("/goal-feedback "):
+                    outcome = line[len("/goal-feedback "):].strip().casefold()
+                    output = {
+                        "feedback_recorded": machina.autonomy_memory.record_feedback(outcome),
+                        "autonomy_learning": machina.autonomy_memory.summary(),
+                    }
                 elif line == "/status":
                     output = machina.status()
                 elif line.startswith("/remember "):

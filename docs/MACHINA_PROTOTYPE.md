@@ -73,3 +73,21 @@ A geração de objetivos usa regras explícitas e a execução final continua se
 o executor local de reconhecimento. O próximo passo experimental é substituir
 sinais manuais por métricas reais do histórico, testar persistência dos objetivos
 e avaliar se a seleção melhora resultados em tarefas definidas.
+
+
+## Autonomia v0.2 — memória de decisões e feedback
+
+O protótipo mantém um diário SQLite separado (`autonomy.sqlite3`) com
+objetivos selecionados e feedback explícito. Depois de `/autonomy`, use
+`/goal-feedback success`, `/goal-feedback failure` ou
+`/goal-feedback skip` para avaliar o último objetivo ainda sem avaliação.
+
+Feedback de sucesso/falha ajusta de forma limitada a prioridade futura do tipo
+de objetivo (`drive`). A seleção também aplica uma pequena penalidade à
+repetição recente. Esses ajustes são persistentes após reiniciar o programa,
+limitados a ±0,15 e não podem superar as barreiras de risco ou autorização.
+`/status` mostra a quantidade de objetivos, avaliações e ajustes aprendidos.
+
+O sistema não considera um ciclo técnico concluído como prova de que o objetivo
+foi alcançado. A avaliação depende de feedback explícito; o mecanismo atual
+aprende preferências simples de seleção, não habilidades gerais nem livre-arbítrio.

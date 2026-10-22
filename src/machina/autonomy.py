@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import math
+import sqlite3
+from pathlib import Path
 from typing import Any, Iterable
 
 
@@ -56,7 +58,7 @@ class AutonomyDecision:
     selected_goal: GoalCandidate | None
     alternatives: tuple[dict[str, Any], ...]
     rejected: tuple[dict[str, str], ...]
-    policy: str = "bounded_utility_v1"
+    policy: str = "bounded_utility_feedback_v2"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -65,8 +67,8 @@ class AutonomyDecision:
             "alternatives": [dict(item) for item in self.alternatives],
             "rejected": [dict(item) for item in self.rejected],
             "interpretation": (
-                "Operational goal selection with an inspectable policy; "
-                "this is not evidence of conscious free will."
+                "Operational goal selection with an inspectable policy and optional "
+                "feedback adjustments; this is not evidence of conscious free will."
             ),
         }
 
@@ -155,12 +157,16 @@ class AutonomyController:
         candidates: Iterable[GoalCandidate],
         *,
         approved_external_goal_ids: Iterable[str] = (),
+        drive_adjustments: dict[str, float] | None = None,
+        recent_goal_ids: Iterable[str] = (),
     ) -> AutonomyDecision:
         """Choose the highest-scoring eligible goal and retain the rationale."""
         goals = list(candidates)
         if len({goal.goal_id for goal in goals}) != len(goals):
             raise ValueError("goal_id values must be unique")
         approved = set(approved_external_goal_ids)
+        recent = set(recent_goal_ids)
+        adjustments = drive_adjustments or {}
         eligible: list[tuple[GoalCandidate, dict[str, float]]] = []
         rejected: list[dict[str, str]] = []
 
@@ -171,7 +177,14 @@ class AutonomyController:
             if goal.requires_external_action and goal.goal_id not in approved:
                 rejected.append({"goal_id": goal.goal_id, "reason": "external_action_not_authorized"})
                 continue
-            eligible.append((goal, self._score(goal)))
+            score = self._score(goal)
+            feedback = max(-0.15, min(0.15, float(adjustments.get(goal.drive, 0.0))))
+            repetition = -0.08 if goal.goal_id in recent else 0.0
+            score["base_total"] = score["total"]
+            score["feedback_adjustment"] = feedback
+            score["repetition_penalty"] = repetition
+            score["total"] = score["base_total"] + feedback + repetition
+            eligible.append((goal, score))
 
         eligible.sort(key=lambda pair: (-pair[1]["total"], pair[0].goal_id))
         alternatives = tuple(
@@ -184,6 +197,110 @@ class AutonomyController:
             rejected=tuple(rejected),
         )
 
-    def step(self, context: AutonomyContext) -> AutonomyDecision:
-        """Generate and choose one internal goal from current internal signals."""
-        return self.choose(self.generate_goals(context))
+    def step(
+        self,
+        context: AutonomyContext,
+        *,
+        drive_adjustments: dict[str, float] | None = None,
+        recent_goal_ids: Iterable[str] = (),
+    ) -> AutonomyDecision:
+        """Generate and choose one goal using current state and feedback."""
+        return self.choose(
+            self.generate_goals(context),
+            drive_adjustments=drive_adjustments,
+            recent_goal_ids=recent_goal_ids,
+        )
+
+
+class AutonomyExperienceStore:
+    """SQLite ledger for goal choices and explicit human outcome feedback.
+
+    A completed cognitive cycle is not assumed to mean the selected goal
+    succeeded. Success/failure is recorded only when feedback is supplied.
+    """
+
+    VALID_OUTCOMES = {"success", "failure", "skip"}
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._db = sqlite3.connect(self.path)
+        self._db.row_factory = sqlite3.Row
+        self._db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS goal_experiences (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                goal_id TEXT NOT NULL,
+                drive TEXT NOT NULL,
+                description TEXT NOT NULL,
+                outcome TEXT CHECK (outcome IN ('success', 'failure', 'skip') OR outcome IS NULL),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                feedback_at TEXT
+            )
+            """
+        )
+        self._db.commit()
+
+    def close(self) -> None:
+        self._db.close()
+
+    def record_selection(self, goal: GoalCandidate) -> int:
+        cursor = self._db.execute(
+            "INSERT INTO goal_experiences (goal_id, drive, description) VALUES (?, ?, ?)",
+            (goal.goal_id, goal.drive, goal.description),
+        )
+        self._db.commit()
+        return int(cursor.lastrowid)
+
+    def record_feedback(self, outcome: str) -> dict[str, Any]:
+        if outcome not in self.VALID_OUTCOMES:
+            raise ValueError("outcome must be success, failure, or skip")
+        row = self._db.execute(
+            "SELECT id, goal_id, drive, description FROM goal_experiences "
+            "WHERE outcome IS NULL ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if row is None:
+            raise ValueError("there is no pending goal to evaluate")
+        self._db.execute(
+            "UPDATE goal_experiences SET outcome = ?, feedback_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (outcome, row["id"]),
+        )
+        self._db.commit()
+        return {**dict(row), "outcome": outcome}
+
+    def drive_adjustments(self) -> dict[str, float]:
+        rows = self._db.execute(
+            "SELECT drive, SUM(CASE outcome WHEN 'success' THEN 1 "
+            "WHEN 'failure' THEN -1 ELSE 0 END) AS net, "
+            "SUM(CASE WHEN outcome IN ('success', 'failure') THEN 1 ELSE 0 END) AS n "
+            "FROM goal_experiences GROUP BY drive"
+        ).fetchall()
+        # Two neutral prior observations prevent one report from dominating.
+        return {
+            row["drive"]: max(-0.15, min(0.15, 0.15 * row["net"] / (row["n"] + 2)))
+            for row in rows if row["n"]
+        }
+
+    def recent_goal_ids(self, limit: int = 3) -> list[str]:
+        if limit < 1:
+            return []
+        rows = self._db.execute(
+            "SELECT goal_id FROM goal_experiences ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        return [row["goal_id"] for row in rows]
+
+    def summary(self) -> dict[str, Any]:
+        row = self._db.execute(
+            "SELECT COUNT(*) AS total, "
+            "SUM(CASE WHEN outcome = 'success' THEN 1 ELSE 0 END) AS successes, "
+            "SUM(CASE WHEN outcome = 'failure' THEN 1 ELSE 0 END) AS failures, "
+            "SUM(CASE WHEN outcome IS NULL THEN 1 ELSE 0 END) AS pending "
+            "FROM goal_experiences"
+        ).fetchone()
+        return {
+            "goals_recorded": row["total"],
+            "successes": row["successes"] or 0,
+            "failures": row["failures"] or 0,
+            "pending_feedback": row["pending"] or 0,
+            "drive_adjustments": self.drive_adjustments(),
+        }
