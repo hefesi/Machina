@@ -20,7 +20,7 @@ class RetrievalTask:
 
 def _query_parts(question: str) -> tuple[str, str]:
     match = re.fullmatch(
-        r"\s*What is the ([a-z][a-z ]*?) for ([A-Za-z][A-Za-z0-9_-]*)\?\s*",
+        r"\s*What is the ([a-z][a-z ]*?) for ([A-Za-z][A-Za-z0-9 _-]*)\?\s*",
         question,
         flags=re.IGNORECASE,
     )
