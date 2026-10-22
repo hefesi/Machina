@@ -51,9 +51,8 @@ class FunctionalSubjectivityTests(unittest.TestCase):
 
     def test_weights_are_normalized(self):
         signals = EventSignals(1.0, 0.0, 0.0, 0.0)
-        weights = RelevanceWeights(goal_alignment=2.0, novelty=0.0, future_decision_impact=0.0, urgency=0.0)
         with self.assertRaises(ValueError):
-            score_relevance(signals, weights)
+            RelevanceWeights(goal_alignment=2.0, novelty=0.0, future_decision_impact=0.0, urgency=0.0)
 
     def test_functional_dimensions_do_not_claim_phenomenal_consciousness(self):
         from pathlib import Path
