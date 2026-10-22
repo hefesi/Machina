@@ -119,7 +119,7 @@ class AutonomyController:
                 "reflect_on_progress",
                 "Review recent progress and choose the next useful experiment",
                 "self_reflection",
-                0.62, 0.76, 0.72, 0.3, 0.06,
+                0.85, 0.76, 0.72, 0.3, 0.06,
             ))
 
         if context.memory_count == 0:
@@ -134,7 +134,7 @@ class AutonomyController:
             "inspect_internal_state",
             "Inspect internal state and decide whether further work is needed",
             "self_monitoring",
-            0.24, 0.3, 0.9, 0.08, 0.01,
+            0.15, 0.2, 0.9, 0.08, 0.01,
         ))
         return goals
 
