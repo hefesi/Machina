@@ -10,6 +10,7 @@ from .contracts import Artifact, ContractError, ContractKind
 from .event_store import EventStore, IntegrityError
 from .mnn import Connection, MNN, Unit
 from .mnn_adapter import MNNCognitionAdapter
+from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
 
 __all__ = [
     "Artifact",
@@ -19,6 +20,10 @@ __all__ = [
     "CycleAudit",
     "CycleResult",
     "EventStore",
+    "DuplicateKnowledgeError",
+    "KnowledgeDocument",
+    "KnowledgeHit",
+    "KnowledgeStore",
     "IntegrityError",
     "MNN",
     "MNNCognitionAdapter",
