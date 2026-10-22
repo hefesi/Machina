@@ -70,6 +70,19 @@ class PersistentGoalStoreTests(unittest.TestCase):
                 store.resume("missing")
             store.close()
 
+    def test_abandon_requires_reason_and_preserves_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            store.register(candidate())
+            abandoned = store.abandon("reflect", "Repeatedly not useful")
+            self.assertEqual("abandoned", abandoned["status"])
+            self.assertIn("ABANDONED: Repeatedly not useful", abandoned["evidence"])
+            with self.assertRaises(ValueError):
+                store.abandon("reflect", "again")
+            with self.assertRaises(ValueError):
+                store.abandon("missing", "")
+            store.close()
+
     def test_status_filter_is_validated(self):
         with tempfile.TemporaryDirectory() as directory:
             store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
