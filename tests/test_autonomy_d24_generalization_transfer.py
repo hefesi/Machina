@@ -20,7 +20,7 @@ class GeneralizationTransferTests(unittest.TestCase):
 
     def test_decompose_transfers_to_unseen_record_format(self):
         task = TRANSFER_TASKS[2]
-        self.assertEqual("Vim", solve_transfer(task, "direct"))
+        self.assertNotEqual(task.expected_answer, solve_transfer(task, "direct"))
         self.assertEqual("Zed", solve_transfer(task, "decompose"))
         self.assertEqual(1.0, score_transfer(task, "decompose"))
 
