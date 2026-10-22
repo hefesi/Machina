@@ -30,6 +30,10 @@ does not mean low truth or permanent deletion. Confidence is stored separately
 from importance. A later version should include dependency centrality, expiry
 and contradiction handling, semantic retrieval, and measured calibration.
 
+## Query retrieval
+
+`recall(query, limit=5, include_related=True)` ranks fragments by lexical token overlap, importance, confidence, and tag matches. It can also include one-hop linked fragments as contextual candidates even when their wording does not match the query. This is a deterministic lexical baseline, not semantic retrieval; embeddings and semantic evaluation remain future work. Retrieval does not mutate or delete fragment records.
+
 ## Non-destructive forgetting
 
 - `active(limit=N)` provides a bounded, priority-ranked view.
