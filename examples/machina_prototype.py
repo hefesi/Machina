@@ -14,7 +14,10 @@ from pathlib import Path
 import re
 from typing import Any
 
-from machina import (\n    AutonomyContext, AutonomyController, Connection, FragmentMemory, MNN,\n    MNNCognitionAdapter, Unit, VirtualBrain,\n)
+from machina import (
+    AutonomyContext, AutonomyController, Connection, FragmentMemory, MNN,
+    MNNCognitionAdapter, Unit, VirtualBrain,
+)
 
 
 def _terms(text: str) -> list[str]:
@@ -209,7 +212,8 @@ def run_cli(data_dir: str | Path) -> None:
                         "/remember TEXTO": "Salvar um fragmento persistente de memória",
                         "/recall CONSULTA": "Buscar fragmentos pelos termos/tags",
                         "/think TEXTO": "Executar um ciclo cognitivo e mostrar o sinal da MNN",
-                        "/autonomy": "Gerar e executar um objetivo interno sem nova instrução",\n                        "/status": "Mostrar estado e caminhos dos bancos locais",
+                        "/autonomy": "Gerar e executar um objetivo interno sem nova instrução",
+                        "/status": "Mostrar estado e caminhos dos bancos locais",
                         "/quit": "Encerrar",
                     }
                 elif line == "/autonomy":
