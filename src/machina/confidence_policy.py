@@ -32,7 +32,7 @@ def _matching_values(task: TransferTask) -> tuple[str, ...]:
     found: list[str] = []
     for pattern in patterns:
         for match in re.finditer(pattern, task.context):
-            value = match.group(1).strip().strip('"\\' ')
+            value = match.group(1).strip().strip(chr(34) + chr(39) + " ")
             if value:
                 found.append(value)
     # Preserve order while deduplicating equivalent answers.
