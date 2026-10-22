@@ -5,19 +5,24 @@ on:
     paths:
       - "src/machina/autonomy.py"
       - "src/machina/adaptive_learning.py"
+      - "src/machina/skill_benchmark.py"
       - "examples/autonomy_operational_demo.py"
       - "examples/autonomy_adaptive_learning_demo.py"
+      - "examples/autonomy_d22_useful_skill_demo.py"
       - "tests/test_autonomy.py"
       - "tests/test_autonomy_operational_validation.py"
       - "tests/test_autonomy_adaptive_learning.py"
+      - "tests/test_autonomy_d22_useful_skill.py"
       - "docs/AUTONOMY_OPERATIONAL_VALIDATION.md"
       - "docs/AUTONOMY_ADAPTIVE_LEARNING.md"
+      - "docs/AUTONOMY_D22_USEFUL_SKILL.md"
       - ".github/workflows/autonomy-validation.yml"
   push:
     branches:
       - main
       - "feat/autonomy-operational-validation"
       - "feat/autonomy-adaptive-learning"
+      - "feat/autonomy-d22-useful-skill"
 
 jobs:
   validate-autonomy:
@@ -39,3 +44,7 @@ jobs:
         run: python -m examples.autonomy_adaptive_learning_demo
       - name: Run adaptive learning tests
         run: python -m unittest discover -s tests -p 'test_autonomy_adaptive_learning.py'
+      - name: Run D2.2 useful skill demo
+        run: python -m examples.autonomy_d22_useful_skill_demo
+      - name: Run D2.2 useful skill tests
+        run: python -m unittest discover -s tests -p 'test_autonomy_d22_useful_skill.py'
