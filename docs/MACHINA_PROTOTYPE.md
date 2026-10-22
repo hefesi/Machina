@@ -121,3 +121,40 @@ Limitação importante: o executor ainda executa um ciclo cognitivo determiníst
 de reconhecimento, não realiza pesquisa aberta nem comprova que o objetivo foi
 alcançado. O status só muda com feedback explícito; persistência de objetivos é
 continuidade operacional, não consciência nem AGI.
+
+
+## Autonomia v0.4 — planejamento hierárquico persistente
+
+O protótipo agora pode decompor um objetivo persistente em etapas ordenadas,
+com dependências explícitas, armazenadas em `plans.sqlite3`. A primeira versão
+usa decomposições transparentes para tipos de objetivo conhecidos e um plano
+genérico para os demais. Isso é planejamento por templates, não um planejador
+semântico geral.
+
+Comandos:
+
+- `/plan GOAL_RECORD_ID` — criar ou recuperar o plano de um objetivo aberto.
+  Use o ID numérico do registro mostrado por `/goal-status`, não o `goal_id`.
+- `/plans` ou `/plans active` — listar planos e etapas.
+- `/plan-next PLAN_ID` — mostrar somente as etapas cujas dependências já foram concluídas.
+- `/plan-feedback PLAN_ID STEP_ID success|failure|skip [evidência]` — avaliar uma etapa.
+- `/plan-resume PLAN_ID` — retomar um plano pausado ou que requer revisão.
+
+Cada etapa registra estado e evidência. Uma falha pausa o avanço e marca o plano
+para revisão; `resume` reabre a etapa que falhou, preservando as etapas concluídas.
+Uma etapa pulada pausa o plano até que seja retomado. O plano só fica concluído
+quando todas as etapas tiverem sido explicitamente avaliadas como sucesso.
+
+Exemplo de fluxo:
+
+1. `/autonomy`
+2. `/goal-status` — identificar o ID numérico do objetivo criado.
+3. `/plan 1` — substituir `1` pelo ID real do objetivo.
+4. `/plan-next 1` — substituir `1` pelo ID do plano retornado.
+5. Avaliar a etapa retornada usando `/plan-feedback`, incluindo evidência.
+6. Repetir `/plan-next` e a avaliação para avançar pelas dependências.
+
+Limitações: o protótipo ainda não executa automaticamente cada etapa nem realiza
+pesquisa aberta. O usuário ou um avaliador externo fornece o resultado explícito.
+Isso cria continuidade e estrutura de planejamento auditável, mas não demonstra
+por si só raciocínio geral, consciência ou AGI.
