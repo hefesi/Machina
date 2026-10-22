@@ -273,7 +273,7 @@ class FragmentMemory:
         import re
 
         def tokens(text: str) -> set[str]:
-            return {token.casefold() for token in re.findall(r"\\w+", text, flags=re.UNICODE) if len(token) > 1}
+            return {token.casefold() for token in re.findall(r"\w+", text, flags=re.UNICODE) if len(token) > 1}
 
         query_tokens = tokens(query)
         if not query_tokens:
