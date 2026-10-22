@@ -114,6 +114,30 @@ class PersistentGoalStore:
             "SELECT * FROM persistent_goals WHERE id = ?", (row["id"],)
         ).fetchone())
 
+    def abandon(self, goal_id: str, evidence: str) -> dict[str, Any]:
+        """Explicitly abandon an open goal and retain the reason as evidence."""
+        reason = evidence.strip()
+        if not reason:
+            raise ValueError("abandonment requires a non-empty evidence/reason")
+        row = self._db.execute(
+            "SELECT * FROM persistent_goals WHERE goal_id = ? AND status IN "
+            "('active', 'paused', 'needs_revision') ORDER BY id DESC LIMIT 1",
+            (goal_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"no open persistent goal found for {goal_id!r}")
+        prior_evidence = row["evidence"]
+        new_evidence = prior_evidence + "\\n" + "ABANDONED: " + reason if prior_evidence else "ABANDONED: " + reason
+        self._db.execute(
+            "UPDATE persistent_goals SET status = 'abandoned', evidence = ?, "
+            "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_evidence, row["id"]),
+        )
+        self._db.commit()
+        return self._as_dict(self._db.execute(
+            "SELECT * FROM persistent_goals WHERE id = ?", (row["id"],)
+        ).fetchone())
+
     def resume(self, goal_id: str) -> dict[str, Any]:
         row = self._db.execute(
             "SELECT * FROM persistent_goals WHERE goal_id = ? AND status IN "
