@@ -13,6 +13,7 @@ from .fragment_memory import FragmentMemory, MemoryFragment
 from .goal_store import PersistentGoalStore
 from .mnn import Connection, MNN, Unit
 from .mnn_adapter import MNNCognitionAdapter
+from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
 
 __all__ = [
@@ -23,6 +24,8 @@ __all__ = [
     "AutonomyExperienceStore",
     "GoalCandidate",
     "PersistentGoalStore",
+    "HierarchicalPlanner",
+    "PersistentPlanStore",
     "Connection",
     "ContractError",
     "ContractKind",
