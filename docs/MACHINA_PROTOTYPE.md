@@ -110,11 +110,12 @@ Comandos novos:
 - `/goal-feedback skip Aguardar dados` — pausar o objetivo.
 - `/goal-resume reflect_on_progress` — reativar um objetivo pausado ou que precisa
   de revisão. O argumento usa o `goal_id`, não o ID numérico do registro.
+- `/goal-abandon reflect_on_progress Motivo observável` — abandonar explicitamente
+  um objetivo aberto e anexar a justificativa ao histórico. A justificativa é obrigatória.
 
 As evidências são acumuladas no registro do objetivo. Falha repetida não é
-interpretada como sucesso: ela solicita revisão. O estado `abandoned` está
-disponível para uma futura decisão explícita de abandono, mas não é aplicado
-automaticamente pela política atual.
+interpretada como sucesso: ela solicita revisão. O estado `abandoned` só é aplicado pelo comando explícito de abandono; a política
+não descarta objetivos automaticamente.
 
 Limitação importante: o executor ainda executa um ciclo cognitivo determinístico
 de reconhecimento, não realiza pesquisa aberta nem comprova que o objetivo foi
