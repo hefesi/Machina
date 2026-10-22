@@ -53,3 +53,23 @@ understanding, autonomous external actions, or evidence of consciousness/AGI.
 The MNN signal is inspectable telemetry, not a semantic conclusion. The
 prototype is intended to provide an executable foundation for iterative
 experimentation, not to be presented as a finished intelligent assistant.
+
+
+## Autonomia operacional — experimento inicial
+
+O comando `/autonomy` deixa o sistema gerar um objetivo interno a partir do
+estado atual, comparar alternativas por urgência, benefício esperado, confiança,
+custo e risco, registrar a justificativa e iniciar um ciclo cognitivo sem uma
+nova instrução do usuário.
+
+A primeira política é deliberadamente simples e auditável. Ela pode propor
+revisar memórias importantes, refletir sobre o progresso, analisar falhas ou
+inspecionar o estado interno. Objetivos que exigem ações externas são recusados
+por padrão; a implementação ainda não possui permissão implícita para operar
+contas, redes, arquivos externos ou outros sistemas.
+
+Isso demonstra **autonomia operacional limitada**, não livre-arbítrio comprovado.
+A geração de objetivos usa regras explícitas e a execução final continua sendo
+o executor local de reconhecimento. O próximo passo experimental é substituir
+sinais manuais por métricas reais do histórico, testar persistência dos objetivos
+e avaliar se a seleção melhora resultados em tarefas definidas.

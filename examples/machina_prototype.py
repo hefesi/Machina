@@ -14,7 +14,10 @@ from pathlib import Path
 import re
 from typing import Any
 
-from machina import Connection, FragmentMemory, MNN, MNNCognitionAdapter, Unit, VirtualBrain
+from machina import (
+    AutonomyContext, AutonomyController, Connection, FragmentMemory, MNN,
+    MNNCognitionAdapter, Unit, VirtualBrain,
+)
 
 
 def _terms(text: str) -> list[str]:
@@ -54,6 +57,9 @@ class MachinaPrototype:
         adapter = MNNCognitionAdapter(network, input_features=input_features)
         self.brain = VirtualBrain(self.data_dir / "virtual_brain.sqlite3", cognition=adapter)
         self.memory = FragmentMemory(self.data_dir / "fragment_memory.sqlite3")
+        self.autonomy = AutonomyController()
+        self._cycles_since_reflection = 0
+        self._cycles_since_memory_review = 0
 
     def close(self) -> None:
         self.brain.close()
@@ -135,6 +141,46 @@ class MachinaPrototype:
             "note": "The default cognition is deterministic; MNN activations are diagnostic, not semantic understanding.",
         }
 
+    def autonomy_step(self) -> dict[str, Any]:
+        """Let Machina generate and select an internal goal without a user prompt."""
+        fragments = self.memory.active(limit=100)
+        important_count = sum(1 for item in fragments if item.importance >= 0.75)
+        context = AutonomyContext(
+            memory_count=self.memory.count(),
+            important_memory_count=important_count,
+            cycles_since_reflection=self._cycles_since_reflection,
+            cycles_since_memory_review=self._cycles_since_memory_review,
+        )
+        decision = self.autonomy.step(context)
+        selected = decision.selected_goal
+        if selected is None:
+            return {
+                "status": "no_safe_goal",
+                "decision": decision.to_dict(),
+                "note": "No eligible internal goal was found; no action was executed.",
+            }
+
+        self._cycles_since_reflection += 1
+        self._cycles_since_memory_review += 1
+        if selected.drive == "self_reflection":
+            self._cycles_since_reflection = 0
+        if selected.drive == "memory_maintenance":
+            self._cycles_since_memory_review = 0
+
+        cycle = self.think(
+            f"Machina iniciou uma tarefa interna: {selected.description}",
+            goal=selected.description,
+        )
+        return {
+            "status": "goal_executed_in_prototype",
+            "decision": decision.to_dict(),
+            "cycle": cycle,
+            "autonomy_scope": (
+                "The goal was self-generated, but execution remains a local "
+                "cognitive cycle with the acknowledge-only executor."
+            ),
+        }
+
     def status(self) -> dict[str, Any]:
         return {
             "prototype": "Machina local prototype 0.1",
@@ -147,7 +193,7 @@ class MachinaPrototype:
 
 def run_cli(data_dir: str | Path) -> None:
     print("Machina — protótipo local 0.1")
-    print("Comandos: /remember TEXTO | /recall CONSULTA | /think TEXTO | /status | /help | /quit")
+    print("Comandos: /remember TEXTO | /recall CONSULTA | /think TEXTO | /autonomy | /status | /help | /quit")
     with MachinaPrototype(data_dir) as machina:
         while True:
             try:
@@ -166,9 +212,12 @@ def run_cli(data_dir: str | Path) -> None:
                         "/remember TEXTO": "Salvar um fragmento persistente de memória",
                         "/recall CONSULTA": "Buscar fragmentos pelos termos/tags",
                         "/think TEXTO": "Executar um ciclo cognitivo e mostrar o sinal da MNN",
+                        "/autonomy": "Gerar e executar um objetivo interno sem nova instrução",
                         "/status": "Mostrar estado e caminhos dos bancos locais",
                         "/quit": "Encerrar",
                     }
+                elif line == "/autonomy":
+                    output = machina.autonomy_step()
                 elif line == "/status":
                     output = machina.status()
                 elif line.startswith("/remember "):
