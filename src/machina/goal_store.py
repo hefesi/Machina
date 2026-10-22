@@ -100,7 +100,7 @@ class PersistentGoalStore:
         prior_evidence = row["evidence"]
         new_evidence = evidence.strip()
         if prior_evidence and new_evidence:
-            new_evidence = prior_evidence + "\\n" + new_evidence
+            new_evidence = prior_evidence + "\n" + new_evidence
         elif not new_evidence:
             new_evidence = prior_evidence
         completed_at = "CURRENT_TIMESTAMP" if status == "completed" else "NULL"
