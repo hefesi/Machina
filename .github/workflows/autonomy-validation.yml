@@ -7,19 +7,23 @@ on:
       - "src/machina/adaptive_learning.py"
       - "src/machina/skill_benchmark.py"
       - "src/machina/continuous_learning.py"
+      - "src/machina/transfer_benchmark.py"
       - "examples/autonomy_operational_demo.py"
       - "examples/autonomy_adaptive_learning_demo.py"
       - "examples/autonomy_d22_useful_skill_demo.py"
       - "examples/autonomy_d23_continuous_learning_demo.py"
+      - "examples/autonomy_d24_generalization_transfer_demo.py"
       - "tests/test_autonomy.py"
       - "tests/test_autonomy_operational_validation.py"
       - "tests/test_autonomy_adaptive_learning.py"
       - "tests/test_autonomy_d22_useful_skill.py"
       - "tests/test_autonomy_d23_continuous_learning.py"
+      - "tests/test_autonomy_d24_generalization_transfer.py"
       - "docs/AUTONOMY_OPERATIONAL_VALIDATION.md"
       - "docs/AUTONOMY_ADAPTIVE_LEARNING.md"
       - "docs/AUTONOMY_D22_USEFUL_SKILL.md"
       - "docs/AUTONOMY_D23_CONTINUOUS_LEARNING.md"
+      - "docs/AUTONOMY_D24_GENERALIZATION_TRANSFER.md"
       - ".github/workflows/autonomy-validation.yml"
   push:
     branches:
@@ -28,6 +32,7 @@ on:
       - "feat/autonomy-adaptive-learning"
       - "feat/autonomy-d22-useful-skill"
       - "feat/autonomy-d23-continuous-learning"
+      - "feat/autonomy-d24-generalization-transfer"
 
 jobs:
   validate-autonomy:
@@ -57,3 +62,7 @@ jobs:
         run: python -m examples.autonomy_d23_continuous_learning_demo
       - name: Run D2.3 continuous learning tests
         run: python -m unittest discover -s tests -p 'test_autonomy_d23_continuous_learning.py'
+      - name: Run D2.4 generalization and transfer demo
+        run: python -m examples.autonomy_d24_generalization_transfer_demo
+      - name: Run D2.4 generalization and transfer tests
+        run: python -m unittest discover -s tests -p 'test_autonomy_d24_generalization_transfer.py'
