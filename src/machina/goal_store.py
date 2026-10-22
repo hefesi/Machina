@@ -83,7 +83,7 @@ class PersistentGoalStore:
             raise ValueError("outcome must be success, failure, or skip")
         row = self._db.execute(
             "SELECT * FROM persistent_goals WHERE goal_id = ? AND status IN "
-            "('active', 'paused', 'needs_revision') ORDER BY id DESC LIMIT 1",
+            "('active', 'needs_revision') ORDER BY id DESC LIMIT 1",
             (goal_id,),
         ).fetchone()
         if row is None:
