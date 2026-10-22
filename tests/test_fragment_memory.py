@@ -73,7 +73,7 @@ class FragmentMemoryTests(unittest.TestCase):
 
     def test_recall_can_include_associated_context(self) -> None:
         self.memory.add("Corrente elétrica", source_uri="local://current", fragment_id="current")
-        self.memory.add("Lei de Ohm relaciona tensão, corrente e resistência", source_uri="local://ohm", fragment_id="ohm")
+        self.memory.add("Lei de Ohm relaciona tensão, intensidade e resistência", source_uri="local://ohm", fragment_id="ohm")
         self.memory.link("current", "ohm")
         results = self.memory.recall("corrente elétrica", include_related=True)
         self.assertEqual({"current", "ohm"}, {item.id for item in results})
