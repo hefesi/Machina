@@ -63,9 +63,11 @@ def run_benchmark(storage_path: str | Path | None = None) -> dict[str, Any]:
 
         active = memory.active(limit=1)
         active_ids = [fragment.id for fragment in active]
+        all_ranked = {fragment.id: fragment for fragment in memory.active(limit=3)}
         archive_before = memory.archive()
         archive_ids_before = [fragment.id for fragment in archive_before]
-        aged_record = memory.get("aged-important-rule", record_access=False)
+        aged_priority = all_ranked["aged-important-rule"].priority
+        recent_priority = all_ranked["recent-routine-note"].priority
 
         # Deliberately unrelated query: lexical recall should fail while the
         # stored record remains directly addressable and present in archive.
@@ -84,8 +86,8 @@ def run_benchmark(storage_path: str | Path | None = None) -> dict[str, Any]:
             "recent-routine-note" in active_ids
             and "aged-important-rule" in archive_ids_before
             and len(archive_ids_before) == 3
-            and aged_record.priority < recent.priority
-            and abs(aged_record.priority - expected_decayed_priority) < 0.01
+            and aged_priority < recent_priority
+            and abs(aged_priority - expected_decayed_priority) < 1e-9
             and lexical_miss == []
             and direct_lookup.content == aged.content
             and reinforced.pinned
@@ -94,6 +96,7 @@ def run_benchmark(storage_path: str | Path | None = None) -> dict[str, Any]:
             and archive_ids_after == archive_ids_before
             and memory.count() == 3
             and protected.pinned
+            and recent.id in archive_ids_after
         )
         return {
             "benchmark": "fragment_memory_decay_vs_retrieval",
@@ -107,8 +110,8 @@ def run_benchmark(storage_path: str | Path | None = None) -> dict[str, Any]:
             "active_view_before_reinforcement": {
                 "limit": 1,
                 "ids": active_ids,
-                "aged_rule_priority": aged_record.priority,
-                "recent_note_priority": recent.priority,
+                "aged_rule_priority": aged_priority,
+                "recent_note_priority": recent_priority,
                 "aged_rule_in_active_view": "aged-important-rule" in active_ids,
             },
             "archive_before_reinforcement": {
