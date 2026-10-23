@@ -76,13 +76,20 @@ class DeterministicCognition:
         source = observation.data["source"]
         target = source.get("name", source.get("id", "environment"))
         recalled = list(retrieval.data["memory_ids"])
+        fragment_context = list(retrieval.data.get("fragment_context", []))
+        fragment_ids = [
+            str(fragment["fragment_id"])
+            for fragment in fragment_context
+            if isinstance(fragment, Mapping) and fragment.get("fragment_id")
+        ]
+        evidence_refs = list(dict.fromkeys([*recalled, *fragment_ids]))
         plan = {
             "plan_id": f"plan:{request.id}",
             "action": "acknowledge",
             "target": target,
             "parameters": {"message": content},
             "expected_outcome": "The observation is acknowledged and recorded.",
-            "evidence_refs": [observation.id, *recalled],
+            "evidence_refs": [observation.id, *evidence_refs],
         }
         return {
             "request_ref": request.id,
@@ -90,6 +97,16 @@ class DeterministicCognition:
                 "summary": content,
                 "goal": goal.data["description"],
                 "recalled_memory_count": len(recalled),
+                "recalled_fragment_count": len(fragment_context),
+                "recalled_fragments": [
+                    {
+                        "fragment_id": fragment["fragment_id"],
+                        "content": fragment["content"],
+                        "priority": fragment["priority"],
+                        "source_uri": fragment["source_uri"],
+                    }
+                    for fragment in fragment_context
+                ],
             },
             "hypotheses": [],
             "inferences": [],
@@ -107,7 +124,7 @@ class DeterministicCognition:
             "assumptions": [
                 "The default cognition engine only acknowledges an observation."
             ],
-            "provenance": [observation.id, *recalled],
+            "provenance": [observation.id, *evidence_refs],
         }
 
 
