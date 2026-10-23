@@ -6,12 +6,12 @@ from machina.mnn_memory import MemoryFragment, PriorityMemory
 class PriorityMemoryTests(unittest.TestCase):
     def test_retrieval_prefers_relevant_and_reinforces_fragment(self):
         memory = PriorityMemory()
-        memory.remember(MemoryFragment("a", "MNN connection plasticity", importance=0.8))
+        memory.remember(MemoryFragment("a", "MNN connection plasticity", importance=0.8, strength=0.5))
         memory.remember(MemoryFragment("b", "cooking recipes", importance=1.0))
         results = memory.retrieve("MNN plasticity", limit=1)
         self.assertEqual([fragment.id for fragment in results], ["a"])
         self.assertEqual(results[0].access_count, 1)
-        self.assertGreater(results[0].strength, 1.0 - 1e-9)
+        self.assertGreater(results[0].strength, 0.5)
 
     def test_decay_is_slower_for_important_fragments(self):
         memory = PriorityMemory()
