@@ -61,7 +61,7 @@ def run_benchmark(storage_path: str | Path | None = None) -> dict[str, Any]:
         )
         memory._db.commit()
 
-        active = memory.active(limit=1)
+        active = memory.active(limit=2)
         active_ids = [fragment.id for fragment in active]
         all_ranked = {fragment.id: fragment for fragment in memory.active(limit=3)}
         archive_before = memory.archive()
@@ -104,11 +104,11 @@ def run_benchmark(storage_path: str | Path | None = None) -> dict[str, Any]:
             "parameters": {
                 "decay_per_day": 0.8,
                 "simulated_age_days": 30,
-                "active_limit": 1,
+                "active_limit": 2,
                 "usage_reinforcement": 0.0,
             },
             "active_view_before_reinforcement": {
-                "limit": 1,
+                "limit": 2,
                 "ids": active_ids,
                 "aged_rule_priority": aged_priority,
                 "recent_note_priority": recent_priority,
