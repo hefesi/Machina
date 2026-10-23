@@ -19,6 +19,7 @@ from .components import (
 )
 from .contracts import Artifact, ContractKind, EpistemicStatus, new_id, now_utc
 from .event_store import CycleNotFoundError, EventStore, StoredEvent
+from .fragment_memory import FragmentMemory
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +64,7 @@ class VirtualBrain:
         agency: AgencyPolicy | None = None,
         action_executor: ActionExecutor | None = None,
         learning: LearningEngine | None = None,
+        fragment_memory_path: str | Path | None = None,
     ) -> None:
         self.store = EventStore(storage_path)
         self.cognition = cognition or DeterministicCognition()
@@ -70,8 +72,15 @@ class VirtualBrain:
         self.action_executor = action_executor or AcknowledgeExecutor()
         self.learning = learning or OutcomeLearner()
         self.memory = MemoryRepository(self.store)
+        self.fragment_memory = (
+            FragmentMemory(fragment_memory_path)
+            if fragment_memory_path is not None
+            else None
+        )
 
     def close(self) -> None:
+        if self.fragment_memory is not None:
+            self.fragment_memory.close()
         self.store.close()
 
     def __enter__(self) -> "VirtualBrain":
@@ -410,6 +419,7 @@ class VirtualBrain:
                 "memory.episode_recorded",
                 lambda: self._episode_memory(experience, observation, intent, action_result),
             )
+            self._persist_fragment_memory(episode)
             if self._stop_if_requested(cycle_id, "memory.episode_recorded", stop_after):
                 return None
 
@@ -537,7 +547,29 @@ class VirtualBrain:
         )
 
     def _memory_retrieval(self, query: Artifact) -> Artifact:
-        result = self.memory.retrieve(query)
+        result = dict(self.memory.retrieve(query))
+        if self.fragment_memory is not None:
+            recall_query = " ".join((
+                self._text(query.data["query"]),
+                self._text(query.data["goal_context"]),
+                self._text(query.data["context"]),
+            ))
+            fragments = self.fragment_memory.recall(recall_query, limit=5)
+            result["fragment_context"] = [
+                {
+                    "fragment_id": fragment.id,
+                    "content": fragment.content,
+                    "kind": fragment.kind,
+                    "importance": fragment.importance,
+                    "confidence": fragment.confidence,
+                    "priority": fragment.priority,
+                    "tags": list(fragment.tags),
+                    "source_uri": fragment.source_uri,
+                }
+                for fragment in fragments
+            ]
+        else:
+            result["fragment_context"] = []
         return Artifact.create(
             ContractKind.MEMORY_RETRIEVAL,
             cycle_id=query.cycle_id,
@@ -764,6 +796,38 @@ class VirtualBrain:
             source_refs=[*observation.source_refs, *result.source_refs],
             epistemic_status=EpistemicStatus.OBSERVED,
             confidence=1.0,
+        )
+
+    def _persist_fragment_memory(self, episode: Artifact) -> None:
+        """Mirror an episodic event into the optional durable fragment archive.
+
+        The episode artifact ID is the fragment ID, making retries idempotent
+        when a cycle resumes after the journal append but before the mirror write.
+        The event journal remains the source of truth for the cognitive cycle.
+        """
+        if self.fragment_memory is None:
+            return
+        fragment_id = episode.id
+        try:
+            self.fragment_memory.get(fragment_id, record_access=False)
+            return
+        except KeyError:
+            pass
+        data = episode.data
+        content = self._text(data["content"])
+        self.fragment_memory.add(
+            content,
+            kind=str(data["memory_type"]),
+            source_uri=f"machina://memory/{fragment_id}",
+            importance=float(data.get("importance", 0.5)),
+            confidence=float(data.get("confidence", 0.5)),
+            tags=(str(data["memory_type"]), str(data.get("consolidation_state", "recorded"))),
+            metadata={
+                "episode_artifact_id": fragment_id,
+                "cycle_id": episode.cycle_id,
+                "evidence_refs": list(data.get("evidence_refs", [])),
+            },
+            fragment_id=fragment_id,
         )
 
     def _episode_memory(
