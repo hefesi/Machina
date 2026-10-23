@@ -28,7 +28,7 @@ not a new production API.
 
 ## Expected observations
 
-1. The aged rule falls below a more recent item in the one-entry active view.
+1. The aged rule falls outside the two-entry active view, which contains the pinned critical item and the recent note.
 2. The aged rule remains in the archive; the archive count stays at three.
 3. A deliberately unrelated lexical query returns no matches, but direct
    lookup still retrieves the stored rule.
