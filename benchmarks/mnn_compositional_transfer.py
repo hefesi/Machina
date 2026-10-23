@@ -98,7 +98,6 @@ def run_benchmark(
     if checkpoint_path is None:
         with tempfile.TemporaryDirectory() as directory:
             store = MNNCheckpointStore(Path(directory) / "composition-checkpoint.json")
-            restored_network = store.load() if False else None
             store.save(network)
             restored_network = store.load()
     else:
