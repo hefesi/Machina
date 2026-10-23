@@ -50,6 +50,13 @@ class VirtualBrainFragmentMemoryTests(unittest.TestCase):
             self.assertTrue(
                 any("blue sensor" in item["content"].lower() for item in fragment_context)
             )
+            cognitive = next(
+                event.artifact for event in second.events
+                if event.event_type == "cognition.completed"
+            )
+            understanding = cognitive.data["understanding"]
+            self.assertGreater(understanding["recalled_fragment_count"], 0)
+            self.assertTrue(understanding["recalled_fragments"])
             self.assertEqual(restarted.fragment_memory.count(), 2)
             self.assertTrue(restarted.audit_cycle(second.cycle_id).valid)
             restarted.store.verify_integrity()
