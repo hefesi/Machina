@@ -102,6 +102,25 @@ class MNNLearningAgentTests(unittest.TestCase):
             self.assertTrue(decision["request_experience"])
             agent.resolve(0.0, context="unseen setting")
 
+    def test_decide_exposes_epsilon_greedy_policy(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(
+                MNNActionLearner(["left", "right"], exploration_seed=3), memory
+            )
+            decision = agent.decide(exploration_epsilon=1.0)
+            self.assertEqual(decision["exploration_policy"], "epsilon_greedy")
+            self.assertEqual(decision["exploration_epsilon"], 1.0)
+            self.assertIn(decision["action"], ("left", "right"))
+            agent.resolve(0.0)
+
+    def test_decide_reports_scheduled_policy_by_default(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(MNNActionLearner(["left", "right"]), memory)
+            decision = agent.decide()
+            self.assertEqual(decision["exploration_policy"], "scheduled")
+            self.assertIsNone(decision["exploration_epsilon"])
+            agent.resolve(0.0)
+
     def test_decide_requires_context_for_memory_mode(self):
         with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
             agent = MNNLearningAgent(MNNActionLearner(["left", "right"]), memory)
