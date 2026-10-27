@@ -9,7 +9,9 @@ class MNNExperienceCycleTests(unittest.TestCase):
     def make_cycle(self):
         network = MNN(weight_limit=2.0)
         network.add_unit(Unit("action", activation="identity"))
-        network.add_unit(Unit("outcome", activation="identity"))
+        # A constant bias keeps the postsynaptic unit active while the action
+        # is present, making the intended pre/post co-activity explicit.
+        network.add_unit(Unit("outcome", bias=1.0, activation="identity"))
         network.add_connection(Connection("action-outcome", "action", "outcome", 0.5))
         return MNNExperienceCycle(network, learning_rate=0.1)
 
