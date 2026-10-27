@@ -54,6 +54,7 @@ class MNNActionLearner:
         self.counts = {name: 0 for name in names}
         self.decisions = 0
         self._last_action: str | None = None
+        self.last_selection_mode: str | None = None
 
     @staticmethod
     def _new_network(actions: tuple[str, ...]) -> MNN:
@@ -92,18 +93,23 @@ class MNNActionLearner:
         unexplored = [name for name in self.actions if self.counts[name] == 0]
         if unexplored:
             action = unexplored[0]
+            self.last_selection_mode = "initial_coverage"
         elif epsilon is not None:
             rng = random.Random(self.exploration_seed + self.decisions)
             if rng.random() < float(epsilon):
                 action = rng.choice(self.actions)
+                self.last_selection_mode = "epsilon_explore"
             else:
                 predictions = self.predictions()
                 action = max(self.actions, key=lambda name: (predictions[name], -self.actions.index(name)))
+                self.last_selection_mode = "greedy"
         elif self.decisions % self.exploration_interval == 0:
             action = self.actions[(self.decisions // self.exploration_interval) % len(self.actions)]
+            self.last_selection_mode = "scheduled_exploration"
         else:
             predictions = self.predictions()
             action = max(self.actions, key=lambda name: (predictions[name], -self.actions.index(name)))
+            self.last_selection_mode = "greedy"
         self._last_action = action
         return action
 
@@ -144,6 +150,7 @@ class MNNActionLearner:
             "decisions": self.decisions,
             "counts": dict(self.counts),
             "last_action": self._last_action,
+            "last_selection_mode": self.last_selection_mode,
             "network": self.network.snapshot(),
         }
 
@@ -175,4 +182,8 @@ class MNNActionLearner:
         learner.counts = normalized
         learner.decisions = decisions
         learner._last_action = last_action
+        selection_mode = data.get("last_selection_mode")
+        if selection_mode not in (None, "initial_coverage", "epsilon_explore", "greedy", "scheduled_exploration"):
+            raise ValueError("invalid last_selection_mode in snapshot")
+        learner.last_selection_mode = selection_mode
         return learner
