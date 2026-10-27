@@ -38,7 +38,9 @@ with FragmentMemory("machina-experience.sqlite3") as memory:
 
 The margin is a heuristic in the reward scale, not a calibrated probability of correctness. A recommendation based on a single fragment can still be fragile; callers should inspect evidence counts or request stricter experiment-specific criteria.
 
-By default, it does **not** change the learner's action values or override `decide()`. For controlled experiments, `decide(context=..., use_memory=True)` explicitly allows a valid memory recommendation to select the action for that decision. The return value includes `selection_source`, `memory_recommendation`, and `fallback_action`, making memory influence observable. If no usable context evidence exists, the learner's normal choice is used. The learner still receives the observed outcome through `resolve()`.
+By default, it does **not** change the learner's action values or override `decide()`. For controlled experiments, `decide(context=..., use_memory=True)` explicitly allows a valid memory recommendation to select the action for that decision. The return value includes `selection_source`, `memory_recommendation`, and `fallback_action`, making memory influence observable.
+
+If memory cannot recommend (because there is no matching evidence or the evidence is ambiguous), the learner makes the fallback choice. The decision result marks `memory_status="no_recommendation"`, supplies a conservative `fallback_reason`, and sets `request_experience=True`. This is a signal to the calling environment to prioritize observing and recording the outcome; it does not automatically execute a trial or claim that new evidence already exists. Resolve the actual outcome with `resolve()`.
 
 ## Controlled benchmark
 
