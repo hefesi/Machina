@@ -11,6 +11,7 @@ from machina.mnn_action_learning import MNNActionLearner
 from machina.mnn_agent import MNNLearningAgent
 from machina.mnn_concept_advisor import MNNConceptAdvisor
 from machina.mnn_concepts import MNNConceptBuilder
+from benchmarks.mnn_concept_guidance_loop import run as run_guidance_benchmark
 
 
 class MNNConceptGuidedAgentTests(unittest.TestCase):
@@ -73,6 +74,16 @@ class MNNConceptGuidedAgentTests(unittest.TestCase):
             self.assertEqual("concept", restored.pending_action_source)
             result = restored.resolve(0.5, context="restored concept-guided trial")
             self.assertEqual("pause", result["learning_update"]["action"])
+
+    def test_synthetic_reward_loop_benchmark_reports_guidance_gain(self) -> None:
+        result = run_guidance_benchmark()
+        self.assertEqual("mnn-concept-guidance-loop", result["benchmark"])
+        self.assertEqual(1.0, result["concept_guided"]["optimal_action_rate"])
+        self.assertGreater(
+            result["concept_guided"]["mean_reward"],
+            result["baseline"]["mean_reward"],
+        )
+        self.assertGreater(result["reward_difference_guided_minus_baseline"], 0.0)
 
     def test_concept_mode_requires_configured_advisor_and_tags(self) -> None:
         with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
