@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Mapping
+from typing import Iterable, Mapping
 
 from .fragment_memory import FragmentMemory, MemoryFragment
 from .mnn_action_learning import MNNActionLearner
+from .mnn_concept_advisor import MNNConceptAdvisor
 
 
 class MNNLearningAgent:
@@ -23,12 +24,16 @@ class MNNLearningAgent:
         memory: FragmentMemory,
         *,
         agent_id: str = "machina",
+        concept_advisor: MNNConceptAdvisor | None = None,
     ) -> None:
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("agent_id must be a non-empty string")
         self.learner = learner
         self.memory = memory
         self.agent_id = agent_id.strip()
+        if concept_advisor is not None and not isinstance(concept_advisor, MNNConceptAdvisor):
+            raise ValueError("concept_advisor must be an MNNConceptAdvisor or None")
+        self.concept_advisor = concept_advisor
         self.pending_action: str | None = None
         self.pending_action_source: str | None = None
         self.experience_count = 0
@@ -36,6 +41,8 @@ class MNNLearningAgent:
     def decide(
         self, *, context: str | None = None, use_memory: bool = False,
         exploration_epsilon: float | None = None,
+        use_concepts: bool = False,
+        context_tags: Iterable[str] | None = None,
     ) -> dict:
         """Choose an action, optionally using an explicit contextual memory recommendation.
 
@@ -47,27 +54,54 @@ class MNNLearningAgent:
             raise RuntimeError("resolve the pending action before choosing another")
         if not isinstance(use_memory, bool):
             raise ValueError("use_memory must be boolean")
+        if not isinstance(use_concepts, bool):
+            raise ValueError("use_concepts must be boolean")
+        if use_concepts and self.concept_advisor is None:
+            raise ValueError("use_concepts=True requires a configured concept_advisor")
+        if use_concepts and context_tags is None:
+            raise ValueError("context_tags are required when use_concepts=True")
+        if context_tags is not None and not use_concepts:
+            raise ValueError("context_tags require use_concepts=True")
         if context is not None and not isinstance(context, str):
             raise ValueError("context must be a string")
         if use_memory and (context is None or not context.strip()):
             raise ValueError("a non-empty context is required when use_memory=True")
 
         fallback = self.learner.choose(epsilon=exploration_epsilon)
+        concept_result = (
+            self.concept_advisor.recommend(context_tags)
+            if use_concepts and self.concept_advisor is not None and context_tags is not None
+            else None
+        )
+        concept_recommendation = (
+            concept_result["recommendation"]
+            if concept_result is not None and concept_result["status"] == "recommended"
+            else None
+        )
         recommendation = (
             self.recommend_from_memory(context)
             if use_memory and context is not None
             else None
         )
-        action = recommendation["action"] if recommendation else fallback
+        if concept_recommendation is not None:
+            action = concept_recommendation["action"]
+            source = "concept"
+        elif recommendation is not None:
+            action = recommendation["action"]
+            source = "memory"
+        else:
+            action = fallback
+            source = "learner"
         self.pending_action = action
-        self.pending_action_source = "memory" if recommendation else "learner"
+        self.pending_action_source = source
         return {
             "action": action,
             "predicted_utility": self.learner.predictions()[action],
             "decision": self.learner.decisions,
             "context": context,
-            "selection_source": "memory" if recommendation else "learner",
+            "selection_source": source,
             "memory_recommendation": recommendation,
+            "concept_guidance": concept_result,
             "fallback_action": fallback,
             "exploration_policy": "epsilon_greedy" if exploration_epsilon is not None else "scheduled",
             "exploration_epsilon": exploration_epsilon,
@@ -83,7 +117,7 @@ class MNNLearningAgent:
             ),
             # Signals that the environment should gather another observed outcome;
             # this does not fabricate or automatically execute a trial.
-            "request_experience": bool(use_memory and recommendation is None),
+            "request_experience": bool((use_memory and recommendation is None and concept_recommendation is None) or (use_concepts and concept_recommendation is None)),
         }
 
     def resolve(self, reward: float, *, context: str = "") -> dict:
@@ -252,14 +286,14 @@ class MNNLearningAgent:
         # Schema v1 only represented learner-selected pending actions. Schema v2
         # records whether contextual memory overrode the learner's fallback.
         source = data.get("pending_action_source", "learner" if pending is not None else None)
-        if source not in (None, "learner", "memory"):
-            raise ValueError("pending_action_source must be 'learner', 'memory', or None")
+        if source not in (None, "learner", "memory", "concept"):
+            raise ValueError("pending_action_source must be 'learner', 'memory', 'concept', or None")
         if (pending is None) != (source is None):
             raise ValueError("pending_action and pending_action_source must both be set or unset")
         if pending is not None and source == "learner" and learner._last_action != pending:
             raise ValueError("pending_action does not match the learner's pending choice")
-        if pending is not None and source == "memory" and learner._last_action not in learner.actions:
-            raise ValueError("memory-selected pending action requires a valid learner fallback")
+        if pending is not None and source in ("memory", "concept") and learner._last_action not in learner.actions:
+            raise ValueError(f"{source}-selected pending action requires a valid learner fallback")
 
         agent.pending_action = pending
         agent.pending_action_source = source
