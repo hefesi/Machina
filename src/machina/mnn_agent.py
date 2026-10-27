@@ -30,6 +30,7 @@ class MNNLearningAgent:
         self.memory = memory
         self.agent_id = agent_id.strip()
         self.pending_action: str | None = None
+        self.pending_action_source: str | None = None
         self.experience_count = 0
 
     def decide(self, *, context: str | None = None, use_memory: bool = False) -> dict:
@@ -56,6 +57,7 @@ class MNNLearningAgent:
         )
         action = recommendation["action"] if recommendation else fallback
         self.pending_action = action
+        self.pending_action_source = "memory" if recommendation else "learner"
         return {
             "action": action,
             "predicted_utility": self.learner.predictions()[action],
@@ -102,6 +104,7 @@ class MNNLearningAgent:
         )
         self.experience_count += 1
         self.pending_action = None
+        self.pending_action_source = None
         return {
             "learning_update": update,
             "experience_id": fragment.id,
@@ -181,10 +184,11 @@ class MNNLearningAgent:
     def snapshot(self) -> dict:
         """Capture learner and in-flight action state; SQLite is persisted separately."""
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "agent_id": self.agent_id,
             "learner": self.learner.snapshot(),
             "pending_action": self.pending_action,
+            "pending_action_source": self.pending_action_source,
             "experience_count": self.experience_count,
         }
 
@@ -192,7 +196,8 @@ class MNNLearningAgent:
     def from_snapshot(
         cls, data: Mapping, memory: FragmentMemory
     ) -> "MNNLearningAgent":
-        if data.get("schema_version") != 1:
+        schema_version = data.get("schema_version")
+        if schema_version not in (1, 2):
             raise ValueError("unsupported MNN learning-agent snapshot schema")
         learner = MNNActionLearner.from_snapshot(data["learner"])
         agent = cls(learner, memory, agent_id=data["agent_id"])
@@ -202,8 +207,20 @@ class MNNLearningAgent:
         count = data.get("experience_count")
         if isinstance(count, bool) or not isinstance(count, int) or count < 0:
             raise ValueError("experience_count must be a non-negative integer")
-        if pending is not None and learner._last_action != pending:
+
+        # Schema v1 only represented learner-selected pending actions. Schema v2
+        # records whether contextual memory overrode the learner's fallback.
+        source = data.get("pending_action_source", "learner" if pending is not None else None)
+        if source not in (None, "learner", "memory"):
+            raise ValueError("pending_action_source must be 'learner', 'memory', or None")
+        if (pending is None) != (source is None):
+            raise ValueError("pending_action and pending_action_source must both be set or unset")
+        if pending is not None and source == "learner" and learner._last_action != pending:
             raise ValueError("pending_action does not match the learner's pending choice")
+        if pending is not None and source == "memory" and learner._last_action not in learner.actions:
+            raise ValueError("memory-selected pending action requires a valid learner fallback")
+
         agent.pending_action = pending
+        agent.pending_action_source = source
         agent.experience_count = count
         return agent
