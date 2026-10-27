@@ -16,6 +16,7 @@ from .mnn_action_learning import MNNActionLearner
 from .mnn_agent import MNNLearningAgent
 from .mnn_adapter import MNNCognitionAdapter
 from .mnn_experience import MNNExperienceCycle
+from .mnn_memory_consolidation import ConsolidatedMemory, MNNMemoryConsolidator
 from .mnn_reward import RewardModulator
 from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
@@ -38,6 +39,8 @@ __all__ = [
     "EventStore",
     "FragmentMemory",
     "MemoryFragment",
+    "ConsolidatedMemory",
+    "MNNMemoryConsolidator",
     "DuplicateKnowledgeError",
     "KnowledgeDocument",
     "KnowledgeHit",
