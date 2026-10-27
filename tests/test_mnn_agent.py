@@ -140,6 +140,41 @@ class MNNLearningAgentTests(unittest.TestCase):
             self.assertIsNotNone(agent.pending_action)
             self.assertEqual(memory.count(), 0)
 
+    def test_snapshot_restores_memory_overridden_pending_action(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(MNNActionLearner(["left", "right"]), memory)
+            memory.add(
+                "Action 'right' received reward 1. Context: busy evening",
+                kind="action-outcome", source_uri="test://busy-right",
+                metadata={"action": "right", "reward": 1.0, "context": "busy evening"},
+                confidence=1.0, tags=("right",),
+            )
+
+            decision = agent.decide(context="busy evening", use_memory=True)
+            self.assertEqual(decision["action"], "right")
+            self.assertEqual(decision["fallback_action"], "left")
+            self.assertEqual(agent.snapshot()["pending_action_source"], "memory")
+
+            snapshot = json.loads(json.dumps(agent.snapshot()))
+            restored = MNNLearningAgent.from_snapshot(snapshot, memory)
+            self.assertEqual(restored.pending_action, "right")
+            self.assertEqual(restored.pending_action_source, "memory")
+            result = restored.resolve(1.0, context="busy evening")
+            self.assertEqual(result["learning_update"]["action"], "right")
+            self.assertIsNone(restored.pending_action)
+            self.assertIsNone(restored.pending_action_source)
+
+    def test_schema_v1_snapshot_remains_compatible(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(MNNActionLearner(["left", "right"]), memory)
+            decision = agent.decide()
+            snapshot = agent.snapshot()
+            snapshot["schema_version"] = 1
+            snapshot.pop("pending_action_source")
+            restored = MNNLearningAgent.from_snapshot(snapshot, memory)
+            self.assertEqual(restored.pending_action, decision["action"])
+            self.assertEqual(restored.pending_action_source, "learner")
+
     def test_snapshot_rejects_mismatched_pending_action(self):
         with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
             agent = MNNLearningAgent(MNNActionLearner(["a", "b"]), memory)
