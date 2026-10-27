@@ -12,6 +12,7 @@ from .event_store import EventStore, IntegrityError
 from .fragment_memory import FragmentMemory, MemoryFragment
 from .goal_store import PersistentGoalStore
 from .mnn import Connection, MNN, Unit
+from .mnn_action_learning import MNNActionLearner
 from .mnn_adapter import MNNCognitionAdapter
 from .mnn_experience import MNNExperienceCycle
 from .mnn_reward import RewardModulator
@@ -42,6 +43,7 @@ __all__ = [
     "KnowledgeStore",
     "IntegrityError",
     "MNN",
+    "MNNActionLearner",
     "MNNCognitionAdapter",
     "MNNExperienceCycle",
     "RewardModulator",
