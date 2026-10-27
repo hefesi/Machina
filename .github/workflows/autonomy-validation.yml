@@ -8,6 +8,7 @@ on:
       - "src/machina/skill_benchmark.py"
       - "src/machina/continuous_learning.py"
       - "src/machina/transfer_benchmark.py"
+      - "src/machina/confidence_policy.py"
       - "src/machina/subjective_state.py"
       - "src/machina/self_continuity.py"
       - "src/machina/relevance.py"
@@ -16,6 +17,7 @@ on:
       - "examples/autonomy_d22_useful_skill_demo.py"
       - "examples/autonomy_d23_continuous_learning_demo.py"
       - "examples/autonomy_d24_generalization_transfer_demo.py"
+      - "examples/autonomy_d25_confidence_demo.py"
       - "examples/consciousness_d08_demo.py"
       - "tests/test_autonomy.py"
       - "tests/test_autonomy_operational_validation.py"
@@ -23,12 +25,14 @@ on:
       - "tests/test_autonomy_d22_useful_skill.py"
       - "tests/test_autonomy_d23_continuous_learning.py"
       - "tests/test_autonomy_d24_generalization_transfer.py"
+      - "tests/test_autonomy_d25_confidence_policy.py"
       - "tests/test_consciousness_d08.py"
       - "docs/AUTONOMY_OPERATIONAL_VALIDATION.md"
       - "docs/AUTONOMY_ADAPTIVE_LEARNING.md"
       - "docs/AUTONOMY_D22_USEFUL_SKILL.md"
       - "docs/AUTONOMY_D23_CONTINUOUS_LEARNING.md"
       - "docs/AUTONOMY_D24_GENERALIZATION_TRANSFER.md"
+      - "docs/AUTONOMY_D25_CONFIDENCE_AND_ABSTENTION.md"
       - "docs/CONSCIOUSNESS_D08_FORMAL_MODEL.md"
       - ".github/workflows/autonomy-validation.yml"
   push:
@@ -39,6 +43,7 @@ on:
       - "feat/autonomy-d22-useful-skill"
       - "feat/autonomy-d23-continuous-learning"
       - "feat/autonomy-d24-generalization-transfer"
+      - "fix/autonomy-d25-rebased"
       - "feat/consciousness-d08-functional-subjectivity"
 
 jobs:
@@ -73,6 +78,10 @@ jobs:
         run: python -m examples.autonomy_d24_generalization_transfer_demo
       - name: Run D2.4 generalization and transfer tests
         run: python -m unittest discover -s tests -p 'test_autonomy_d24_generalization_transfer.py'
+      - name: Run D2.5 confidence and abstention demo
+        run: python -m examples.autonomy_d25_confidence_demo
+      - name: Run D2.5 confidence and abstention tests
+        run: python -m unittest discover -s tests -p 'test_autonomy_d25_confidence_policy.py'
       - name: Run D08 functional subjectivity demo
         run: python -m examples.consciousness_d08_demo
       - name: Run D08 functional subjectivity tests
