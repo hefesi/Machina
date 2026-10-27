@@ -60,6 +60,7 @@ def run_benchmark(
         )
         first_phase = _phase(learner, preferred="left", rounds=rounds_per_phase)
         state_before_restart = learner.snapshot()
+        predictions_before_restart = learner.predictions()
         durable_state.write_text(
             json.dumps(state_before_restart, sort_keys=True, allow_nan=False),
             encoding="utf-8",
@@ -90,6 +91,7 @@ def run_benchmark(
             json.loads(durable_state.read_text(encoding="utf-8"))
         )
         restart_preserved_state = restored.snapshot() == state_before_restart
+        predictions_after_restart = restored.predictions()
         second_phase = _phase(restored, preferred="right", rounds=rounds_per_phase)
 
         # Reopen SQLite to verify that experience survives closing and reopening.
@@ -115,8 +117,8 @@ def run_benchmark(
             "phase_1": first_phase,
             "restart": {
                 "learner_state_preserved": restart_preserved_state,
-                "predictions_before_restart": state_before_restart["network"]["connections"],
-                "predictions_after_restart": restored.predictions(),
+                "predictions_before_restart": predictions_before_restart,
+                "predictions_after_restart": predictions_after_restart,
             },
             "phase_2": second_phase,
             "persistent_memory": {
