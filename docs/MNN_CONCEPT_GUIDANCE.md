@@ -42,3 +42,12 @@ else:
 ```
 
 The caller is responsible for applying a safe fallback when the advisor abstains.
+
+
+## Integration with the learning agent
+
+`MNNLearningAgent` can receive an optional `concept_advisor` and consult it during `decide(use_concepts=True, context_tags=[...])`. A supported recommendation selects its explicitly mapped action for that decision. The ordinary learner still selects a fallback and receives the actual observed reward when `resolve(reward, context=...)` is called. The selected action and reward are archived as an outcome fragment.
+
+When concept guidance abstains, the agent uses the learner's fallback and sets `request_experience=True` so the surrounding environment can collect another outcome. The flag is a request only: no action is executed and no reward is fabricated by the agent.
+
+`benchmarks/mnn_concept_guidance_loop.py` compares this integration with the context-free learner in a small synthetic environment. Since the action mapping and environment rewards are specified in advance, this is an integration smoke benchmark, not evidence that the MNN independently discovered action semantics or will generalize to real tasks.
