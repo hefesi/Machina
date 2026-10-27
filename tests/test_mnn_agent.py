@@ -70,6 +70,36 @@ class MNNLearningAgentTests(unittest.TestCase):
             self.assertEqual(agent.learner.decisions, 0)
             self.assertEqual(agent.learner.predictions(), {"left": 0.0, "right": 0.0})
 
+    def test_decide_can_use_contextual_memory_and_reports_fallback(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(MNNActionLearner(["left", "right"]), memory)
+            memory.add(
+                "Action 'right' received reward 1. Context: busy evening",
+                kind="action-outcome", source_uri="test://busy-right",
+                metadata={"action": "right", "reward": 1.0, "context": "busy evening"},
+                confidence=1.0, tags=("right",),
+            )
+            decision = agent.decide(context="busy evening", use_memory=True)
+            self.assertEqual(decision["action"], "right")
+            self.assertEqual(decision["selection_source"], "memory")
+            self.assertEqual(decision["fallback_action"], "left")
+            self.assertTrue(decision["memory_recommendation"]["evidence_ids"])
+            agent.resolve(1.0, context="busy evening")
+
+    def test_decide_memory_mode_falls_back_without_evidence(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(MNNActionLearner(["left", "right"]), memory)
+            decision = agent.decide(context="unseen setting", use_memory=True)
+            self.assertEqual(decision["selection_source"], "learner")
+            self.assertEqual(decision["action"], decision["fallback_action"])
+            agent.resolve(0.0, context="unseen setting")
+
+    def test_decide_requires_context_for_memory_mode(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(MNNActionLearner(["left", "right"]), memory)
+            with self.assertRaises(ValueError):
+                agent.decide(use_memory=True)
+
     def test_memory_recommendation_returns_none_without_matching_context(self):
         with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
             agent = MNNLearningAgent(MNNActionLearner(["a", "b"]), memory)
