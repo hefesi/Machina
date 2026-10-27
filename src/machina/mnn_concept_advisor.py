@@ -94,10 +94,15 @@ class MNNConceptAdvisor:
                 if item.state == "current" and item.current_status == "supported"
             ]
             if not current:
-                blocked[key] = (
-                    "stale_or_unverified_concept" if key_reviews
-                    else "no_persisted_concept"
-                )
+                if not key_reviews:
+                    blocked[key] = "no_persisted_concept"
+                elif any(
+                    item.state == "current" and item.current_status != "supported"
+                    for item in key_reviews
+                ):
+                    blocked[key] = "concept_not_supported"
+                else:
+                    blocked[key] = "stale_or_unverified_concept"
                 continue
             concept_review = sorted(current, key=lambda item: item.concept.id)[-1]
             concept = concept_review.concept
