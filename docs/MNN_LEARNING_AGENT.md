@@ -32,7 +32,11 @@ with FragmentMemory("machina-experience.sqlite3") as memory:
 - filters for recorded action outcomes whose saved context shares tokens with the query;
 - estimates each action's reward using a context-overlap-weighted mean;
 - returns the recommendation, per-action estimates, and evidence fragment IDs;
-- returns `None` if no usable matching context exists.
+- returns `None` if no usable matching context exists;
+- abstains when the two best observed action estimates differ by less than `min_reward_margin` (default `0.1`), rather than silently breaking an ambiguous tie by action order;
+- reports evidence counts, estimated rewards, and the decision margin when it can recommend.
+
+The margin is a heuristic in the reward scale, not a calibrated probability of correctness. A recommendation based on a single fragment can still be fragile; callers should inspect evidence counts or request stricter experiment-specific criteria.
 
 By default, it does **not** change the learner's action values or override `decide()`. For controlled experiments, `decide(context=..., use_memory=True)` explicitly allows a valid memory recommendation to select the action for that decision. The return value includes `selection_source`, `memory_recommendation`, and `fallback_action`, making memory influence observable. If no usable context evidence exists, the learner's normal choice is used. The learner still receives the observed outcome through `resolve()`.
 

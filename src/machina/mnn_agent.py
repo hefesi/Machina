@@ -116,7 +116,9 @@ class MNNLearningAgent:
         """Recall explicit experience records using FragmentMemory's lexical search."""
         return self.memory.recall(query, limit=limit)
 
-    def recommend_from_memory(self, context: str, *, limit: int = 20) -> dict | None:
+    def recommend_from_memory(
+        self, context: str, *, limit: int = 20, min_reward_margin: float = 0.1
+    ) -> dict | None:
         """Recommend an action from context-matching archived outcomes.
 
         This is an explicit, explainable memory-based recommendation; it does
@@ -130,6 +132,13 @@ class MNNLearningAgent:
             raise ValueError("context must be a non-empty string")
         if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
             raise ValueError("limit must be a positive integer")
+        if (
+            isinstance(min_reward_margin, bool)
+            or not isinstance(min_reward_margin, (int, float))
+            or not math.isfinite(min_reward_margin)
+            or min_reward_margin < 0
+        ):
+            raise ValueError("min_reward_margin must be a finite non-negative number")
 
         def tokens(value: str) -> set[str]:
             return {
@@ -167,18 +176,32 @@ class MNNLearningAgent:
         if not weights:
             return None
         estimates = {action: totals[action] / weights[action] for action in weights}
-        # Stable tie-breaking follows the learner's configured action order.
-        action = max(
+        ranked_actions = sorted(
             estimates,
-            key=lambda name: (estimates[name], -self.learner.actions.index(name)),
+            key=lambda name: (-estimates[name], self.learner.actions.index(name)),
         )
+        # If the best two observed actions are too close, abstain instead of
+        # letting configured action order turn ambiguous evidence into certainty.
+        if (
+            len(ranked_actions) > 1
+            and estimates[ranked_actions[0]] - estimates[ranked_actions[1]]
+            < float(min_reward_margin)
+        ):
+            return None
+        action = ranked_actions[0]
         return {
             "action": action,
             "estimated_reward": estimates[action],
             "context": context.strip(),
             "evidence_ids": evidence[action],
+            "evidence_counts": {name: len(ids) for name, ids in evidence.items()},
             "estimates_by_action": estimates,
-            "method": "lexical-context-overlap-weighted-reward-mean",
+            "decision_margin": (
+                estimates[ranked_actions[0]] - estimates[ranked_actions[1]]
+                if len(ranked_actions) > 1 else None
+            ),
+            "min_reward_margin": float(min_reward_margin),
+            "method": "lexical-context-overlap-weighted-reward-mean-with-abstention",
         }
 
     def snapshot(self) -> dict:

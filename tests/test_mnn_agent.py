@@ -100,6 +100,43 @@ class MNNLearningAgentTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 agent.decide(use_memory=True)
 
+    def test_memory_recommendation_abstains_on_conflicting_context_evidence(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(MNNActionLearner(["left", "right"]), memory)
+            records = (
+                ("left", 1.0, "noisy room"),
+                ("right", 0.0, "noisy room"),
+                ("left", 0.0, "noisy room"),
+                ("right", 1.0, "noisy room"),
+            )
+            for index, (action, reward, context) in enumerate(records):
+                memory.add(
+                    f"Action '{action}' received reward {reward:g}. Context: {context}",
+                    kind="action-outcome", source_uri=f"test://conflict-{index}",
+                    metadata={"action": action, "reward": reward, "context": context},
+                    confidence=1.0, tags=(action,),
+                )
+
+            self.assertIsNone(agent.recommend_from_memory("noisy room"))
+            # A caller can request a stricter margin; the threshold is validated.
+            with self.assertRaises(ValueError):
+                agent.recommend_from_memory("noisy room", min_reward_margin=-0.1)
+
+    def test_memory_recommendation_reports_evidence_and_margin(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(MNNActionLearner(["left", "right"]), memory)
+            for index, (action, reward) in enumerate((("left", 1.0), ("right", 0.0))):
+                memory.add(
+                    f"Action '{action}' received reward {reward:g}. Context: quiet morning",
+                    kind="action-outcome", source_uri=f"test://evidence-{index}",
+                    metadata={"action": action, "reward": reward, "context": "quiet morning"},
+                    confidence=1.0, tags=(action,),
+                )
+            recommendation = agent.recommend_from_memory("quiet morning")
+            self.assertEqual(recommendation["action"], "left")
+            self.assertEqual(recommendation["evidence_counts"], {"left": 1, "right": 1})
+            self.assertEqual(recommendation["decision_margin"], 1.0)
+
     def test_memory_recommendation_returns_none_without_matching_context(self):
         with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
             agent = MNNLearningAgent(MNNActionLearner(["a", "b"]), memory)
