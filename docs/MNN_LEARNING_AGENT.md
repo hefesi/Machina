@@ -42,7 +42,21 @@ By default, it does **not** change the learner's action values or override `deci
 
 If memory cannot recommend (because there is no matching evidence or the evidence is ambiguous), the learner makes the fallback choice. The decision result marks `memory_status="no_recommendation"`, supplies a conservative `fallback_reason`, and sets `request_experience=True`. This is a signal to the calling environment to prioritize observing and recording the outcome; it does not automatically execute a trial or claim that new evidence already exists. Resolve the actual outcome with `resolve()`.
 
-## Controlled benchmark
+## Exploration versus exploitation
+
+`MNNActionLearner.choose()` keeps the original deterministic scheduled policy when `epsilon` is omitted. For experiments, pass `epsilon` to select an epsilon-greedy policy:
+
+```python
+decision = agent.decide(exploration_epsilon=0.15)
+# Execute decision["action"] in the environment, then report the observed reward.
+agent.resolve(reward=measured_reward, context="current situation")
+```
+
+`epsilon=0` greedily chooses the highest predicted utility after every action has been tried once; `epsilon=1` explores uniformly at random after that initial coverage. Values between 0 and 1 trade off exploitation and exploration. The seeded draw is derived from `exploration_seed + decision_number`, so the action sequence is reproducible across JSON snapshot/restart. `exploration_seed` defaults to `0` and is persisted by the learner.
+
+The decision output reports `exploration_policy` and `exploration_epsilon`. This policy is a simple epsilon-greedy baseline, not a calibrated uncertainty model. It explores randomly rather than estimating epistemic uncertainty, and reward quality must be measured in a controlled environment.
+
+## Epsilon-greedy reward-reversal sweep\n\nRun `python benchmarks/mnn_exploration_sweep.py` from the repository root to compare `epsilon` values `0.0`, `0.05`, `0.15`, `0.30`, and `1.0` over five fixed seeds. Each trial rewards `left` in phase 1 and reverses the mapping to reward `right` in phase 2. The benchmark reports phase reward rates, actual epsilon-triggered exploration frequency, and adaptation lag (the first point at which the agent achieves five consecutive rewards in phase 2).\n\nThe sweep aggregates multiple seeds to reduce reliance on one random sequence. A `null` adaptation lag means the criterion was not reached during the measured phase. This is a synthetic deterministic task; it does not represent noisy real environments, semantic context understanding, or broad generalization.\n\n## Controlled benchmark
 
 Run `python benchmarks/mnn_contextual_memory.py` to compare the context-free baseline with memory-assisted selection on a deterministic two-context task where the best action reverses between contexts. The benchmark seeds the same four experience records for each policy and reports reward total, accuracy, and how often memory selected the action. It is a small synthetic sanity check, not proof of generalization; results depend on lexical retrieval and supplied experience.
 

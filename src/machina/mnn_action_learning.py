@@ -7,6 +7,7 @@ a prediction error. This is a compact contextual-free bandit baseline.
 from __future__ import annotations
 
 import math
+import random
 from typing import Mapping
 
 from .mnn import Connection, MNN, Unit
@@ -28,6 +29,7 @@ class MNNActionLearner:
         network: MNN | None = None,
         learning_rate: float = 0.2,
         exploration_interval: int = 5,
+        exploration_seed: int = 0,
     ) -> None:
         names = tuple(actions)
         if len(names) < 2 or any(not isinstance(name, str) or not name for name in names):
@@ -41,6 +43,9 @@ class MNNActionLearner:
         if isinstance(exploration_interval, bool) or not isinstance(exploration_interval, int) or exploration_interval < 1:
             raise ValueError("exploration_interval must be a positive integer")
         self.exploration_interval = exploration_interval
+        if isinstance(exploration_seed, bool) or not isinstance(exploration_seed, int):
+            raise ValueError("exploration_seed must be an integer")
+        self.exploration_seed = exploration_seed
         self.network = network or self._new_network(names)
         self._action_edges = {name: f"action-value:{name}" for name in names}
         missing = set(self._action_edges.values()) - set(self.network.connections)
@@ -49,6 +54,7 @@ class MNNActionLearner:
         self.counts = {name: 0 for name in names}
         self.decisions = 0
         self._last_action: str | None = None
+        self.last_selection_mode: str | None = None
 
     @staticmethod
     def _new_network(actions: tuple[str, ...]) -> MNN:
@@ -68,17 +74,42 @@ class MNNActionLearner:
             for action in self.actions
         }
 
-    def choose(self) -> str:
-        """Choose an unexplored action first, then greedy with scheduled exploration."""
+    def choose(self, *, epsilon: float | None = None) -> str:
+        """Choose using the original schedule or reproducible epsilon-greedy.
+
+        When epsilon is omitted, preserve the original deterministic schedule.
+        When supplied, epsilon must be in [0, 1]; unseen actions are tried first,
+        then a seeded pseudo-random draw explores with probability epsilon.
+        Deriving the draw from seed + decision number keeps restarts reproducible.
+        """
+        if epsilon is not None and (
+            isinstance(epsilon, bool)
+            or not isinstance(epsilon, (int, float))
+            or not math.isfinite(epsilon)
+            or not 0.0 <= epsilon <= 1.0
+        ):
+            raise ValueError("epsilon must be a finite number in [0, 1]")
         self.decisions += 1
         unexplored = [name for name in self.actions if self.counts[name] == 0]
         if unexplored:
             action = unexplored[0]
+            self.last_selection_mode = "initial_coverage"
+        elif epsilon is not None:
+            rng = random.Random(self.exploration_seed + self.decisions)
+            if rng.random() < float(epsilon):
+                action = rng.choice(self.actions)
+                self.last_selection_mode = "epsilon_explore"
+            else:
+                predictions = self.predictions()
+                action = max(self.actions, key=lambda name: (predictions[name], -self.actions.index(name)))
+                self.last_selection_mode = "greedy"
         elif self.decisions % self.exploration_interval == 0:
             action = self.actions[(self.decisions // self.exploration_interval) % len(self.actions)]
+            self.last_selection_mode = "scheduled_exploration"
         else:
             predictions = self.predictions()
             action = max(self.actions, key=lambda name: (predictions[name], -self.actions.index(name)))
+            self.last_selection_mode = "greedy"
         self._last_action = action
         return action
 
@@ -115,9 +146,11 @@ class MNNActionLearner:
             "actions": list(self.actions),
             "learning_rate": self.learning_rate,
             "exploration_interval": self.exploration_interval,
+            "exploration_seed": self.exploration_seed,
             "decisions": self.decisions,
             "counts": dict(self.counts),
             "last_action": self._last_action,
+            "last_selection_mode": self.last_selection_mode,
             "network": self.network.snapshot(),
         }
 
@@ -130,6 +163,7 @@ class MNNActionLearner:
             network=MNN.from_snapshot(data["network"]),
             learning_rate=data["learning_rate"],
             exploration_interval=data["exploration_interval"],
+            exploration_seed=data.get("exploration_seed", 0),
         )
         counts = data["counts"]
         if set(counts) != set(learner.actions):
@@ -148,4 +182,8 @@ class MNNActionLearner:
         learner.counts = normalized
         learner.decisions = decisions
         learner._last_action = last_action
+        selection_mode = data.get("last_selection_mode")
+        if selection_mode not in (None, "initial_coverage", "epsilon_explore", "greedy", "scheduled_exploration"):
+            raise ValueError("invalid last_selection_mode in snapshot")
+        learner.last_selection_mode = selection_mode
         return learner
