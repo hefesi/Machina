@@ -84,6 +84,8 @@ class MNNLearningAgentTests(unittest.TestCase):
             self.assertEqual(decision["selection_source"], "memory")
             self.assertEqual(decision["fallback_action"], "left")
             self.assertTrue(decision["memory_recommendation"]["evidence_ids"])
+            self.assertEqual(decision["memory_status"], "recommended")
+            self.assertFalse(decision["request_experience"])
             agent.resolve(1.0, context="busy evening")
 
     def test_decide_memory_mode_falls_back_without_evidence(self):
@@ -92,6 +94,12 @@ class MNNLearningAgentTests(unittest.TestCase):
             decision = agent.decide(context="unseen setting", use_memory=True)
             self.assertEqual(decision["selection_source"], "learner")
             self.assertEqual(decision["action"], decision["fallback_action"])
+            self.assertEqual(decision["memory_status"], "no_recommendation")
+            self.assertEqual(
+                decision["fallback_reason"],
+                "no_matching_or_unambiguous_memory_evidence",
+            )
+            self.assertTrue(decision["request_experience"])
             agent.resolve(0.0, context="unseen setting")
 
     def test_decide_requires_context_for_memory_mode(self):

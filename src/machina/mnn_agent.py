@@ -66,6 +66,19 @@ class MNNLearningAgent:
             "selection_source": "memory" if recommendation else "learner",
             "memory_recommendation": recommendation,
             "fallback_action": fallback,
+            "memory_status": (
+                "recommended" if recommendation
+                else "no_recommendation" if use_memory
+                else "not_consulted"
+            ),
+            "fallback_reason": (
+                "no_matching_or_unambiguous_memory_evidence"
+                if use_memory and recommendation is None
+                else None
+            ),
+            # Signals that the environment should gather another observed outcome;
+            # this does not fabricate or automatically execute a trial.
+            "request_experience": bool(use_memory and recommendation is None),
         }
 
     def resolve(self, reward: float, *, context: str = "") -> dict:
