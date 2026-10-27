@@ -15,6 +15,8 @@ from .mnn import Connection, MNN, Unit
 from .mnn_action_learning import MNNActionLearner
 from .mnn_agent import MNNLearningAgent
 from .mnn_adapter import MNNCognitionAdapter
+from .mnn_concept_review import ConceptReview, MNNConceptReviewer
+from .mnn_concepts import ConceptHypothesis, MNNConceptBuilder
 from .mnn_experience import MNNExperienceCycle
 from .mnn_memory_consolidation import ConsolidatedMemory, MNNMemoryConsolidator
 from .mnn_reward import RewardModulator
@@ -22,36 +24,13 @@ from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
 
 __all__ = [
-    "Artifact",
-    "AutonomyContext",
-    "AutonomyController",
-    "AutonomyDecision",
-    "AutonomyExperienceStore",
-    "GoalCandidate",
-    "PersistentGoalStore",
-    "HierarchicalPlanner",
-    "PersistentPlanStore",
-    "Connection",
-    "ContractError",
-    "ContractKind",
-    "CycleAudit",
-    "CycleResult",
-    "EventStore",
-    "FragmentMemory",
-    "MemoryFragment",
-    "ConsolidatedMemory",
-    "MNNMemoryConsolidator",
-    "DuplicateKnowledgeError",
-    "KnowledgeDocument",
-    "KnowledgeHit",
-    "KnowledgeStore",
-    "IntegrityError",
-    "MNN",
-    "MNNActionLearner",
-    "MNNLearningAgent",
-    "MNNCognitionAdapter",
-    "MNNExperienceCycle",
-    "RewardModulator",
-    "Unit",
-    "VirtualBrain",
+    "Artifact", "AutonomyContext", "AutonomyController", "AutonomyDecision",
+    "AutonomyExperienceStore", "GoalCandidate", "PersistentGoalStore",
+    "HierarchicalPlanner", "PersistentPlanStore", "Connection", "ContractError",
+    "ContractKind", "CycleAudit", "CycleResult", "EventStore", "FragmentMemory",
+    "MemoryFragment", "ConsolidatedMemory", "MNNMemoryConsolidator",
+    "ConceptHypothesis", "MNNConceptBuilder", "ConceptReview", "MNNConceptReviewer",
+    "DuplicateKnowledgeError", "KnowledgeDocument", "KnowledgeHit", "KnowledgeStore",
+    "IntegrityError", "MNN", "MNNActionLearner", "MNNLearningAgent",
+    "MNNCognitionAdapter", "MNNExperienceCycle", "RewardModulator", "Unit", "VirtualBrain",
 ]
