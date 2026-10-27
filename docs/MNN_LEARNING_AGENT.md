@@ -34,7 +34,11 @@ with FragmentMemory("machina-experience.sqlite3") as memory:
 - returns the recommendation, per-action estimates, and evidence fragment IDs;
 - returns `None` if no usable matching context exists.
 
-It does **not** silently change the learner's action values or automatically override `decide()`. A caller can inspect the evidence and choose whether to use the recommendation or fall back to the context-free learner. This separation makes memory influence measurable rather than hidden.
+By default, it does **not** change the learner's action values or override `decide()`. For controlled experiments, `decide(context=..., use_memory=True)` explicitly allows a valid memory recommendation to select the action for that decision. The return value includes `selection_source`, `memory_recommendation`, and `fallback_action`, making memory influence observable. If no usable context evidence exists, the learner's normal choice is used. The learner still receives the observed outcome through `resolve()`.
+
+## Controlled benchmark
+
+Run `python benchmarks/mnn_contextual_memory.py` to compare the context-free baseline with memory-assisted selection on a deterministic two-context task where the best action reverses between contexts. The benchmark seeds the same four experience records for each policy and reports reward total, accuracy, and how often memory selected the action. It is a small synthetic sanity check, not proof of generalization; results depend on lexical retrieval and supplied experience.
 
 ## Guarantees and limits
 
