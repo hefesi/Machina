@@ -109,7 +109,7 @@ class MNNLearningAgent:
         def tokens(value: str) -> set[str]:
             return {
                 token.casefold()
-                for token in re.findall(r"\\w+", value, flags=re.UNICODE)
+                for token in re.findall(r"\w+", value, flags=re.UNICODE)
                 if len(token) > 1
             }
 
