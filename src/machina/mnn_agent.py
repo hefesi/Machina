@@ -67,7 +67,8 @@ class MNNLearningAgent:
         if use_memory and (context is None or not context.strip()):
             raise ValueError("a non-empty context is required when use_memory=True")
 
-        fallback = self.learner.choose(epsilon=exploration_epsilon)
+        # Validate and gather optional recommendations before advancing the learner's
+        # decision counter, so invalid context input cannot partially mutate state.
         concept_result = (
             self.concept_advisor.recommend(context_tags)
             if use_concepts and self.concept_advisor is not None and context_tags is not None
@@ -83,6 +84,7 @@ class MNNLearningAgent:
             if use_memory and context is not None
             else None
         )
+        fallback = self.learner.choose(epsilon=exploration_epsilon)
         if concept_recommendation is not None:
             action = concept_recommendation["action"]
             source = "concept"
