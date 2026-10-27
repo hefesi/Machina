@@ -33,7 +33,10 @@ class MNNLearningAgent:
         self.pending_action_source: str | None = None
         self.experience_count = 0
 
-    def decide(self, *, context: str | None = None, use_memory: bool = False) -> dict:
+    def decide(
+        self, *, context: str | None = None, use_memory: bool = False,
+        exploration_epsilon: float | None = None,
+    ) -> dict:
         """Choose an action, optionally using an explicit contextual memory recommendation.
 
         The learner always advances its decision counter and provides a fallback.
@@ -49,7 +52,7 @@ class MNNLearningAgent:
         if use_memory and (context is None or not context.strip()):
             raise ValueError("a non-empty context is required when use_memory=True")
 
-        fallback = self.learner.choose()
+        fallback = self.learner.choose(epsilon=exploration_epsilon)
         recommendation = (
             self.recommend_from_memory(context)
             if use_memory and context is not None
@@ -66,6 +69,8 @@ class MNNLearningAgent:
             "selection_source": "memory" if recommendation else "learner",
             "memory_recommendation": recommendation,
             "fallback_action": fallback,
+            "exploration_policy": "epsilon_greedy" if exploration_epsilon is not None else "scheduled",
+            "exploration_epsilon": exploration_epsilon,
             "memory_status": (
                 "recommended" if recommendation
                 else "no_recommendation" if use_memory
