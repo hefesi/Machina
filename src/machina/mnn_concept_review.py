@@ -97,7 +97,10 @@ class MNNConceptReviewer:
         """
         logs: list[MemoryFragment] = []
         for review in self.review():
-            evidence = review.current_evidence_ids or tuple(sorted(review.concept.metadata.get("evidence_ids", [])))
+            recorded = review.concept.metadata.get("evidence_ids", [])
+            if not isinstance(recorded, list) or not all(isinstance(item, str) for item in recorded):
+                recorded = []
+            evidence = review.current_evidence_ids or tuple(sorted(recorded))
             digest_payload = "|".join((review.concept.id, review.state, *evidence))
             identifier = "review_" + hashlib.sha256(digest_payload.encode("utf-8")).hexdigest()[:24]
             try:
