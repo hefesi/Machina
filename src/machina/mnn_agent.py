@@ -32,16 +32,38 @@ class MNNLearningAgent:
         self.pending_action: str | None = None
         self.experience_count = 0
 
-    def decide(self) -> dict:
-        """Choose one action and return its predicted utility."""
+    def decide(self, *, context: str | None = None, use_memory: bool = False) -> dict:
+        """Choose an action, optionally using an explicit contextual memory recommendation.
+
+        The learner always advances its decision counter and provides a fallback.
+        When use_memory=True, a usable memory recommendation overrides that
+        fallback for this decision only; learning still occurs in resolve().
+        """
         if self.pending_action is not None:
             raise RuntimeError("resolve the pending action before choosing another")
-        action = self.learner.choose()
+        if not isinstance(use_memory, bool):
+            raise ValueError("use_memory must be boolean")
+        if context is not None and not isinstance(context, str):
+            raise ValueError("context must be a string")
+        if use_memory and (context is None or not context.strip()):
+            raise ValueError("a non-empty context is required when use_memory=True")
+
+        fallback = self.learner.choose()
+        recommendation = (
+            self.recommend_from_memory(context)
+            if use_memory and context is not None
+            else None
+        )
+        action = recommendation["action"] if recommendation else fallback
         self.pending_action = action
         return {
             "action": action,
             "predicted_utility": self.learner.predictions()[action],
             "decision": self.learner.decisions,
+            "context": context,
+            "selection_source": "memory" if recommendation else "learner",
+            "memory_recommendation": recommendation,
+            "fallback_action": fallback,
         }
 
     def resolve(self, reward: float, *, context: str = "") -> dict:
