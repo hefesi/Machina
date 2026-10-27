@@ -15,6 +15,7 @@ from .mnn import Connection, MNN, Unit
 from .mnn_action_learning import MNNActionLearner
 from .mnn_agent import MNNLearningAgent
 from .mnn_adapter import MNNCognitionAdapter
+from .mnn_concepts import ConceptHypothesis, MNNConceptBuilder
 from .mnn_experience import MNNExperienceCycle
 from .mnn_memory_consolidation import ConsolidatedMemory, MNNMemoryConsolidator
 from .mnn_reward import RewardModulator
@@ -41,6 +42,8 @@ __all__ = [
     "MemoryFragment",
     "ConsolidatedMemory",
     "MNNMemoryConsolidator",
+    "ConceptHypothesis",
+    "MNNConceptBuilder",
     "DuplicateKnowledgeError",
     "KnowledgeDocument",
     "KnowledgeHit",
