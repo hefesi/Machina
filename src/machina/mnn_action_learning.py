@@ -74,7 +74,7 @@ class MNNActionLearner:
             for action in self.actions
         }
 
-    def choose(self, *, epsilon: float | None = None) -> str:
+    def choose(self, *, epsilon: float | None = None, uncertainty_bonus: float | None = None) -> str:
         """Choose using the original schedule or reproducible epsilon-greedy.
 
         When epsilon is omitted, preserve the original deterministic schedule.
@@ -82,6 +82,8 @@ class MNNActionLearner:
         then a seeded pseudo-random draw explores with probability epsilon.
         Deriving the draw from seed + decision number keeps restarts reproducible.
         """
+        if epsilon is not None and uncertainty_bonus is not None:
+            raise ValueError("epsilon and uncertainty_bonus are mutually exclusive")
         if epsilon is not None and (
             isinstance(epsilon, bool)
             or not isinstance(epsilon, (int, float))
@@ -89,11 +91,32 @@ class MNNActionLearner:
             or not 0.0 <= epsilon <= 1.0
         ):
             raise ValueError("epsilon must be a finite number in [0, 1]")
+        if uncertainty_bonus is not None and (
+            isinstance(uncertainty_bonus, bool)
+            or not isinstance(uncertainty_bonus, (int, float))
+            or not math.isfinite(uncertainty_bonus)
+            or uncertainty_bonus < 0.0
+        ):
+            raise ValueError("uncertainty_bonus must be a finite non-negative number")
         self.decisions += 1
         unexplored = [name for name in self.actions if self.counts[name] == 0]
         if unexplored:
             action = unexplored[0]
             self.last_selection_mode = "initial_coverage"
+        elif uncertainty_bonus is not None:
+            predictions = self.predictions()
+            log_decisions = math.log(max(2, self.decisions))
+            scores = {
+                name: predictions[name] + float(uncertainty_bonus) * math.sqrt(
+                    log_decisions / max(1, self.counts[name])
+                )
+                for name in self.actions
+            }
+            action = max(self.actions, key=lambda name: (scores[name], -self.actions.index(name)))
+            greedy = max(self.actions, key=lambda name: (predictions[name], -self.actions.index(name)))
+            self.last_selection_mode = (
+                "uncertainty_bonus" if action != greedy else "uncertainty_greedy"
+            )
         elif epsilon is not None:
             rng = random.Random(self.exploration_seed + self.decisions)
             if rng.random() < float(epsilon):
@@ -183,7 +206,10 @@ class MNNActionLearner:
         learner.decisions = decisions
         learner._last_action = last_action
         selection_mode = data.get("last_selection_mode")
-        if selection_mode not in (None, "initial_coverage", "epsilon_explore", "greedy", "scheduled_exploration"):
+        if selection_mode not in (
+            None, "initial_coverage", "epsilon_explore", "greedy",
+            "scheduled_exploration", "uncertainty_bonus", "uncertainty_greedy"
+        ):
             raise ValueError("invalid last_selection_mode in snapshot")
         learner.last_selection_mode = selection_mode
         return learner

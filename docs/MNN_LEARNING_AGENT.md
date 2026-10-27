@@ -60,6 +60,20 @@ The decision output reports `exploration_policy` and `exploration_epsilon`. This
 
 Run `python benchmarks/mnn_contextual_memory.py` to compare the context-free baseline with memory-assisted selection on a deterministic two-context task where the best action reverses between contexts. The benchmark seeds the same four experience records for each policy and reports reward total, accuracy, and how often memory selected the action. It is a small synthetic sanity check, not proof of generalization; results depend on lexical retrieval and supplied experience.
 
+## Confidence-bonus exploration
+
+For experiments that should prefer actions with less observed evidence, pass `uncertainty_bonus` to `choose()` instead of `epsilon`:
+
+```python
+action = learner.choose(uncertainty_bonus=0.5)
+# Execute the action and pass the measured outcome back.
+learner.observe(reward, action=action)
+```
+
+The selection score is the current reward estimate plus `c * sqrt(log(decisions) / observations_for_action)`. The coefficient `c` controls how much the policy values under-observed actions. A coefficient of zero is greedy selection after initial action coverage; larger values add a stronger confidence bonus. The bonus is a simple count-based heuristic, not a calibrated probability or a full Bayesian uncertainty estimate. Do not pass `epsilon` and `uncertainty_bonus` together.
+
+Run `python benchmarks/mnn_uncertainty_exploration.py` to compare this policy at several coefficients with epsilon-greedy (`epsilon=0.15`) on a two-action reward-reversal task across fixed seeds. It reports reward before and after the reversal and how often each policy invoked its exploration mechanism. This controlled experiment is diagnostic only; it cannot establish that the new policy is generally better.
+
 ## Guarantees and limits
 
 - Rejects overlapping decisions and invalid rewards.
