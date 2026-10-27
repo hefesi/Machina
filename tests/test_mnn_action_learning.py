@@ -42,6 +42,35 @@ class MNNActionLearnerTests(unittest.TestCase):
         self.assertEqual(restored.snapshot(), learner.snapshot())
         self.assertEqual(restored.choose(), learner.choose())
 
+    def test_epsilon_greedy_is_reproducible_and_explores(self):
+        first = MNNActionLearner(["left", "right"], exploration_seed=17)
+        second = MNNActionLearner(["left", "right"], exploration_seed=17)
+        # Initial unseen-action coverage is guaranteed, then epsilon=1 explores.
+        for learner in (first, second):
+            action = learner.choose(epsilon=1.0)
+            learner.observe(0.0, action=action)
+            action = learner.choose(epsilon=1.0)
+            learner.observe(0.0, action=action)
+        sequence_a = [first.choose(epsilon=1.0) for _ in range(20)]
+        sequence_b = [second.choose(epsilon=1.0) for _ in range(20)]
+        self.assertEqual(sequence_a, sequence_b)
+
+    def test_epsilon_greedy_rejects_invalid_epsilon(self):
+        learner = MNNActionLearner(["a", "b"])
+        for epsilon in (-0.1, 1.1, float("nan"), True):
+            with self.subTest(epsilon=epsilon):
+                with self.assertRaises(ValueError):
+                    learner.choose(epsilon=epsilon)
+
+    def test_snapshot_preserves_exploration_seed_and_legacy_default(self):
+        learner = MNNActionLearner(["a", "b"], exploration_seed=42)
+        snapshot = json.loads(json.dumps(learner.snapshot()))
+        restored = MNNActionLearner.from_snapshot(snapshot)
+        self.assertEqual(restored.exploration_seed, 42)
+        snapshot.pop("exploration_seed")
+        legacy = MNNActionLearner.from_snapshot(snapshot)
+        self.assertEqual(legacy.exploration_seed, 0)
+
     def test_invalid_rewards_and_snapshot_counts_are_rejected(self):
         learner = MNNActionLearner(["a", "b"])
         with self.assertRaises(ValueError):
