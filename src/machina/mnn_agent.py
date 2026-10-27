@@ -7,6 +7,7 @@ understanding and does not silently rewrite the policy.
 from __future__ import annotations
 
 import math
+import re
 from typing import Mapping
 
 from .fragment_memory import FragmentMemory, MemoryFragment
@@ -89,6 +90,71 @@ class MNNLearningAgent:
     def recall(self, query: str, *, limit: int = 5) -> list[MemoryFragment]:
         """Recall explicit experience records using FragmentMemory's lexical search."""
         return self.memory.recall(query, limit=limit)
+
+    def recommend_from_memory(self, context: str, *, limit: int = 20) -> dict | None:
+        """Recommend an action from context-matching archived outcomes.
+
+        This is an explicit, explainable memory-based recommendation; it does
+        not modify the learner or choose an action automatically. Only recorded
+        action-outcome fragments with a known action and overlapping context
+        tokens participate. Rewards are averaged per action, weighted by
+        context-token overlap. Returns None when no usable context evidence
+        exists, so callers can fall back to the ordinary learner.
+        """
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("context must be a non-empty string")
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive integer")
+
+        def tokens(value: str) -> set[str]:
+            return {
+                token.casefold()
+                for token in re.findall(r"\w+", value, flags=re.UNICODE)
+                if len(token) > 1
+            }
+
+        query_tokens = tokens(context)
+        if not query_tokens:
+            return None
+        fragments = self.memory.recall(context, limit=limit)
+        totals: dict[str, float] = {}
+        weights: dict[str, float] = {}
+        evidence: dict[str, list[str]] = {}
+        for fragment in fragments:
+            if fragment.kind != "action-outcome":
+                continue
+            metadata = fragment.metadata
+            action = metadata.get("action")
+            stored_context = metadata.get("context", "")
+            if action not in self.learner.actions or not isinstance(stored_context, str):
+                continue
+            overlap = len(query_tokens & tokens(stored_context)) / len(query_tokens)
+            if overlap <= 0:
+                continue
+            reward = metadata.get("reward")
+            if isinstance(reward, bool) or not isinstance(reward, (int, float)) or not math.isfinite(reward):
+                continue
+            weight = overlap * max(0.01, fragment.confidence)
+            totals[action] = totals.get(action, 0.0) + float(reward) * weight
+            weights[action] = weights.get(action, 0.0) + weight
+            evidence.setdefault(action, []).append(fragment.id)
+
+        if not weights:
+            return None
+        estimates = {action: totals[action] / weights[action] for action in weights}
+        # Stable tie-breaking follows the learner's configured action order.
+        action = max(
+            estimates,
+            key=lambda name: (estimates[name], -self.learner.actions.index(name)),
+        )
+        return {
+            "action": action,
+            "estimated_reward": estimates[action],
+            "context": context.strip(),
+            "evidence_ids": evidence[action],
+            "estimates_by_action": estimates,
+            "method": "lexical-context-overlap-weighted-reward-mean",
+        }
 
     def snapshot(self) -> dict:
         """Capture learner and in-flight action state; SQLite is persisted separately."""

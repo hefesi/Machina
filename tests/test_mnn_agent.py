@@ -30,6 +30,57 @@ class MNNLearningAgentTests(unittest.TestCase):
                 self.assertEqual(reopened.count(), 1)
                 self.assertTrue(reopened.recall("first controlled trial"))
 
+    def test_memory_recommendation_distinguishes_contexts(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(MNNActionLearner(["left", "right"]), memory)
+            # Store explicit context-action outcomes independent of global action values.
+            memory.add(
+                "Action 'left' received reward 1. Context: quiet morning",
+                kind="action-outcome", source_uri="test://quiet-left",
+                metadata={"action": "left", "reward": 1.0, "context": "quiet morning"},
+                confidence=1.0, tags=("left",),
+            )
+            memory.add(
+                "Action 'right' received reward 0. Context: quiet morning",
+                kind="action-outcome", source_uri="test://quiet-right",
+                metadata={"action": "right", "reward": 0.0, "context": "quiet morning"},
+                confidence=1.0, tags=("right",),
+            )
+            memory.add(
+                "Action 'left' received reward 0. Context: busy evening",
+                kind="action-outcome", source_uri="test://busy-left",
+                metadata={"action": "left", "reward": 0.0, "context": "busy evening"},
+                confidence=1.0, tags=("left",),
+            )
+            memory.add(
+                "Action 'right' received reward 1. Context: busy evening",
+                kind="action-outcome", source_uri="test://busy-right",
+                metadata={"action": "right", "reward": 1.0, "context": "busy evening"},
+                confidence=1.0, tags=("right",),
+            )
+
+            quiet = agent.recommend_from_memory("quiet morning")
+            busy = agent.recommend_from_memory("busy evening")
+            self.assertEqual(quiet["action"], "left")
+            self.assertEqual(busy["action"], "right")
+            self.assertEqual(quiet["estimated_reward"], 1.0)
+            self.assertEqual(busy["estimated_reward"], 1.0)
+            self.assertTrue(quiet["evidence_ids"])
+            # Recommendation is deliberately read-only: it must not train the learner.
+            self.assertEqual(agent.learner.decisions, 0)
+            self.assertEqual(agent.learner.predictions(), {"left": 0.0, "right": 0.0})
+
+    def test_memory_recommendation_returns_none_without_matching_context(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(MNNActionLearner(["a", "b"]), memory)
+            self.assertIsNone(agent.recommend_from_memory("unseen context"))
+
+    def test_memory_recommendation_rejects_empty_context(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
+            agent = MNNLearningAgent(MNNActionLearner(["a", "b"]), memory)
+            with self.assertRaises(ValueError):
+                agent.recommend_from_memory(" ")
+
     def test_requires_outcome_before_next_decision(self):
         with tempfile.TemporaryDirectory() as directory, FragmentMemory(Path(directory) / "m.db") as memory:
             agent = MNNLearningAgent(MNNActionLearner(["a", "b"]), memory)

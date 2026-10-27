@@ -19,10 +19,22 @@ with FragmentMemory("machina-experience.sqlite3") as memory:
     agent = MNNLearningAgent(MNNActionLearner(["left", "right"]), memory)
     decision = agent.decide()
     # The environment executes decision["action"] and measures an outcome.
-    result = agent.resolve(1.0, context="controlled trial")
+    result = agent.resolve(1.0, context="quiet morning")
     print(result["learning_update"], result["experience_id"])
-    print(agent.recall("controlled trial"))
+    print(agent.recall("quiet morning"))
+    print(agent.recommend_from_memory("quiet morning"))
 ```
+
+## Contextual recall from experience
+
+`recommend_from_memory(context)` is an explicit, read-only retrieval step. It:
+- retrieves fragments using the existing lexical memory search;
+- filters for recorded action outcomes whose saved context shares tokens with the query;
+- estimates each action's reward using a context-overlap-weighted mean;
+- returns the recommendation, per-action estimates, and evidence fragment IDs;
+- returns `None` if no usable matching context exists.
+
+It does **not** silently change the learner's action values or automatically override `decide()`. A caller can inspect the evidence and choose whether to use the recommendation or fall back to the context-free learner. This separation makes memory influence measurable rather than hidden.
 
 ## Guarantees and limits
 
@@ -30,5 +42,5 @@ with FragmentMemory("machina-experience.sqlite3") as memory:
 - Records each resolved action outcome as an auditable memory fragment.
 - Supports restoring an in-flight action from a JSON-compatible snapshot.
 - Does not claim atomic transactions across the learner and SQLite. If memory persistence fails after a learner update, the caller should treat that as a partial failure and recover from its last durable snapshot.
-- Recall uses the lexical retrieval implemented by `FragmentMemory`; memories do not automatically alter the policy.
+- Retrieval is lexical, not semantic; token overlap can confuse related or ambiguous contexts.
 - The action learner is a small contextual-free bandit, not a general planning or consciousness model.
