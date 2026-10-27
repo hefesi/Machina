@@ -14,6 +14,7 @@ from .fragment_memory import FragmentMemory, MemoryFragment
 from .goal_store import PersistentGoalStore
 from .mnn import Connection, MNN, Unit
 from .mnn_adapter import MNNCognitionAdapter
+from .mnn_reward import RewardModulator
 from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
 
@@ -47,6 +48,7 @@ __all__ = [
     "IntegrityError",
     "MNN",
     "MNNCognitionAdapter",
+    "RewardModulator",
     "Unit",
     "VirtualBrain",
 ]
