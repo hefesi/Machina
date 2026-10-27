@@ -88,6 +88,10 @@ class MNNConceptGuidedAgentTests(unittest.TestCase):
                 configured.decide(use_concepts=True)
             with self.assertRaises(ValueError):
                 configured.decide(context_tags=["x"])
+            self.assertEqual(0, configured.learner.decisions)
+            with self.assertRaises(ValueError):
+                configured.decide(use_concepts=True, context_tags=[""])
+            self.assertEqual(0, configured.learner.decisions)
 
 
 if __name__ == "__main__":
