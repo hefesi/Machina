@@ -56,7 +56,7 @@ agent.resolve(reward=measured_reward, context="current situation")
 
 The decision output reports `exploration_policy` and `exploration_epsilon`. This policy is a simple epsilon-greedy baseline, not a calibrated uncertainty model. It explores randomly rather than estimating epistemic uncertainty, and reward quality must be measured in a controlled environment.
 
-## Controlled benchmark
+## Epsilon-greedy reward-reversal sweep\n\nRun `python benchmarks/mnn_exploration_sweep.py` from the repository root to compare `epsilon` values `0.0`, `0.05`, `0.15`, `0.30`, and `1.0` over five fixed seeds. Each trial rewards `left` in phase 1 and reverses the mapping to reward `right` in phase 2. The benchmark reports phase reward rates, actual epsilon-triggered exploration frequency, and adaptation lag (the first point at which the agent achieves five consecutive rewards in phase 2).\n\nThe sweep aggregates multiple seeds to reduce reliance on one random sequence. A `null` adaptation lag means the criterion was not reached during the measured phase. This is a synthetic deterministic task; it does not represent noisy real environments, semantic context understanding, or broad generalization.\n\n## Controlled benchmark
 
 Run `python benchmarks/mnn_contextual_memory.py` to compare the context-free baseline with memory-assisted selection on a deterministic two-context task where the best action reverses between contexts. The benchmark seeds the same four experience records for each policy and reports reward total, accuracy, and how often memory selected the action. It is a small synthetic sanity check, not proof of generalization; results depend on lexical retrieval and supplied experience.
 
