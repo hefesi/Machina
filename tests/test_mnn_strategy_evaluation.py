@@ -43,6 +43,9 @@ class StrategyExperimentEvaluationTests(unittest.TestCase):
         self.assertEqual(2, result["sample_counts"]["baseline"])
         self.assertEqual(2, result["sample_counts"]["candidate"])
         self.assertFalse(result["causal_claim"])
+        self.assertFalse(result["statistical_significance_claim"])
+        self.assertIn("sample_standard_deviations", result)
+        self.assertGreater(result["difference_standard_error"], 0)
         self.assertEqual(before, after)
 
     def test_current_better_and_small_margin_are_distinguished(self):
@@ -58,6 +61,17 @@ class StrategyExperimentEvaluationTests(unittest.TestCase):
         result = self.evaluator.evaluate("campaign-A")
         self.assertEqual("inconclusive", result["status"])
         self.assertEqual("insufficient_samples", result["reason"])
+
+    def test_high_reward_variability_prevents_overconfident_conclusion(self):
+        for i, reward in enumerate((0.0, 1.0, 0.0, 1.0)):
+            self.trial(f"noisy-base-{i}", "baseline", reward, campaign="noisy")
+        for i, reward in enumerate((0.0, 2.0, 0.0, 2.0)):
+            self.trial(f"noisy-cand-{i}", "candidate", reward, campaign="noisy")
+        result = self.evaluator.evaluate("noisy")
+        self.assertEqual("inconclusive", result["status"])
+        self.assertEqual("reward_difference_not_larger_than_noise_guard", result["reason"])
+        self.assertGreater(result["sample_variances"]["candidate"], result["sample_variances"]["baseline"])
+        self.assertGreater(result["noise_threshold"], result["reward_difference"])
 
     def test_campaigns_are_isolated_and_missing_campaign_abstains(self):
         self.trial("base-1", "baseline", 0.1, campaign="other")
@@ -85,6 +99,10 @@ class StrategyExperimentEvaluationTests(unittest.TestCase):
             MNNStrategyExperimentEvaluator(self.memory, ["a", "b"], min_samples_per_action=0)
         with self.assertRaises(ValueError):
             MNNStrategyExperimentEvaluator(self.memory, ["a", "b"], min_reward_margin=float("nan"))
+        with self.assertRaises(ValueError):
+            MNNStrategyExperimentEvaluator(self.memory, ["a", "b"], noise_guard_multiplier=-1)
+        with self.assertRaises(ValueError):
+            MNNStrategyExperimentEvaluator(self.memory, ["a", "b"], noise_guard_multiplier=float("inf"))
         with self.assertRaises(ValueError):
             self.evaluator.evaluate(" ")
 
