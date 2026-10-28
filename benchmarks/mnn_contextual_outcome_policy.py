@@ -48,12 +48,12 @@ def run() -> dict:
             }
             # Reward reversal: the preferred action changes after decision four.
             # Both policies inspect the same archive; only temporal weighting differs.
-            for index in range(1, 5):
+            for index in range(1, 7):
                 add(memory, f"drift-old-continue-{index}", "continue", 1.0,
                     "changing workload", decision=index)
                 add(memory, f"drift-old-pause-{index}", "pause", 0.0,
                     "changing workload", decision=index)
-            for index in range(5, 9):
+            for index in range(7, 10):
                 add(memory, f"drift-new-continue-{index}", "continue", 0.0,
                     "changing workload", decision=index)
                 add(memory, f"drift-new-pause-{index}", "pause", 1.0,
