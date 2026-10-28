@@ -21,6 +21,7 @@ class MNNStrategyExperimentEvaluator:
         *,
         min_samples_per_action: int = 3,
         min_reward_margin: float = 0.1,
+        noise_guard_multiplier: float = 1.0,
     ) -> None:
         if not isinstance(memory, FragmentMemory):
             raise ValueError("memory must be a FragmentMemory")
@@ -33,13 +34,16 @@ class MNNStrategyExperimentEvaluator:
             raise ValueError("min_samples_per_action must be a positive integer")
         if isinstance(min_reward_margin, bool) or not isinstance(min_reward_margin, (int, float)) or not math.isfinite(min_reward_margin) or min_reward_margin < 0:
             raise ValueError("min_reward_margin must be a finite non-negative number")
+        if isinstance(noise_guard_multiplier, bool) or not isinstance(noise_guard_multiplier, (int, float)) or not math.isfinite(noise_guard_multiplier) or noise_guard_multiplier < 0:
+            raise ValueError("noise_guard_multiplier must be a finite non-negative number")
         self.memory = memory
         self.actions = names
         self.min_samples_per_action = min_samples_per_action
         self.min_reward_margin = float(min_reward_margin)
+        self.noise_guard_multiplier = float(noise_guard_multiplier)
 
     def evaluate(self, campaign_id: str) -> dict[str, Any]:
-        """Evaluate one campaign; abstain if role or sample evidence is ambiguous."""
+        """Evaluate one campaign; abstain if role, context, or evidence is ambiguous."""
         if not isinstance(campaign_id, str) or not campaign_id.strip():
             raise ValueError("campaign_id must be a non-empty string")
         campaign_id = campaign_id.strip()
@@ -102,9 +106,25 @@ class MNNStrategyExperimentEvaluator:
 
         current = outcomes_by_action[current_action]
         candidate = outcomes_by_action[candidate_action]
-        means = {
-            current_action: (sum(value for value, _ in current) / len(current)) if current else None,
-            candidate_action: (sum(value for value, _ in candidate) / len(candidate)) if candidate else None,
+
+        def summarize(samples: list[tuple[float, str]]) -> tuple[float | None, float | None]:
+            values = [value for value, _ in samples]
+            if not values:
+                return None, None
+            mean = sum(values) / len(values)
+            if len(values) < 2:
+                return mean, None
+            # Sample variance (Bessel-corrected); clamp tiny negative roundoff.
+            variance = max(0.0, sum((value - mean) ** 2 for value in values) / (len(values) - 1))
+            return mean, variance
+
+        current_mean, current_variance = summarize(current)
+        candidate_mean, candidate_variance = summarize(candidate)
+        means = {current_action: current_mean, candidate_action: candidate_mean}
+        variances = {current_action: current_variance, candidate_action: candidate_variance}
+        stddevs = {
+            action: math.sqrt(variance) if variance is not None else None
+            for action, variance in variances.items()
         }
         evidence_ids = {
             current_action: [fragment_id for _, fragment_id in current],
@@ -115,25 +135,46 @@ class MNNStrategyExperimentEvaluator:
             "candidate_action": candidate_action,
             "sample_counts": {current_action: len(current), candidate_action: len(candidate)},
             "mean_rewards": means,
+            "sample_variances": variances,
+            "sample_standard_deviations": stddevs,
             "evidence_ids": evidence_ids,
             "min_samples_per_action": self.min_samples_per_action,
             "min_reward_margin": self.min_reward_margin,
-            "method": "unweighted-empirical-mean-with-minimum-samples-and-margin",
+            "noise_guard_multiplier": self.noise_guard_multiplier,
+            "method": "empirical-mean-margin-with-variance-based-noise-guard",
             "causal_claim": False,
+            "statistical_significance_claim": False,
         }
         if min(len(current), len(candidate)) < self.min_samples_per_action:
             return self._result("inconclusive", campaign_id, reason="insufficient_samples", **common)
-        difference = means[candidate_action] - means[current_action]
-        if difference >= self.min_reward_margin and difference > 0:
+        # A sample variance cannot be estimated from a single observation. Do
+        # not treat missing variance as zero noise, even if configured minimum is 1.
+        if current_variance is None or candidate_variance is None:
+            return self._result("inconclusive", campaign_id, reason="insufficient_samples_for_variability", **common)
+
+        difference = candidate_mean - current_mean
+        standard_error = math.sqrt(
+            current_variance / len(current) + candidate_variance / len(candidate)
+        )
+        noise_threshold = self.noise_guard_multiplier * standard_error
+        common.update({
+            "reward_difference": difference,
+            "difference_standard_error": standard_error,
+            "noise_threshold": noise_threshold,
+        })
+        if difference >= self.min_reward_margin and difference > noise_threshold:
             status = "candidate_better"
-            reason = "candidate_mean_exceeds_current_by_required_margin"
-        elif difference <= -self.min_reward_margin and difference < 0:
+            reason = "candidate_mean_exceeds_margin_and_noise_guard"
+        elif difference <= -self.min_reward_margin and -difference > noise_threshold:
             status = "current_better"
-            reason = "current_mean_exceeds_candidate_by_required_margin"
-        else:
+            reason = "current_mean_exceeds_margin_and_noise_guard"
+        elif abs(difference) < self.min_reward_margin:
             status = "inconclusive"
             reason = "reward_difference_below_required_margin"
-        return self._result(status, campaign_id, reason=reason, reward_difference=difference, **common)
+        else:
+            status = "inconclusive"
+            reason = "reward_difference_not_larger_than_noise_guard"
+        return self._result(status, campaign_id, reason=reason, **common)
 
     @staticmethod
     def _result(status: str, campaign_id: str, *, reason: str, **details: Any) -> dict[str, Any]:
