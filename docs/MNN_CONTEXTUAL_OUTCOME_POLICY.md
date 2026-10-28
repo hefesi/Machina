@@ -22,6 +22,7 @@ policy = MNNContextualOutcomePolicy(
     ["continue", "pause"],
     min_samples_per_action=3,
     min_reward_margin=0.2,
+    recency_half_life_decisions=20,
 )
 decision = policy.recommend("stable workload")
 if decision["status"] == "recommended":
@@ -47,11 +48,22 @@ agent.resolve(observed_reward, context="stable workload")
 
 The agent prioritizes an available concept recommendation, then an outcome-policy recommendation, then optional legacy memory guidance, and finally its learner fallback. If the outcome policy abstains, the agent requests another experience and uses its fallback. The action is not executed automatically. The pending action source is preserved by agent snapshots; pass the same policy when restoring if future policy-guided decisions are needed.
 
+## Adapting to changing conditions
+
+By default, all comparable archived outcomes contribute equally apart from context overlap and fragment confidence. Set `recency_half_life_decisions` to a positive number to apply exponential recency weighting based on the recorded `decision` counter:
+
+- An outcome one half-life old receives half the temporal weight; two half-lives old receives one quarter.
+- The archive is never pruned or rewritten. Sample counts and evidence IDs still include all matching records, while estimates discount older outcomes.
+- Legacy fragments without a valid decision counter remain usable without temporal discounting.
+- Decision indices should be comparable within the memory/policy population. Mixing unrelated agents' counters can distort recency; use a shared counter or separate memories when needed.
+
+The parameter is opt-in (`None` by default), preserving existing behavior. Recency weighting helps respond to reward drift but does not explain why the environment changed or guarantee rapid adaptation.
+
 ## Boundaries and limitations
 
 - This is an empirical association, not causal inference, semantic comprehension, or a guarantee of future reward.
 - Context matching is lexical, not embedding-based; it requires meaningful shared words.
 - The policy does not execute actions, alter memory, or train the global action learner.
 - It requires minimum comparable samples for **all** configured actions to avoid treating an untested alternative as inferior.
-- Reward averages can be distorted by changing environments, biased exploration, confounders, and non-stationary reward distributions. A later iteration should add time windows, uncertainty estimates, and online calibration before this policy is used in safety-critical settings.
+- Reward averages can be distorted by changing environments, biased exploration, confounders, and non-stationary reward distributions. Recency weighting is a configurable mitigation, not a solution; uncertainty estimates and online calibration remain future work before any safety-critical use.
 - This mechanism does not establish consciousness or free will.

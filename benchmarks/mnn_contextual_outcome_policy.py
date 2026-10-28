@@ -13,14 +13,14 @@ from machina.fragment_memory import FragmentMemory
 from machina.mnn_contextual_outcome_policy import MNNContextualOutcomePolicy
 
 
-def add(memory, identifier, action, reward, context):
+def add(memory, identifier, action, reward, context, decision=None):
     memory.add(
         f"Observed {action} reward {reward} in {context}",
         kind="action-outcome",
         source_uri=f"benchmark://{identifier}",
         confidence=1.0,
         tags=("action-learning", action),
-        metadata={"action": action, "reward": reward, "context": context},
+        metadata={"action": action, "reward": reward, "context": context, **({"decision": decision} if decision is not None else {})},
         fragment_id=identifier,
     )
 
@@ -46,6 +46,28 @@ def run() -> dict:
                 "risky_workload": policy.recommend("risky workload"),
                 "unseen_context": policy.recommend("unseen environment"),
             }
+            # Reward reversal: the preferred action changes after decision four.
+            # Both policies inspect the same archive; only temporal weighting differs.
+            for index in range(1, 7):
+                add(memory, f"drift-old-continue-{index}", "continue", 1.0,
+                    "changing workload", decision=index)
+                add(memory, f"drift-old-pause-{index}", "pause", 0.0,
+                    "changing workload", decision=index)
+            for index in range(7, 10):
+                add(memory, f"drift-new-continue-{index}", "continue", 0.0,
+                    "changing workload", decision=index)
+                add(memory, f"drift-new-pause-{index}", "pause", 1.0,
+                    "changing workload", decision=index)
+            drift = {
+                "all_history": MNNContextualOutcomePolicy(
+                    memory, ["continue", "pause"], min_samples_per_action=2,
+                    min_reward_margin=0.2,
+                ).recommend("changing workload"),
+                "recency_weighted": MNNContextualOutcomePolicy(
+                    memory, ["continue", "pause"], min_samples_per_action=2,
+                    min_reward_margin=0.2, recency_half_life_decisions=2.0,
+                ).recommend("changing workload"),
+            }
             return {
                 "benchmark": "mnn-contextual-outcome-policy",
                 "limitations": [
@@ -53,6 +75,11 @@ def run() -> dict:
                     "lexical association does not establish causation",
                     "no claim of generalization to real environments",
                 ],
+                "reward_reversal": {
+                    name: {"status": result["status"], "action": result.get("action"),
+                           "sample_counts": result.get("sample_counts")}
+                    for name, result in drift.items()
+                },
                 "scenarios": {
                     name: {
                         "status": result["status"],

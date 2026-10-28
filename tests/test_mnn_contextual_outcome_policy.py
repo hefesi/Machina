@@ -106,6 +106,76 @@ class MNNContextualOutcomePolicyTests(unittest.TestCase):
         self.assertEqual(result["status"], "recommended")
         self.assertEqual(self.memory.count(), before_count)
 
+    def test_recency_weighting_adapts_after_reward_reversal(self):
+        # Older evidence favours left; newer evidence favours right.
+        for index in range(1, 6):
+            self.memory.add(
+                "old left outcome", kind="action-outcome",
+                source_uri=f"test://old-left-{index}", confidence=1.0,
+                metadata={"action": "left", "reward": 1.0,
+                          "context": "quiet morning", "decision": index},
+                fragment_id=f"old-left-{index}",
+            )
+            self.memory.add(
+                "old right outcome", kind="action-outcome",
+                source_uri=f"test://old-right-{index}", confidence=1.0,
+                metadata={"action": "right", "reward": 0.0,
+                          "context": "quiet morning", "decision": index},
+                fragment_id=f"old-right-{index}",
+            )
+        for index in range(6, 9):
+            self.memory.add(
+                "new left outcome", kind="action-outcome",
+                source_uri=f"test://new-left-{index}", confidence=1.0,
+                metadata={"action": "left", "reward": 0.0,
+                          "context": "quiet morning", "decision": index},
+                fragment_id=f"new-left-{index}",
+            )
+            self.memory.add(
+                "new right outcome", kind="action-outcome",
+                source_uri=f"test://new-right-{index}", confidence=1.0,
+                metadata={"action": "right", "reward": 1.0,
+                          "context": "quiet morning", "decision": index},
+                fragment_id=f"new-right-{index}",
+            )
+
+        before_count = self.memory.count()
+        all_history = MNNContextualOutcomePolicy(
+            self.memory, ["left", "right"], min_samples_per_action=2,
+            min_reward_margin=0.1,
+        ).recommend("quiet morning")
+        recency = MNNContextualOutcomePolicy(
+            self.memory, ["left", "right"], min_samples_per_action=2,
+            min_reward_margin=0.1, recency_half_life_decisions=1.0,
+        ).recommend("quiet morning")
+
+        self.assertEqual(all_history["status"], "recommended")
+        self.assertEqual(all_history["action"], "left")
+        self.assertEqual(recency["status"], "recommended")
+        self.assertEqual(recency["action"], "right")
+        self.assertEqual(self.memory.count(), before_count)
+        self.assertEqual(recency["sample_counts"], {"left": 8, "right": 8})
+
+    def test_recency_weighting_preserves_legacy_fragments_without_decision(self):
+        self.add_outcome("left-1", "left", 1.0)
+        self.add_outcome("left-2", "left", 1.0)
+        self.add_outcome("right-1", "right", 0.0)
+        self.add_outcome("right-2", "right", 0.0)
+        result = MNNContextualOutcomePolicy(
+            self.memory, ["left", "right"], recency_half_life_decisions=2.0
+        ).recommend("quiet morning")
+        self.assertEqual(result["status"], "recommended")
+        self.assertEqual(result["action"], "left")
+
+    def test_validates_recency_half_life(self):
+        for value in (0, -1, float("inf"), float("nan"), True):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    MNNContextualOutcomePolicy(
+                        self.memory, ["left", "right"],
+                        recency_half_life_decisions=value,
+                    )
+
     def test_validates_configuration_and_query(self):
         with self.assertRaises(ValueError):
             MNNContextualOutcomePolicy(self.memory, ["left", "left"])
