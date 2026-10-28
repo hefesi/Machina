@@ -73,6 +73,34 @@ number of independent trials before drawing a conclusion.
   causality and cannot compensate for biased or unsafe experimental design. Trials
   should be comparable and controlled by the caller.
 
+## Review performance over time
+
+Use `evaluate_over_time` to compare the candidate's advantage in an early
+window with its advantage in a late window. Outcomes are ordered by their
+persisted creation timestamps; each action needs at least two non-overlapping
+windows of observations:
+
+```python
+trend = evaluator.evaluate_over_time(
+    "workload-a-comparison",
+    window_size=3,
+)
+```
+
+- `advantage_persisted`: the candidate's mean-reward advantage meets the
+  configured margin in both windows.
+- `advantage_emerged`: the advantage meets the margin only in the late window.
+- `advantage_reversed`: an early advantage later reverses beyond the margin.
+- `no_clear_change`: the windows do not support one of those patterns.
+- `inconclusive`: insufficient observations; `abstain`: ambiguous context or
+  action roles.
+
+The result includes early and late means by action, advantage differences,
+change in advantage, and evidence fragment IDs. This is a descriptive temporal
+comparison, not a formal drift detector, significance test, or causal estimate.
+Use comparable contexts and deliberately designed trials; time ordering alone
+does not isolate environmental changes from other factors.
+
 ## Log guarantees
 
 - Proposal and outcome are separate immutable records. Identical retries are
