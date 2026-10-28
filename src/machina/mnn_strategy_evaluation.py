@@ -242,12 +242,12 @@ class MNNStrategyExperimentEvaluator:
             if len(contexts) != 1:
                 return self._result(
                     "abstain", "cross-campaign", reason="inconsistent_campaign_context",
-                    campaign_id=campaign_id, context_count=len(contexts),
+                    affected_campaign_id=campaign_id, context_count=len(contexts),
                 )
             if len(roles) != 1:
                 return self._result(
                     "abstain", "cross-campaign", reason="ambiguous_action_roles",
-                    campaign_id=campaign_id,
+                    affected_campaign_id=campaign_id,
                 )
             context = next(iter(contexts))
             role_pair = next(iter(roles))
@@ -256,13 +256,13 @@ class MNNStrategyExperimentEvaluator:
             elif context != expected_context:
                 return self._result(
                     "abstain", "cross-campaign", reason="incompatible_campaign_contexts",
-                    campaign_id=campaign_id, expected_context=expected_context,
+                    affected_campaign_id=campaign_id, expected_context=expected_context,
                     observed_context=context,
                 )
             elif role_pair != expected_roles:
                 return self._result(
                     "abstain", "cross-campaign", reason="incompatible_action_roles",
-                    campaign_id=campaign_id, expected_action_roles=expected_roles,
+                    affected_campaign_id=campaign_id, expected_action_roles=expected_roles,
                     observed_action_roles=role_pair,
                 )
 
