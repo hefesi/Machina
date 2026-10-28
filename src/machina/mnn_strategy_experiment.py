@@ -70,7 +70,7 @@ class MNNStrategyExperimentLog:
         if not isinstance(review, Mapping):
             raise ValueError("review must be a mapping returned by the strategy reviewer")
         status = review.get("status")
-        if status not in {"candidate", "maintain", "abstain"}:
+        if not isinstance(status, str) or status not in {"candidate", "maintain", "abstain"}:
             raise ValueError("review status must be candidate, maintain, or abstain")
         candidate = review.get("candidate_action")
         if candidate is not None and candidate not in self.actions:
@@ -101,7 +101,7 @@ class MNNStrategyExperimentLog:
         if isinstance(observed_reward, bool) or not isinstance(observed_reward, (int, float)) or not math.isfinite(observed_reward):
             raise ValueError("observed_reward must be a finite number")
         allowed = {"keep_current", "validate_candidate_further", "collect_more_data"}
-        if decision not in allowed:
+        if not isinstance(decision, str) or decision not in allowed:
             raise ValueError("decision must be keep_current, validate_candidate_further, or collect_more_data")
         if not isinstance(observation, str):
             raise ValueError("observation must be a string")
