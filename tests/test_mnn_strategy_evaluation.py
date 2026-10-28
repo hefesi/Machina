@@ -73,6 +73,49 @@ class StrategyExperimentEvaluationTests(unittest.TestCase):
         self.assertGreater(result["sample_variances"]["candidate"], result["sample_variances"]["baseline"])
         self.assertGreater(result["noise_threshold"], result["reward_difference"])
 
+    def test_temporal_review_detects_reversed_advantage(self):
+        sequence = [
+            ("baseline", 0.3), ("candidate", 0.8),
+            ("baseline", 0.3), ("candidate", 0.9),
+            ("baseline", 0.4), ("candidate", 0.2),
+            ("baseline", 0.3), ("candidate", 0.1),
+        ]
+        for i, (action, reward) in enumerate(sequence):
+            self.trial(f"temporal-{i}", action, reward, campaign="temporal")
+        result = self.evaluator.evaluate_over_time("temporal", window_size=2)
+        self.assertEqual("advantage_reversed", result["status"])
+        self.assertGreater(result["early_advantage"], 0)
+        self.assertLess(result["late_advantage"], 0)
+        self.assertFalse(result["causal_claim"])
+        self.assertFalse(result["statistical_significance_claim"])
+        self.assertEqual(2, len(result["action_windows"]["baseline"]["early_evidence_ids"]))
+        self.assertEqual(2, len(result["action_windows"]["candidate"]["late_evidence_ids"]))
+
+    def test_temporal_review_reports_persistent_advantage(self):
+        sequence = [
+            ("baseline", 0.2), ("candidate", 0.7),
+            ("baseline", 0.3), ("candidate", 0.8),
+            ("baseline", 0.2), ("candidate", 0.7),
+            ("baseline", 0.3), ("candidate", 0.9),
+        ]
+        for i, (action, reward) in enumerate(sequence):
+            self.trial(f"persistent-{i}", action, reward, campaign="persistent")
+        result = self.evaluator.evaluate_over_time("persistent", window_size=2)
+        self.assertEqual("advantage_persisted", result["status"])
+        self.assertGreaterEqual(result["early_advantage"], self.evaluator.min_reward_margin)
+        self.assertGreaterEqual(result["late_advantage"], self.evaluator.min_reward_margin)
+
+    def test_temporal_review_requires_two_disjoint_windows(self):
+        self.trial("temporal-base", "baseline", 0.2, campaign="too-short")
+        self.trial("temporal-candidate", "candidate", 0.8, campaign="too-short")
+        result = self.evaluator.evaluate_over_time("too-short", window_size=2)
+        self.assertEqual("inconclusive", result["status"])
+        self.assertEqual("insufficient_temporal_samples", result["reason"])
+
+    def test_temporal_window_size_validation(self):
+        with self.assertRaises(ValueError):
+            self.evaluator.evaluate_over_time("campaign-A", window_size=1)
+
     def test_campaigns_are_isolated_and_missing_campaign_abstains(self):
         self.trial("base-1", "baseline", 0.1, campaign="other")
         self.assertEqual("abstain", self.evaluator.evaluate("campaign-A")["status"])
