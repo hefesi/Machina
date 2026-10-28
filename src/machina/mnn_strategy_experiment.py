@@ -58,11 +58,18 @@ class MNNStrategyExperimentLog:
     def begin(
         self, experiment_id: str, *, hypothesis: str, context: str,
         current_action: str, planned_action: str, review: Mapping,
+        campaign_id: str | None = None,
     ) -> MemoryFragment:
-        """Record a proposed controlled trial; no action is executed here."""
+        """Record a proposed controlled trial; no action is executed here.
+
+        Set campaign_id to group separate trials comparing the same current and
+        candidate actions. When omitted, the experiment remains its own campaign.
+        """
         experiment_id = self._required_text(experiment_id, "experiment_id")
         hypothesis = self._required_text(hypothesis, "hypothesis")
         context = self._required_text(context, "context")
+        if campaign_id is not None:
+            campaign_id = self._required_text(campaign_id, "campaign_id")
         if current_action not in self.actions:
             raise ValueError("current_action must be a configured action")
         if planned_action not in self.actions:
@@ -78,7 +85,7 @@ class MNNStrategyExperimentLog:
         if status == "candidate" and candidate is None:
             raise ValueError("candidate review must include candidate_action")
         content = f"Strategy experiment proposal '{experiment_id}': {hypothesis}"
-        return self._persist(experiment_id, "proposal", content, {
+        metadata = {
             "hypothesis": hypothesis,
             "context": context,
             "current_action": current_action,
@@ -88,7 +95,11 @@ class MNNStrategyExperimentLog:
             "review_reason": review.get("reason"),
             "evidence_ids": self._evidence_ids(review),
             "execution": "not_executed_by_log",
-        })
+        }
+        # Omitting this key preserves idempotency for legacy persisted proposals.
+        if campaign_id is not None:
+            metadata["campaign_id"] = campaign_id
+        return self._persist(experiment_id, "proposal", content, metadata)
 
     def complete(
         self, experiment_id: str, *, tested_action: str, observed_reward: float,
@@ -120,14 +131,17 @@ class MNNStrategyExperimentLog:
             f"Strategy experiment outcome '{experiment_id}': action={tested_action}, "
             f"reward={float(observed_reward):g}, decision={decision}"
         )
-        return self._persist(experiment_id, "outcome", content, {
+        metadata = {
             "tested_action": tested_action,
             "observed_reward": float(observed_reward),
             "decision": decision,
             "observation": observation.strip(),
             "proposal_fragment_id": proposal.id,
             "policy_changed": False,
-        })
+        }
+        if "campaign_id" in proposal.metadata:
+            metadata["campaign_id"] = proposal.metadata["campaign_id"]
+        return self._persist(experiment_id, "outcome", content, metadata)
 
     @staticmethod
     def _evidence_ids(review: Mapping) -> list[str]:
