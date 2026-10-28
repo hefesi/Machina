@@ -38,7 +38,9 @@ for i, (action, reward) in enumerate([
 
 evaluator = MNNStrategyExperimentEvaluator(
     memory, actions=("baseline", "candidate"),
-    min_samples_per_action=3, min_reward_margin=0.1,
+    min_samples_per_action=3,
+    min_reward_margin=0.1,
+    noise_guard_multiplier=1.0,
 )
 result = evaluator.evaluate("workload-a-comparison")
 ```
@@ -50,17 +52,26 @@ number of independent trials before drawing a conclusion.
 ## Interpretation
 
 - `candidate_better`: the candidate's observed mean exceeds the current action's
-  mean by at least `min_reward_margin`, with the required samples for both.
+  mean by at least `min_reward_margin` and the observed difference is larger
+  than the configured noise guard.
 - `current_better`: the current action's observed mean exceeds the candidate's
-  mean by the same threshold.
-- `inconclusive`: sample counts are insufficient or the difference is too small.
+  mean by the same margin and noise guard.
+- `inconclusive`: sample counts are insufficient, the mean difference is too
+  small, or observed variability is too large relative to the difference.
 - `abstain`: no proposals exist, action roles cannot be established consistently, or a campaign mixes contexts. Keep each campaign limited to one comparable context.
-- The result includes per-action counts, means, and outcome-fragment IDs for audit.
+- The result includes per-action counts, means, sample variances, sample standard
+  deviations, estimated standard error of the mean difference, and outcome-fragment
+  IDs for audit. At least two samples per action are required to estimate variability.
+- `noise_guard_multiplier` (default `1.0`) requires the absolute mean difference
+  to exceed that multiplier times the estimated standard error
+  `sqrt(var_current / n_current + var_candidate / n_candidate)`. Set it to `0`
+  to disable this additional guard while retaining the minimum reward margin.
 - The evaluator is read-only. It does not execute trials, change policy, or
   automatically adopt a candidate.
-- This is a simple empirical-mean heuristic, not a statistical significance test.
-  It does not establish causality and cannot compensate for biased or unsafe
-  experimental design. Trials should be comparable and controlled by the caller.
+- The variance guard is a conservative heuristic, **not** a confidence interval,
+  statistical significance test, or calibrated probability. It does not establish
+  causality and cannot compensate for biased or unsafe experimental design. Trials
+  should be comparable and controlled by the caller.
 
 ## Log guarantees
 
