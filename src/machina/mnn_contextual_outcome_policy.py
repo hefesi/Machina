@@ -28,6 +28,7 @@ class MNNContextualOutcomePolicy:
         min_samples_per_action: int = 2,
         min_reward_margin: float = 0.1,
         min_context_overlap: float = 0.6,
+        recency_half_life_decisions: float | None = None,
     ) -> None:
         if not isinstance(memory, FragmentMemory):
             raise ValueError("memory must be a FragmentMemory")
@@ -60,7 +61,18 @@ class MNNContextualOutcomePolicy:
         self.actions = names
         self.min_samples_per_action = min_samples_per_action
         self.min_reward_margin = float(min_reward_margin)
+        if recency_half_life_decisions is not None and (
+            isinstance(recency_half_life_decisions, bool)
+            or not isinstance(recency_half_life_decisions, (int, float))
+            or not math.isfinite(recency_half_life_decisions)
+            or recency_half_life_decisions <= 0
+        ):
+            raise ValueError("recency_half_life_decisions must be finite and positive or None")
         self.min_context_overlap = float(min_context_overlap)
+        self.recency_half_life_decisions = (
+            None if recency_half_life_decisions is None
+            else float(recency_half_life_decisions)
+        )
 
     @staticmethod
     def _tokens(value: str) -> set[str]:
@@ -78,10 +90,23 @@ class MNNContextualOutcomePolicy:
         if not query_tokens:
             return self._abstain(context, "context_has_no_searchable_tokens")
 
+        archive = self.memory.archive()
+        # Decision counters make recency deterministic and independent of wall-clock
+        # timestamps. Legacy fragments without a valid counter remain usable at
+        # full temporal weight rather than being silently discarded.
+        decision_indices = [
+            fragment.metadata.get("decision")
+            for fragment in archive
+            if fragment.kind == "action-outcome"
+            and isinstance(fragment.metadata.get("decision"), int)
+            and not isinstance(fragment.metadata.get("decision"), bool)
+            and fragment.metadata.get("decision") >= 0
+        ]
+        latest_decision = max(decision_indices, default=None)
         samples: dict[str, list[tuple[float, float, str]]] = {
             action: [] for action in self.actions
         }
-        for fragment in self.memory.archive():
+        for fragment in archive:
             if fragment.kind != "action-outcome":
                 continue
             metadata = fragment.metadata
@@ -100,6 +125,18 @@ class MNNContextualOutcomePolicy:
                 continue
             confidence = fragment.confidence
             weight = overlap * max(0.01, confidence)
+            decision_index = metadata.get("decision")
+            if (
+                self.recency_half_life_decisions is not None
+                and latest_decision is not None
+                and isinstance(decision_index, int)
+                and not isinstance(decision_index, bool)
+                and decision_index >= 0
+            ):
+                age = max(0, latest_decision - decision_index)
+                weight *= math.exp(
+                    -math.log(2.0) * age / self.recency_half_life_decisions
+                )
             samples[action].append((float(reward), weight, fragment.id))
 
         counts = {action: len(samples[action]) for action in self.actions}
@@ -150,9 +187,12 @@ class MNNContextualOutcomePolicy:
             "minimum_samples_per_action": self.min_samples_per_action,
             "minimum_reward_margin": self.min_reward_margin,
             "minimum_context_overlap": self.min_context_overlap,
+            "recency_half_life_decisions": self.recency_half_life_decisions,
+            "latest_decision_index": latest_decision,
             "interpretation": (
-                "Weighted averages of recorded rewards with lexical context overlap; "
-                "observational association, not a causal guarantee."
+                "Confidence- and lexical-overlap-weighted recorded rewards; optionally "
+                "discounted exponentially by decision age. Observational association, "
+                "not a causal guarantee."
             ),
         }
 
