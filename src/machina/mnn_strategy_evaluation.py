@@ -179,3 +179,105 @@ class MNNStrategyExperimentEvaluator:
     @staticmethod
     def _result(status: str, campaign_id: str, *, reason: str, **details: Any) -> dict[str, Any]:
         return {"status": status, "campaign_id": campaign_id, "reason": reason, **details}
+
+    def evaluate_over_time(self, campaign_id: str, *, window_size: int = 3) -> dict[str, Any]:
+        """Compare candidate advantage in early versus late observations.
+
+        Outcomes are ordered by their persisted creation time. This is a
+        descriptive drift check, not a causal or statistical significance test.
+        """
+        if not isinstance(campaign_id, str) or not campaign_id.strip():
+            raise ValueError("campaign_id must be a non-empty string")
+        if isinstance(window_size, bool) or not isinstance(window_size, int) or window_size < 2:
+            raise ValueError("window_size must be an integer of at least 2")
+        campaign_id = campaign_id.strip()
+        archive = [
+            item for item in self.memory.archive()
+            if item.kind == "strategy-experiment"
+        ]
+        proposals = {
+            item.metadata.get("experiment_id"): item
+            for item in archive
+            if item.metadata.get("event") == "proposal"
+            and item.metadata.get("campaign_id", item.metadata.get("experiment_id")) == campaign_id
+        }
+        if not proposals:
+            return self._result("abstain", campaign_id, reason="no_campaign_proposals")
+
+        contexts = {
+            " ".join(item.metadata.get("context", "").casefold().split())
+            for item in proposals.values()
+            if isinstance(item.metadata.get("context"), str) and item.metadata.get("context", "").strip()
+        }
+        roles = set()
+        for proposal in proposals.values():
+            current = proposal.metadata.get("current_action")
+            candidate = proposal.metadata.get("candidate_action") or proposal.metadata.get("planned_action")
+            if current in self.actions and candidate in self.actions and current != candidate:
+                roles.add((current, candidate))
+        if len(contexts) != 1:
+            return self._result("abstain", campaign_id, reason="inconsistent_campaign_context",
+                                context_count=len(contexts))
+        if len(roles) != 1:
+            return self._result("abstain", campaign_id, reason="ambiguous_action_roles")
+        current_action, candidate_action = next(iter(roles))
+        outcomes: dict[str, list[tuple[str, float, str]]] = {
+            current_action: [], candidate_action: []
+        }
+        for item in archive:
+            metadata = item.metadata
+            if metadata.get("event") != "outcome":
+                continue
+            proposal = proposals.get(metadata.get("experiment_id"))
+            if proposal is None or metadata.get("proposal_fragment_id") != proposal.id:
+                continue
+            action = metadata.get("tested_action")
+            reward = metadata.get("observed_reward")
+            if action not in outcomes or isinstance(reward, bool) or not isinstance(reward, (int, float)) or not math.isfinite(reward):
+                continue
+            outcomes[action].append((item.created_at, float(reward), item.id))
+
+        required = window_size * 2
+        counts = {action: len(items) for action, items in outcomes.items()}
+        if any(count < required for count in counts.values()):
+            return self._result(
+                "inconclusive", campaign_id, reason="insufficient_temporal_samples",
+                current_action=current_action, candidate_action=candidate_action,
+                sample_counts=counts, window_size=window_size,
+                required_per_action=required,
+            )
+
+        windows: dict[str, dict[str, Any]] = {}
+        for action, samples in outcomes.items():
+            samples.sort(key=lambda entry: (entry[0], entry[2]))
+            early = samples[:window_size]
+            late = samples[-window_size:]
+            windows[action] = {
+                "early_mean": sum(value for _, value, _ in early) / window_size,
+                "late_mean": sum(value for _, value, _ in late) / window_size,
+                "early_evidence_ids": [fragment_id for _, _, fragment_id in early],
+                "late_evidence_ids": [fragment_id for _, _, fragment_id in late],
+            }
+
+        early_advantage = windows[candidate_action]["early_mean"] - windows[current_action]["early_mean"]
+        late_advantage = windows[candidate_action]["late_mean"] - windows[current_action]["late_mean"]
+        early_positive = early_advantage >= self.min_reward_margin
+        late_positive = late_advantage >= self.min_reward_margin
+        if early_positive and late_positive:
+            status, reason = "advantage_persisted", "candidate_advantage_meets_margin_in_both_windows"
+        elif not early_positive and late_positive:
+            status, reason = "advantage_emerged", "candidate_advantage_meets_margin_only_in_late_window"
+        elif early_positive and late_advantage <= -self.min_reward_margin:
+            status, reason = "advantage_reversed", "candidate_advantage_reversed_beyond_margin"
+        else:
+            status, reason = "no_clear_change", "advantage_not_consistent_across_windows"
+        return self._result(
+            status, campaign_id, reason=reason,
+            current_action=current_action, candidate_action=candidate_action,
+            sample_counts=counts, window_size=window_size,
+            early_advantage=early_advantage, late_advantage=late_advantage,
+            change_in_advantage=late_advantage - early_advantage,
+            action_windows=windows, causal_claim=False,
+            statistical_significance_claim=False,
+            method="chronological-early-versus-late-window-mean-comparison",
+        )
