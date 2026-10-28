@@ -13,6 +13,7 @@ from typing import Iterable, Mapping
 from .fragment_memory import FragmentMemory, MemoryFragment
 from .mnn_action_learning import MNNActionLearner
 from .mnn_concept_advisor import MNNConceptAdvisor
+from .mnn_contextual_outcome_policy import MNNContextualOutcomePolicy
 
 
 class MNNLearningAgent:
@@ -25,6 +26,7 @@ class MNNLearningAgent:
         *,
         agent_id: str = "machina",
         concept_advisor: MNNConceptAdvisor | None = None,
+        outcome_policy: MNNContextualOutcomePolicy | None = None,
     ) -> None:
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("agent_id must be a non-empty string")
@@ -34,6 +36,11 @@ class MNNLearningAgent:
         if concept_advisor is not None and not isinstance(concept_advisor, MNNConceptAdvisor):
             raise ValueError("concept_advisor must be an MNNConceptAdvisor or None")
         self.concept_advisor = concept_advisor
+        if outcome_policy is not None and not isinstance(outcome_policy, MNNContextualOutcomePolicy):
+            raise ValueError("outcome_policy must be an MNNContextualOutcomePolicy or None")
+        if outcome_policy is not None and tuple(outcome_policy.actions) != tuple(learner.actions):
+            raise ValueError("outcome_policy actions must match learner actions in the same order")
+        self.outcome_policy = outcome_policy
         self.pending_action: str | None = None
         self.pending_action_source: str | None = None
         self.experience_count = 0
@@ -43,6 +50,7 @@ class MNNLearningAgent:
         exploration_epsilon: float | None = None,
         use_concepts: bool = False,
         context_tags: Iterable[str] | None = None,
+        use_outcome_policy: bool = False,
     ) -> dict:
         """Choose an action, optionally using an explicit contextual memory recommendation.
 
@@ -56,6 +64,12 @@ class MNNLearningAgent:
             raise ValueError("use_memory must be boolean")
         if not isinstance(use_concepts, bool):
             raise ValueError("use_concepts must be boolean")
+        if not isinstance(use_outcome_policy, bool):
+            raise ValueError("use_outcome_policy must be boolean")
+        if use_outcome_policy and self.outcome_policy is None:
+            raise ValueError("use_outcome_policy=True requires a configured outcome_policy")
+        if use_outcome_policy and (context is None or not context.strip()):
+            raise ValueError("a non-empty context is required when use_outcome_policy=True")
         if use_concepts and self.concept_advisor is None:
             raise ValueError("use_concepts=True requires a configured concept_advisor")
         if use_concepts and context_tags is None:
@@ -79,6 +93,15 @@ class MNNLearningAgent:
             if concept_result is not None and concept_result["status"] == "recommended"
             else None
         )
+        outcome_result = (
+            self.outcome_policy.recommend(context)
+            if use_outcome_policy and self.outcome_policy is not None and context is not None
+            else None
+        )
+        outcome_recommendation = (
+            outcome_result if outcome_result is not None and outcome_result.get("status") == "recommended"
+            else None
+        )
         recommendation = (
             self.recommend_from_memory(context)
             if use_memory and context is not None
@@ -88,6 +111,9 @@ class MNNLearningAgent:
         if concept_recommendation is not None:
             action = concept_recommendation["action"]
             source = "concept"
+        elif outcome_recommendation is not None:
+            action = outcome_recommendation["action"]
+            source = "outcome_policy"
         elif recommendation is not None:
             action = recommendation["action"]
             source = "memory"
@@ -104,6 +130,7 @@ class MNNLearningAgent:
             "selection_source": source,
             "memory_recommendation": recommendation,
             "concept_guidance": concept_result,
+            "outcome_policy_result": outcome_result,
             "fallback_action": fallback,
             "exploration_policy": "epsilon_greedy" if exploration_epsilon is not None else "scheduled",
             "exploration_epsilon": exploration_epsilon,
@@ -119,7 +146,11 @@ class MNNLearningAgent:
             ),
             # Signals that the environment should gather another observed outcome;
             # this does not fabricate or automatically execute a trial.
-            "request_experience": bool((use_memory and recommendation is None and concept_recommendation is None) or (use_concepts and concept_recommendation is None)),
+            "request_experience": bool(
+                (use_memory and recommendation is None and concept_recommendation is None and outcome_recommendation is None)
+                or (use_concepts and concept_recommendation is None)
+                or (use_outcome_policy and outcome_recommendation is None)
+            ),
         }
 
     def resolve(self, reward: float, *, context: str = "") -> dict:
@@ -271,13 +302,18 @@ class MNNLearningAgent:
 
     @classmethod
     def from_snapshot(
-        cls, data: Mapping, memory: FragmentMemory
+        cls, data: Mapping, memory: FragmentMemory, *,
+        concept_advisor: MNNConceptAdvisor | None = None,
+        outcome_policy: MNNContextualOutcomePolicy | None = None,
     ) -> "MNNLearningAgent":
         schema_version = data.get("schema_version")
         if schema_version not in (1, 2):
             raise ValueError("unsupported MNN learning-agent snapshot schema")
         learner = MNNActionLearner.from_snapshot(data["learner"])
-        agent = cls(learner, memory, agent_id=data["agent_id"])
+        agent = cls(
+            learner, memory, agent_id=data["agent_id"],
+            concept_advisor=concept_advisor, outcome_policy=outcome_policy,
+        )
         pending = data.get("pending_action")
         if pending is not None and pending not in learner.actions:
             raise ValueError("pending_action is not a configured action")
@@ -288,13 +324,13 @@ class MNNLearningAgent:
         # Schema v1 only represented learner-selected pending actions. Schema v2
         # records whether contextual memory overrode the learner's fallback.
         source = data.get("pending_action_source", "learner" if pending is not None else None)
-        if source not in (None, "learner", "memory", "concept"):
-            raise ValueError("pending_action_source must be 'learner', 'memory', 'concept', or None")
+        if source not in (None, "learner", "memory", "concept", "outcome_policy"):
+            raise ValueError("pending_action_source must be 'learner', 'memory', 'concept', 'outcome_policy', or None")
         if (pending is None) != (source is None):
             raise ValueError("pending_action and pending_action_source must both be set or unset")
         if pending is not None and source == "learner" and learner._last_action != pending:
             raise ValueError("pending_action does not match the learner's pending choice")
-        if pending is not None and source in ("memory", "concept") and learner._last_action not in learner.actions:
+        if pending is not None and source in ("memory", "concept", "outcome_policy") and learner._last_action not in learner.actions:
             raise ValueError(f"{source}-selected pending action requires a valid learner fallback")
 
         agent.pending_action = pending
