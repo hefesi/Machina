@@ -126,8 +126,8 @@ robustness = evaluator.evaluate_across_campaigns(
   individual evaluations.
 - `abstain`: a campaign is missing, has inconsistent context/action roles, or
   differs in context or action roles from the other campaigns.
-- The default requires at least three conclusive campaigns and more than 75%
-  agreement (the configured default is 75%, inclusive). The agreement fraction
+- The default requires at least three conclusive campaigns and at least 75%
+  agreement. The agreement fraction
   is calculated only over conclusive campaign results; inconclusive campaigns
   remain visible in `campaign_results`.
 - Raw trials are **not pooled** across campaigns. This avoids allowing one large
