@@ -80,6 +80,20 @@ class MNNContextualOutcomePolicyTests(unittest.TestCase):
         self.assertEqual(result["status"], "abstain")
         self.assertEqual(result["sample_counts"]["right"], 0)
 
+
+    def test_partial_shared_word_is_not_enough_context_overlap(self):
+        self.add_outcome("left-1", "left", 1.0, "stable workload")
+        self.add_outcome("left-2", "left", 1.0, "stable workload")
+        self.add_outcome("right-1", "right", 0.0, "risky workload")
+        self.add_outcome("right-2", "right", 0.0, "risky workload")
+
+        result = MNNContextualOutcomePolicy(
+            self.memory, ["left", "right"], min_samples_per_action=2,
+        ).recommend("stable workload")
+
+        self.assertEqual("abstain", result["status"])
+        self.assertEqual(0, result["sample_counts"]["right"])
+
     def test_reads_persistent_archive_without_mutating_memory(self):
         self.add_outcome("left-1", "left", 1.0)
         self.add_outcome("left-2", "left", 1.0)
