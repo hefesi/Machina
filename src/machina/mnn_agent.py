@@ -15,6 +15,7 @@ from .mnn_action_learning import MNNActionLearner
 from .mnn_concept_advisor import MNNConceptAdvisor
 from .mnn_contextual_outcome_policy import MNNContextualOutcomePolicy
 from .mnn_reward_drift import MNNRewardDriftDetector
+from .mnn_strategy_review import MNNStrategyReviewer
 
 
 class MNNLearningAgent:
@@ -29,6 +30,7 @@ class MNNLearningAgent:
         concept_advisor: MNNConceptAdvisor | None = None,
         outcome_policy: MNNContextualOutcomePolicy | None = None,
         reward_drift_detector: MNNRewardDriftDetector | None = None,
+        strategy_reviewer: MNNStrategyReviewer | None = None,
     ) -> None:
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("agent_id must be a non-empty string")
@@ -50,6 +52,13 @@ class MNNLearningAgent:
         if reward_drift_detector is not None and reward_drift_detector.memory is not memory:
             raise ValueError("reward_drift_detector must use the agent's memory instance")
         self.reward_drift_detector = reward_drift_detector
+        if strategy_reviewer is not None and not isinstance(strategy_reviewer, MNNStrategyReviewer):
+            raise ValueError("strategy_reviewer must be an MNNStrategyReviewer or None")
+        if strategy_reviewer is not None and strategy_reviewer.detector.memory is not memory:
+            raise ValueError("strategy_reviewer must use the agent's memory instance")
+        if strategy_reviewer is not None and tuple(strategy_reviewer.actions) != tuple(learner.actions):
+            raise ValueError("strategy_reviewer actions must match learner actions in the same order")
+        self.strategy_reviewer = strategy_reviewer
         self.pending_action: str | None = None
         self.pending_action_source: str | None = None
         self.experience_count = 0
@@ -61,6 +70,7 @@ class MNNLearningAgent:
         context_tags: Iterable[str] | None = None,
         use_outcome_policy: bool = False,
         review_reward_drift: bool = False,
+        review_strategy: bool = False,
     ) -> dict:
         """Choose an action, optionally using an explicit contextual memory recommendation.
 
@@ -78,6 +88,12 @@ class MNNLearningAgent:
             raise ValueError("use_outcome_policy must be boolean")
         if not isinstance(review_reward_drift, bool):
             raise ValueError("review_reward_drift must be boolean")
+        if not isinstance(review_strategy, bool):
+            raise ValueError("review_strategy must be boolean")
+        if review_strategy and self.strategy_reviewer is None:
+            raise ValueError("review_strategy=True requires a configured strategy_reviewer")
+        if review_strategy and (context is None or not context.strip()):
+            raise ValueError("a non-empty context is required when review_strategy=True")
         if review_reward_drift and self.reward_drift_detector is None:
             raise ValueError("review_reward_drift=True requires a configured reward_drift_detector")
         if review_reward_drift and (context is None or not context.strip()):
@@ -141,6 +157,11 @@ class MNNLearningAgent:
         else:
             action = fallback
             source = "learner"
+        strategy_result = (
+            self.strategy_reviewer.review(context, current_action=action)
+            if review_strategy and self.strategy_reviewer is not None and context is not None
+            else None
+        )
         self.pending_action = action
         self.pending_action_source = source
         return {
@@ -153,6 +174,7 @@ class MNNLearningAgent:
             "concept_guidance": concept_result,
             "outcome_policy_result": outcome_result,
             "reward_drift_review": drift_result,
+            "strategy_review": strategy_result,
             "fallback_action": fallback,
             "exploration_policy": "epsilon_greedy" if exploration_epsilon is not None else "scheduled",
             "exploration_epsilon": exploration_epsilon,
@@ -173,6 +195,7 @@ class MNNLearningAgent:
                 or (use_concepts and concept_recommendation is None)
                 or (use_outcome_policy and outcome_recommendation is None)
                 or (review_reward_drift and drift_result is not None and drift_result["status"] in {"detected", "abstain"})
+                or (review_strategy and strategy_result is not None and strategy_result["status"] in {"candidate", "abstain"})
             ),
         }
 
