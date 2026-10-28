@@ -138,6 +138,36 @@ robustness = evaluator.evaluate_across_campaigns(
   observed direction under the tested conditions, not proof that the strategy
   caused the reward difference.
 
+
+## Validate a candidate on holdout campaigns
+
+After exploration identifies a possible improvement, evaluate it on a separate
+set of campaigns that was not used to select the candidate:
+
+```python
+validation = evaluator.evaluate_with_holdout(
+    exploration_campaign_ids=["explore-1", "explore-2", "explore-3"],
+    validation_campaign_ids=["holdout-1", "holdout-2", "holdout-3"],
+    min_conclusive_campaigns_per_group=2,
+    min_agreement_fraction=0.75,
+)
+```
+
+- `candidate_replicated`: the candidate advantage is consistent in both
+  exploration and independent validation campaigns.
+- `current_action_replicated`: the current action is consistently better in
+  both groups.
+- `not_replicated`: the two groups have different directional conclusions.
+- `mixed_results`, `inconclusive`, and `abstain` preserve uncertainty when
+  campaigns disagree, evidence is insufficient, or comparisons are incompatible.
+- Campaign IDs must be unique within each group and disjoint between groups.
+  Each group is evaluated independently; raw trials are never pooled.
+- Holdout data is only meaningfully independent if the caller reserves it before
+  choosing the candidate and does not tune the candidate based on holdout results.
+  The code checks ID separation, not the integrity of the experimental process.
+- This is a descriptive replication gate, not a significance test or causal
+  estimate. A replicated result does not automatically change the agent's policy.
+
 ## Log guarantees
 
 - Proposal and outcome are separate immutable records. Identical retries are
