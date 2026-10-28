@@ -176,6 +176,146 @@ class MNNStrategyExperimentEvaluator:
             reason = "reward_difference_not_larger_than_noise_guard"
         return self._result(status, campaign_id, reason=reason, **common)
 
+    def evaluate_across_campaigns(
+        self,
+        campaign_ids: list[str] | tuple[str, ...],
+        *,
+        min_conclusive_campaigns: int = 3,
+        min_agreement_fraction: float = 0.75,
+    ) -> dict[str, Any]:
+        """Review whether campaign-level outcomes agree, without pooling trials.
+
+        All campaigns must describe the same normalized context and the same
+        current/candidate action roles. Inconclusive campaigns are reported but
+        excluded from the agreement denominator.
+        """
+        if isinstance(campaign_ids, (str, bytes)) or not isinstance(campaign_ids, (list, tuple)):
+            raise ValueError("campaign_ids must be a list or tuple of campaign IDs")
+        normalized_ids = []
+        for campaign_id in campaign_ids:
+            if not isinstance(campaign_id, str) or not campaign_id.strip():
+                raise ValueError("campaign IDs must be non-empty strings")
+            normalized_ids.append(campaign_id.strip())
+        if not normalized_ids:
+            raise ValueError("at least one campaign ID is required")
+        if len(set(normalized_ids)) != len(normalized_ids):
+            raise ValueError("campaign IDs must be unique")
+        if (isinstance(min_conclusive_campaigns, bool)
+                or not isinstance(min_conclusive_campaigns, int)
+                or min_conclusive_campaigns < 2):
+            raise ValueError("min_conclusive_campaigns must be an integer of at least 2")
+        if (isinstance(min_agreement_fraction, bool)
+                or not isinstance(min_agreement_fraction, (int, float))
+                or not math.isfinite(min_agreement_fraction)
+                or not 0.5 < min_agreement_fraction <= 1.0):
+            raise ValueError("min_agreement_fraction must be greater than 0.5 and at most 1")
+
+        archive = [
+            item for item in self.memory.archive()
+            if item.kind == "strategy-experiment" and item.metadata.get("event") == "proposal"
+        ]
+        expected_context = None
+        expected_roles = None
+        for campaign_id in normalized_ids:
+            proposals = [
+                item for item in archive
+                if item.metadata.get("campaign_id", item.metadata.get("experiment_id")) == campaign_id
+            ]
+            if not proposals:
+                return self._result(
+                    "abstain", campaign_id, reason="no_campaign_proposals",
+                    requested_campaign_ids=normalized_ids,
+                )
+            contexts = {
+                " ".join(value.casefold().split())
+                for item in proposals
+                if isinstance((value := item.metadata.get("context")), str) and value.strip()
+            }
+            roles = set()
+            for item in proposals:
+                current = item.metadata.get("current_action")
+                candidate = item.metadata.get("candidate_action")
+                if candidate is None:
+                    candidate = item.metadata.get("planned_action")
+                if current in self.actions and candidate in self.actions and current != candidate:
+                    roles.add((current, candidate))
+            if len(contexts) != 1:
+                return self._result(
+                    "abstain", "cross-campaign", reason="inconsistent_campaign_context",
+                    campaign_id=campaign_id, context_count=len(contexts),
+                )
+            if len(roles) != 1:
+                return self._result(
+                    "abstain", "cross-campaign", reason="ambiguous_action_roles",
+                    campaign_id=campaign_id,
+                )
+            context = next(iter(contexts))
+            role_pair = next(iter(roles))
+            if expected_context is None:
+                expected_context, expected_roles = context, role_pair
+            elif context != expected_context:
+                return self._result(
+                    "abstain", "cross-campaign", reason="incompatible_campaign_contexts",
+                    campaign_id=campaign_id, expected_context=expected_context,
+                    observed_context=context,
+                )
+            elif role_pair != expected_roles:
+                return self._result(
+                    "abstain", "cross-campaign", reason="incompatible_action_roles",
+                    campaign_id=campaign_id, expected_action_roles=expected_roles,
+                    observed_action_roles=role_pair,
+                )
+
+        campaign_results = [self.evaluate(campaign_id) for campaign_id in normalized_ids]
+        conclusive = [
+            result for result in campaign_results
+            if result.get("status") in {"candidate_better", "current_better"}
+        ]
+        counts = {
+            "candidate_better": sum(result["status"] == "candidate_better" for result in conclusive),
+            "current_better": sum(result["status"] == "current_better" for result in conclusive),
+            "inconclusive": sum(result["status"] == "inconclusive" for result in campaign_results),
+        }
+        common = {
+            "campaign_ids": normalized_ids,
+            "campaign_results": campaign_results,
+            "conclusive_campaign_count": len(conclusive),
+            "status_counts": counts,
+            "min_conclusive_campaigns": min_conclusive_campaigns,
+            "min_agreement_fraction": float(min_agreement_fraction),
+            "agreement_fraction": (
+                max(counts["candidate_better"], counts["current_better"]) / len(conclusive)
+                if conclusive else None
+            ),
+            "current_action": expected_roles[0],
+            "candidate_action": expected_roles[1],
+            "context": expected_context,
+            "method": "agreement-of-independent-campaign-level-evaluations",
+            "causal_claim": False,
+            "statistical_significance_claim": False,
+            "raw_trials_pooled": False,
+        }
+        if len(conclusive) < min_conclusive_campaigns:
+            return self._result(
+                "inconclusive", "cross-campaign", reason="insufficient_conclusive_campaigns",
+                **common,
+            )
+        agreement = common["agreement_fraction"]
+        if agreement < min_agreement_fraction:
+            return self._result(
+                "mixed_results", "cross-campaign", reason="campaign_results_do_not_agree",
+                **common,
+            )
+        if counts["candidate_better"] > counts["current_better"]:
+            return self._result(
+                "consistent_candidate_advantage", "cross-campaign",
+                reason="candidate_advantage_repeats_across_campaigns", **common,
+            )
+        return self._result(
+            "consistent_current_advantage", "cross-campaign",
+            reason="current_action_advantage_repeats_across_campaigns", **common,
+        )
+
     @staticmethod
     def _result(status: str, campaign_id: str, *, reason: str, **details: Any) -> dict[str, Any]:
         return {"status": status, "campaign_id": campaign_id, "reason": reason, **details}
