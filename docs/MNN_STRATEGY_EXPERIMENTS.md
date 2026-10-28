@@ -28,6 +28,27 @@ outcome = log.complete(
 )
 ```
 
+## Using the agent integration
+
+Configure the same memory and action set on the agent and log. After `decide(..., review_strategy=True)`, explicitly record the proposal:
+
+```python
+agent = MNNLearningAgent(learner, memory, strategy_experiment_log=log)
+decision = agent.decide(context="workload A", review_strategy=True)
+if decision["strategy_review"]["status"] == "candidate":
+    agent.record_strategy_experiment_proposal(
+        "trial-2026-002", decision,
+        hypothesis="The proposed action improves reward on workload A",
+    )
+# The environment must explicitly run and measure any trial.
+agent.record_strategy_experiment_outcome(
+    "trial-2026-002", tested_action="candidate", observed_reward=0.7,
+    decision="validate_candidate_further",
+)
+```
+
+The agent methods only write audit records; they do not run the candidate or change the learner.
+
 ## Guarantees and limits
 
 - Proposal and outcome are separate immutable records; retrying an identical event
