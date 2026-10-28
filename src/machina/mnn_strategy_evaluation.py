@@ -57,14 +57,24 @@ class MNNStrategyExperimentEvaluator:
             return self._result("abstain", campaign_id, reason="no_campaign_proposals")
 
         roles: set[tuple[str, str]] = set()
+        contexts: set[str] = set()
         for proposal in proposals.values():
             current = proposal.metadata.get("current_action")
             candidate = proposal.metadata.get("candidate_action")
             if candidate is None:
                 candidate = proposal.metadata.get("planned_action")
+            context = proposal.metadata.get("context")
+            if isinstance(context, str) and context.strip():
+                contexts.add(" ".join(context.casefold().split()))
             if current not in self.actions or candidate not in self.actions or current == candidate:
                 continue
             roles.add((current, candidate))
+        if len(contexts) != 1:
+            return self._result(
+                "abstain", campaign_id, reason="inconsistent_campaign_context",
+                proposal_ids=[item.id for item in proposals.values()],
+                context_count=len(contexts),
+            )
         if len(roles) != 1:
             return self._result(
                 "abstain", campaign_id, reason="ambiguous_action_roles",
