@@ -101,6 +101,43 @@ comparison, not a formal drift detector, significance test, or causal estimate.
 Use comparable contexts and deliberately designed trials; time ordering alone
 does not isolate environmental changes from other factors.
 
+
+## Compare independent campaigns
+
+Use `evaluate_across_campaigns` after evaluating multiple separate campaigns.
+Each campaign must use the same normalized context and the same current/candidate
+action roles. The evaluator keeps each campaign's trial data separate and compares
+the resulting campaign-level classifications:
+
+```python
+robustness = evaluator.evaluate_across_campaigns(
+    ["workload-a-run-1", "workload-a-run-2", "workload-a-run-3"],
+    min_conclusive_campaigns=3,
+    min_agreement_fraction=0.75,
+)
+```
+
+- `consistent_candidate_advantage` / `consistent_current_advantage`: at least
+  the configured number of campaigns are conclusive and the configured fraction
+  of conclusive campaigns agree on the same direction.
+- `mixed_results`: enough campaigns are conclusive, but their directional
+  results do not meet the agreement threshold.
+- `inconclusive`: fewer than `min_conclusive_campaigns` have conclusive
+  individual evaluations.
+- `abstain`: a campaign is missing, has inconsistent context/action roles, or
+  differs in context or action roles from the other campaigns.
+- The default requires at least three conclusive campaigns and more than 75%
+  agreement (the configured default is 75%, inclusive). The agreement fraction
+  is calculated only over conclusive campaign results; inconclusive campaigns
+  remain visible in `campaign_results`.
+- Raw trials are **not pooled** across campaigns. This avoids allowing one large
+  campaign to dominate the result, but does not remove shared biases, confounding,
+  dependence between campaigns, or poor experimental design.
+- This is a descriptive replication check, not a significance test, calibrated
+  confidence, or causal estimate. A consistent result is evidence of repeated
+  observed direction under the tested conditions, not proof that the strategy
+  caused the reward difference.
+
 ## Log guarantees
 
 - Proposal and outcome are separate immutable records. Identical retries are
