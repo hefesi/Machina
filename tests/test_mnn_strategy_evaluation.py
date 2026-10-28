@@ -64,6 +64,22 @@ class StrategyExperimentEvaluationTests(unittest.TestCase):
         self.assertEqual("abstain", self.evaluator.evaluate("campaign-A")["status"])
         self.assertEqual("abstain", self.evaluator.evaluate("missing")["status"])
 
+    def test_mixed_context_campaign_is_rejected(self):
+        self.trial("base-1", "baseline", 0.1, campaign="mixed")
+        review = {"status": "candidate", "candidate_action": "candidate"}
+        self.log.begin(
+            "cand-1", hypothesis="different context", context="workload B",
+            current_action="baseline", planned_action="candidate",
+            review=review, campaign_id="mixed",
+        )
+        self.log.complete(
+            "cand-1", tested_action="candidate", observed_reward=0.9,
+            decision="collect_more_data",
+        )
+        result = self.evaluator.evaluate("mixed")
+        self.assertEqual("abstain", result["status"])
+        self.assertEqual("inconsistent_campaign_context", result["reason"])
+
     def test_validation(self):
         with self.assertRaises(ValueError):
             MNNStrategyExperimentEvaluator(self.memory, ["a", "b"], min_samples_per_action=0)
