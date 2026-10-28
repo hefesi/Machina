@@ -32,3 +32,21 @@ if report["status"] == "detected":
 ```
 
 Each comparison includes prior/recent means, sample counts, decision windows, and fragment IDs for audit. History remains intact.
+
+
+## Agent integration
+
+The agent can optionally review drift during a decision by receiving an `MNNRewardDriftDetector` bound to the same `FragmentMemory` instance and calling:
+
+```python
+decision = agent.decide(
+    context="stable workload",
+    review_reward_drift=True,
+)
+report = decision["reward_drift_review"]
+if report and report["status"] == "detected":
+    # Review evidence and gather another outcome before changing strategy.
+    ...
+```
+
+This integration is deliberately advisory. A detected shift or insufficient history sets `request_experience`; the detector does not select an action, override the learner, or execute a trial. Drift review is opt-in and validates its context before the learner's decision counter advances.
