@@ -316,6 +316,104 @@ class MNNStrategyExperimentEvaluator:
             reason="current_action_advantage_repeats_across_campaigns", **common,
         )
 
+    def evaluate_with_holdout(
+        self,
+        exploration_campaign_ids: list[str] | tuple[str, ...],
+        validation_campaign_ids: list[str] | tuple[str, ...],
+        *,
+        min_conclusive_campaigns_per_group: int = 2,
+        min_agreement_fraction: float = 0.75,
+    ) -> dict[str, Any]:
+        """Require an exploratory result to replicate in separate holdout campaigns.
+
+        Each group is evaluated independently. Campaign IDs may not overlap;
+        no raw trials are pooled and no policy is changed.
+        """
+        def validate_ids(values: list[str] | tuple[str, ...], label: str) -> list[str]:
+            if isinstance(values, (str, bytes)) or not isinstance(values, (list, tuple)):
+                raise ValueError(f"{label} must be a list or tuple of campaign IDs")
+            result = []
+            for value in values:
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(f"{label} must contain non-empty campaign IDs")
+                result.append(value.strip())
+            if not result:
+                raise ValueError(f"{label} must not be empty")
+            if len(set(result)) != len(result):
+                raise ValueError(f"{label} must contain unique campaign IDs")
+            return result
+
+        exploration_ids = validate_ids(exploration_campaign_ids, "exploration_campaign_ids")
+        validation_ids = validate_ids(validation_campaign_ids, "validation_campaign_ids")
+        overlap = sorted(set(exploration_ids) & set(validation_ids))
+        if overlap:
+            raise ValueError("exploration and validation campaign IDs must be disjoint")
+        if (isinstance(min_conclusive_campaigns_per_group, bool)
+                or not isinstance(min_conclusive_campaigns_per_group, int)
+                or min_conclusive_campaigns_per_group < 2):
+            raise ValueError("min_conclusive_campaigns_per_group must be an integer of at least 2")
+        if (isinstance(min_agreement_fraction, bool)
+                or not isinstance(min_agreement_fraction, (int, float))
+                or not math.isfinite(min_agreement_fraction)
+                or not 0.5 < min_agreement_fraction <= 1.0):
+            raise ValueError("min_agreement_fraction must be greater than 0.5 and at most 1")
+
+        exploration = self.evaluate_across_campaigns(
+            exploration_ids,
+            min_conclusive_campaigns=min_conclusive_campaigns_per_group,
+            min_agreement_fraction=min_agreement_fraction,
+        )
+        validation = self.evaluate_across_campaigns(
+            validation_ids,
+            min_conclusive_campaigns=min_conclusive_campaigns_per_group,
+            min_agreement_fraction=min_agreement_fraction,
+        )
+        common = {
+            "exploration": exploration,
+            "validation": validation,
+            "exploration_campaign_ids": exploration_ids,
+            "validation_campaign_ids": validation_ids,
+            "groups_disjoint": True,
+            "raw_trials_pooled": False,
+            "causal_claim": False,
+            "statistical_significance_claim": False,
+            "method": "independent-exploration-and-holdout-campaign-replication",
+        }
+        if exploration.get("status") == "abstain" or validation.get("status") == "abstain":
+            return self._result(
+                "abstain", "holdout-validation", reason="campaign_group_abstained",
+                **common,
+            )
+        if exploration.get("status") == "inconclusive" or validation.get("status") == "inconclusive":
+            return self._result(
+                "inconclusive", "holdout-validation", reason="insufficient_group_evidence",
+                **common,
+            )
+        if exploration.get("status") == "mixed_results" or validation.get("status") == "mixed_results":
+            return self._result(
+                "mixed_results", "holdout-validation", reason="campaign_group_results_are_mixed",
+                **common,
+            )
+        exploration_status = exploration.get("status")
+        validation_status = validation.get("status")
+        if exploration_status != validation_status:
+            return self._result(
+                "not_replicated", "holdout-validation",
+                reason="validation_group_does_not_reproduce_exploration_direction",
+                **common,
+            )
+        if exploration_status == "consistent_candidate_advantage":
+            return self._result(
+                "candidate_replicated", "holdout-validation",
+                reason="candidate_advantage_repeated_in_independent_validation_campaigns",
+                **common,
+            )
+        return self._result(
+            "current_action_replicated", "holdout-validation",
+            reason="current_action_advantage_repeated_in_independent_validation_campaigns",
+            **common,
+        )
+
     @staticmethod
     def _result(status: str, campaign_id: str, *, reason: str, **details: Any) -> dict[str, Any]:
         return {"status": status, "campaign_id": campaign_id, "reason": reason, **details}
