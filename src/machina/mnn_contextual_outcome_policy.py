@@ -88,7 +88,7 @@ class MNNContextualOutcomePolicy:
             action = metadata.get("action")
             stored_context = metadata.get("context")
             reward = metadata.get("reward")
-            if action not in samples or not isinstance(stored_context, str) or not stored_context.strip():
+            if not isinstance(action, str) or action not in samples or not isinstance(stored_context, str) or not stored_context.strip():
                 continue
             if isinstance(reward, bool) or not isinstance(reward, (int, float)) or not math.isfinite(reward):
                 continue
