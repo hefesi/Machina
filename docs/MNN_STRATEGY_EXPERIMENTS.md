@@ -54,7 +54,7 @@ number of independent trials before drawing a conclusion.
 - `current_better`: the current action's observed mean exceeds the candidate's
   mean by the same threshold.
 - `inconclusive`: sample counts are insufficient or the difference is too small.
-- `abstain`: no proposals exist or action roles cannot be established consistently.
+- `abstain`: no proposals exist, action roles cannot be established consistently, or a campaign mixes contexts. Keep each campaign limited to one comparable context.
 - The result includes per-action counts, means, and outcome-fragment IDs for audit.
 - The evaluator is read-only. It does not execute trials, change policy, or
   automatically adopt a candidate.
