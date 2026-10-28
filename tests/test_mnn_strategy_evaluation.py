@@ -137,6 +137,70 @@ class StrategyExperimentEvaluationTests(unittest.TestCase):
         self.assertEqual("abstain", result["status"])
         self.assertEqual("inconsistent_campaign_context", result["reason"])
 
+
+    def test_cross_campaign_review_requires_repeated_agreement(self):
+        for campaign in ("replicate-1", "replicate-2", "replicate-3"):
+            for i, reward in enumerate((0.2, 0.3)):
+                self.trial(f"{campaign}-base-{i}", "baseline", reward, campaign=campaign)
+            for i, reward in enumerate((0.8, 0.9)):
+                self.trial(f"{campaign}-candidate-{i}", "candidate", reward, campaign=campaign)
+        before = [(f.id, dict(f.metadata)) for f in self.memory.archive()]
+        result = self.evaluator.evaluate_across_campaigns(
+            ["replicate-1", "replicate-2", "replicate-3"]
+        )
+        after = [(f.id, dict(f.metadata)) for f in self.memory.archive()]
+        self.assertEqual("consistent_candidate_advantage", result["status"])
+        self.assertEqual(3, result["conclusive_campaign_count"])
+        self.assertEqual(1.0, result["agreement_fraction"])
+        self.assertFalse(result["causal_claim"])
+        self.assertFalse(result["statistical_significance_claim"])
+        self.assertFalse(result["raw_trials_pooled"])
+        self.assertEqual(before, after)
+
+    def test_cross_campaign_review_reports_mixed_outcomes(self):
+        for campaign, baseline, candidate in (
+            ("replicate-A", (0.2, 0.3), (0.8, 0.9)),
+            ("replicate-B", (0.2, 0.3), (0.8, 0.9)),
+            ("replicate-C", (0.8, 0.9), (0.2, 0.3)),
+        ):
+            for i, reward in enumerate(baseline):
+                self.trial(f"{campaign}-base-{i}", "baseline", reward, campaign=campaign)
+            for i, reward in enumerate(candidate):
+                self.trial(f"{campaign}-candidate-{i}", "candidate", reward, campaign=campaign)
+        result = self.evaluator.evaluate_across_campaigns(
+            ["replicate-A", "replicate-B", "replicate-C"]
+        )
+        self.assertEqual("mixed_results", result["status"])
+        self.assertAlmostEqual(2 / 3, result["agreement_fraction"])
+
+    def test_cross_campaign_review_rejects_different_contexts(self):
+        for campaign in ("context-A", "context-B"):
+            self.trial(f"{campaign}-base", "baseline", 0.2, campaign=campaign)
+            self.trial(f"{campaign}-candidate", "candidate", 0.9, campaign=campaign)
+        review = {"status": "candidate", "candidate_action": "candidate"}
+        self.log.begin(
+            "context-B-extra", hypothesis="different context", context="workload B",
+            current_action="baseline", planned_action="candidate", review=review,
+            campaign_id="context-B",
+        )
+        result = self.evaluator.evaluate_across_campaigns(["context-A", "context-B"])
+        self.assertEqual("abstain", result["status"])
+        self.assertEqual("inconsistent_campaign_context", result["reason"])
+
+    def test_cross_campaign_validation(self):
+        with self.assertRaises(ValueError):
+            self.evaluator.evaluate_across_campaigns("campaign-A")
+        with self.assertRaises(ValueError):
+            self.evaluator.evaluate_across_campaigns(["campaign-A", "campaign-A"])
+        with self.assertRaises(ValueError):
+            self.evaluator.evaluate_across_campaigns(
+                ["campaign-A"], min_conclusive_campaigns=1
+            )
+        with self.assertRaises(ValueError):
+            self.evaluator.evaluate_across_campaigns(
+                ["campaign-A"], min_agreement_fraction=0.5
+            )
+
     def test_validation(self):
         with self.assertRaises(ValueError):
             MNNStrategyExperimentEvaluator(self.memory, ["a", "b"], min_samples_per_action=0)
