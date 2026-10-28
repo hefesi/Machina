@@ -16,6 +16,7 @@ from .mnn_concept_advisor import MNNConceptAdvisor
 from .mnn_contextual_outcome_policy import MNNContextualOutcomePolicy
 from .mnn_reward_drift import MNNRewardDriftDetector
 from .mnn_strategy_review import MNNStrategyReviewer
+from .mnn_strategy_experiment import MNNStrategyExperimentLog
 
 
 class MNNLearningAgent:
@@ -31,6 +32,7 @@ class MNNLearningAgent:
         outcome_policy: MNNContextualOutcomePolicy | None = None,
         reward_drift_detector: MNNRewardDriftDetector | None = None,
         strategy_reviewer: MNNStrategyReviewer | None = None,
+        strategy_experiment_log: MNNStrategyExperimentLog | None = None,
     ) -> None:
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("agent_id must be a non-empty string")
@@ -59,6 +61,15 @@ class MNNLearningAgent:
         if strategy_reviewer is not None and tuple(strategy_reviewer.actions) != tuple(learner.actions):
             raise ValueError("strategy_reviewer actions must match learner actions in the same order")
         self.strategy_reviewer = strategy_reviewer
+        if strategy_experiment_log is not None and not isinstance(
+            strategy_experiment_log, MNNStrategyExperimentLog
+        ):
+            raise ValueError("strategy_experiment_log must be an MNNStrategyExperimentLog or None")
+        if strategy_experiment_log is not None and strategy_experiment_log.memory is not memory:
+            raise ValueError("strategy_experiment_log must use the agent's memory instance")
+        if strategy_experiment_log is not None and tuple(strategy_experiment_log.actions) != tuple(learner.actions):
+            raise ValueError("strategy_experiment_log actions must match learner actions in the same order")
+        self.strategy_experiment_log = strategy_experiment_log
         self.pending_action: str | None = None
         self.pending_action_source: str | None = None
         self.experience_count = 0
@@ -198,6 +209,45 @@ class MNNLearningAgent:
                 or (review_strategy and strategy_result is not None and strategy_result["status"] in {"candidate", "abstain"})
             ),
         }
+
+    def record_strategy_experiment_proposal(
+        self, experiment_id: str, decision: Mapping, *, hypothesis: str,
+        planned_action: str | None = None,
+    ) -> MemoryFragment:
+        """Explicitly persist a reviewed proposal; never executes the planned action."""
+        if self.strategy_experiment_log is None:
+            raise ValueError("a strategy_experiment_log must be configured")
+        if not isinstance(decision, Mapping):
+            raise ValueError("decision must be the mapping returned by decide()")
+        context = decision.get("context")
+        current_action = decision.get("action")
+        review = decision.get("strategy_review")
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("decision must include a non-empty context")
+        if not isinstance(current_action, str) or current_action not in self.learner.actions:
+            raise ValueError("decision must include a configured current action")
+        if not isinstance(review, Mapping):
+            raise ValueError("decision must include strategy_review from review_strategy=True")
+        candidate = review.get("candidate_action")
+        selected_plan = planned_action if planned_action is not None else candidate
+        if selected_plan is None:
+            raise ValueError("planned_action is required when the review has no candidate")
+        return self.strategy_experiment_log.begin(
+            experiment_id, hypothesis=hypothesis, context=context,
+            current_action=current_action, planned_action=selected_plan, review=review,
+        )
+
+    def record_strategy_experiment_outcome(
+        self, experiment_id: str, *, tested_action: str, observed_reward: float,
+        decision: str, observation: str = "",
+    ) -> MemoryFragment:
+        """Persist an externally observed trial result; does not change the policy."""
+        if self.strategy_experiment_log is None:
+            raise ValueError("a strategy_experiment_log must be configured")
+        return self.strategy_experiment_log.complete(
+            experiment_id, tested_action=tested_action, observed_reward=observed_reward,
+            decision=decision, observation=observation,
+        )
 
     def resolve(self, reward: float, *, context: str = "") -> dict:
         """Learn from the pending action and archive its observed outcome."""
@@ -351,6 +401,7 @@ class MNNLearningAgent:
         cls, data: Mapping, memory: FragmentMemory, *,
         concept_advisor: MNNConceptAdvisor | None = None,
         outcome_policy: MNNContextualOutcomePolicy | None = None,
+        strategy_experiment_log: MNNStrategyExperimentLog | None = None,
     ) -> "MNNLearningAgent":
         schema_version = data.get("schema_version")
         if schema_version not in (1, 2):
@@ -359,6 +410,7 @@ class MNNLearningAgent:
         agent = cls(
             learner, memory, agent_id=data["agent_id"],
             concept_advisor=concept_advisor, outcome_policy=outcome_policy,
+            strategy_experiment_log=strategy_experiment_log,
         )
         pending = data.get("pending_action")
         if pending is not None and pending not in learner.actions:
