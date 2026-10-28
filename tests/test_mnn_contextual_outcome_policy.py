@@ -108,7 +108,7 @@ class MNNContextualOutcomePolicyTests(unittest.TestCase):
 
     def test_recency_weighting_adapts_after_reward_reversal(self):
         # Older evidence favours left; newer evidence favours right.
-        for index in range(1, 4):
+        for index in range(1, 6):
             self.memory.add(
                 "old left outcome", kind="action-outcome",
                 source_uri=f"test://old-left-{index}", confidence=1.0,
@@ -123,7 +123,7 @@ class MNNContextualOutcomePolicyTests(unittest.TestCase):
                           "context": "quiet morning", "decision": index},
                 fragment_id=f"old-right-{index}",
             )
-        for index in range(4, 7):
+        for index in range(6, 9):
             self.memory.add(
                 "new left outcome", kind="action-outcome",
                 source_uri=f"test://new-left-{index}", confidence=1.0,
@@ -154,7 +154,7 @@ class MNNContextualOutcomePolicyTests(unittest.TestCase):
         self.assertEqual(recency["status"], "recommended")
         self.assertEqual(recency["action"], "right")
         self.assertEqual(self.memory.count(), before_count)
-        self.assertEqual(recency["sample_counts"], {"left": 6, "right": 6})
+        self.assertEqual(recency["sample_counts"], {"left": 8, "right": 8})
 
     def test_recency_weighting_preserves_legacy_fragments_without_decision(self):
         self.add_outcome("left-1", "left", 1.0)
