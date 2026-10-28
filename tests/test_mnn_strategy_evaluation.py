@@ -77,8 +77,8 @@ class StrategyExperimentEvaluationTests(unittest.TestCase):
         sequence = [
             ("baseline", 0.3), ("candidate", 0.8),
             ("baseline", 0.3), ("candidate", 0.9),
-            ("baseline", 0.4), ("candidate", 0.2),
-            ("baseline", 0.3), ("candidate", 0.1),
+            ("baseline", 0.4), ("candidate", 0.1),
+            ("baseline", 0.3), ("candidate", 0.0),
         ]
         for i, (action, reward) in enumerate(sequence):
             self.trial(f"temporal-{i}", action, reward, campaign="temporal")
