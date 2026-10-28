@@ -27,7 +27,7 @@ class MNNContextualOutcomePolicy:
         *,
         min_samples_per_action: int = 2,
         min_reward_margin: float = 0.1,
-        min_context_overlap: float = 0.5,
+        min_context_overlap: float = 0.6,
     ) -> None:
         if not isinstance(memory, FragmentMemory):
             raise ValueError("memory must be a FragmentMemory")
