@@ -23,6 +23,7 @@ from .mnn_experience import MNNExperienceCycle
 from .mnn_memory_consolidation import ConsolidatedMemory, MNNMemoryConsolidator
 from .mnn_reward import RewardModulator
 from .mnn_reward_drift import MNNRewardDriftDetector
+from .mnn_strategy_review import MNNStrategyReviewer
 from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
 
@@ -35,6 +36,6 @@ __all__ = [
     "ConceptHypothesis", "MNNConceptBuilder", "ConceptReview", "MNNConceptReviewer",
     "ConceptRecommendation", "MNNConceptAdvisor", "MNNContextualOutcomePolicy",
     "DuplicateKnowledgeError", "KnowledgeDocument", "KnowledgeHit", "KnowledgeStore",
-    "IntegrityError", "MNN", "MNNActionLearner", "MNNLearningAgent", "MNNRewardDriftDetector",
+    "IntegrityError", "MNN", "MNNActionLearner", "MNNLearningAgent", "MNNRewardDriftDetector", "MNNStrategyReviewer",
     "MNNCognitionAdapter", "MNNExperienceCycle", "RewardModulator", "Unit", "VirtualBrain",
 ]
