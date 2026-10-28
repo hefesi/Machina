@@ -16,6 +16,7 @@ from .mnn_action_learning import MNNActionLearner
 from .mnn_agent import MNNLearningAgent
 from .mnn_adapter import MNNCognitionAdapter
 from .mnn_concept_review import ConceptReview, MNNConceptReviewer
+from .mnn_concept_advisor import ConceptRecommendation, MNNConceptAdvisor
 from .mnn_concepts import ConceptHypothesis, MNNConceptBuilder
 from .mnn_experience import MNNExperienceCycle
 from .mnn_memory_consolidation import ConsolidatedMemory, MNNMemoryConsolidator
@@ -30,6 +31,7 @@ __all__ = [
     "ContractKind", "CycleAudit", "CycleResult", "EventStore", "FragmentMemory",
     "MemoryFragment", "ConsolidatedMemory", "MNNMemoryConsolidator",
     "ConceptHypothesis", "MNNConceptBuilder", "ConceptReview", "MNNConceptReviewer",
+    "ConceptRecommendation", "MNNConceptAdvisor",
     "DuplicateKnowledgeError", "KnowledgeDocument", "KnowledgeHit", "KnowledgeStore",
     "IntegrityError", "MNN", "MNNActionLearner", "MNNLearningAgent",
     "MNNCognitionAdapter", "MNNExperienceCycle", "RewardModulator", "Unit", "VirtualBrain",
