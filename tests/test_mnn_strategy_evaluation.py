@@ -201,6 +201,47 @@ class StrategyExperimentEvaluationTests(unittest.TestCase):
                 ["campaign-A"], min_agreement_fraction=0.5
             )
 
+    def test_holdout_validation_requires_independent_replication(self):
+        exploration = ("explore-1", "explore-2", "explore-3")
+        validation = ("holdout-1", "holdout-2", "holdout-3")
+        for campaign in exploration + validation:
+            for i, reward in enumerate((0.2, 0.3)):
+                self.trial(f"{campaign}-base-{i}", "baseline", reward, campaign=campaign)
+            for i, reward in enumerate((0.8, 0.9)):
+                self.trial(f"{campaign}-candidate-{i}", "candidate", reward, campaign=campaign)
+        before = [(f.id, dict(f.metadata)) for f in self.memory.archive()]
+        result = self.evaluator.evaluate_with_holdout(exploration, validation)
+        after = [(f.id, dict(f.metadata)) for f in self.memory.archive()]
+        self.assertEqual("candidate_replicated", result["status"])
+        self.assertTrue(result["groups_disjoint"])
+        self.assertFalse(result["raw_trials_pooled"])
+        self.assertFalse(result["causal_claim"])
+        self.assertEqual(before, after)
+
+    def test_holdout_validation_detects_failure_to_replicate(self):
+        for campaign in ("explore-1", "explore-2"):
+            for i, reward in enumerate((0.2, 0.3)):
+                self.trial(f"{campaign}-base-{i}", "baseline", reward, campaign=campaign)
+            for i, reward in enumerate((0.8, 0.9)):
+                self.trial(f"{campaign}-candidate-{i}", "candidate", reward, campaign=campaign)
+        for campaign in ("holdout-1", "holdout-2"):
+            for i, reward in enumerate((0.8, 0.9)):
+                self.trial(f"{campaign}-base-{i}", "baseline", reward, campaign=campaign)
+            for i, reward in enumerate((0.2, 0.3)):
+                self.trial(f"{campaign}-candidate-{i}", "candidate", reward, campaign=campaign)
+        result = self.evaluator.evaluate_with_holdout(
+            ["explore-1", "explore-2"], ["holdout-1", "holdout-2"]
+        )
+        self.assertEqual("not_replicated", result["status"])
+
+    def test_holdout_validation_rejects_overlapping_campaigns(self):
+        with self.assertRaises(ValueError):
+            self.evaluator.evaluate_with_holdout(["same"], ["same"])
+
+    def test_holdout_validation_requires_unique_campaign_ids(self):
+        with self.assertRaises(ValueError):
+            self.evaluator.evaluate_with_holdout(["a", "a"], ["b", "c"])
+
     def test_validation(self):
         with self.assertRaises(ValueError):
             MNNStrategyExperimentEvaluator(self.memory, ["a", "b"], min_samples_per_action=0)
