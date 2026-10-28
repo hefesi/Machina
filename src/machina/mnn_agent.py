@@ -14,6 +14,7 @@ from .fragment_memory import FragmentMemory, MemoryFragment
 from .mnn_action_learning import MNNActionLearner
 from .mnn_concept_advisor import MNNConceptAdvisor
 from .mnn_contextual_outcome_policy import MNNContextualOutcomePolicy
+from .mnn_reward_drift import MNNRewardDriftDetector
 
 
 class MNNLearningAgent:
@@ -27,6 +28,7 @@ class MNNLearningAgent:
         agent_id: str = "machina",
         concept_advisor: MNNConceptAdvisor | None = None,
         outcome_policy: MNNContextualOutcomePolicy | None = None,
+        reward_drift_detector: MNNRewardDriftDetector | None = None,
     ) -> None:
         if not isinstance(agent_id, str) or not agent_id.strip():
             raise ValueError("agent_id must be a non-empty string")
@@ -41,6 +43,13 @@ class MNNLearningAgent:
         if outcome_policy is not None and tuple(outcome_policy.actions) != tuple(learner.actions):
             raise ValueError("outcome_policy actions must match learner actions in the same order")
         self.outcome_policy = outcome_policy
+        if reward_drift_detector is not None and not isinstance(
+            reward_drift_detector, MNNRewardDriftDetector
+        ):
+            raise ValueError("reward_drift_detector must be an MNNRewardDriftDetector or None")
+        if reward_drift_detector is not None and reward_drift_detector.memory is not memory:
+            raise ValueError("reward_drift_detector must use the agent's memory instance")
+        self.reward_drift_detector = reward_drift_detector
         self.pending_action: str | None = None
         self.pending_action_source: str | None = None
         self.experience_count = 0
@@ -51,6 +60,7 @@ class MNNLearningAgent:
         use_concepts: bool = False,
         context_tags: Iterable[str] | None = None,
         use_outcome_policy: bool = False,
+        review_reward_drift: bool = False,
     ) -> dict:
         """Choose an action, optionally using an explicit contextual memory recommendation.
 
@@ -66,6 +76,12 @@ class MNNLearningAgent:
             raise ValueError("use_concepts must be boolean")
         if not isinstance(use_outcome_policy, bool):
             raise ValueError("use_outcome_policy must be boolean")
+        if not isinstance(review_reward_drift, bool):
+            raise ValueError("review_reward_drift must be boolean")
+        if review_reward_drift and self.reward_drift_detector is None:
+            raise ValueError("review_reward_drift=True requires a configured reward_drift_detector")
+        if review_reward_drift and (context is None or not context.strip()):
+            raise ValueError("a non-empty context is required when review_reward_drift=True")
         if use_outcome_policy and self.outcome_policy is None:
             raise ValueError("use_outcome_policy=True requires a configured outcome_policy")
         if use_outcome_policy and (context is None or not context.strip()):
@@ -91,6 +107,11 @@ class MNNLearningAgent:
         concept_recommendation = (
             concept_result["recommendation"]
             if concept_result is not None and concept_result["status"] == "recommended"
+            else None
+        )
+        drift_result = (
+            self.reward_drift_detector.detect(context)
+            if review_reward_drift and self.reward_drift_detector is not None and context is not None
             else None
         )
         outcome_result = (
@@ -131,6 +152,7 @@ class MNNLearningAgent:
             "memory_recommendation": recommendation,
             "concept_guidance": concept_result,
             "outcome_policy_result": outcome_result,
+            "reward_drift_review": drift_result,
             "fallback_action": fallback,
             "exploration_policy": "epsilon_greedy" if exploration_epsilon is not None else "scheduled",
             "exploration_epsilon": exploration_epsilon,
@@ -150,6 +172,7 @@ class MNNLearningAgent:
                 (use_memory and recommendation is None and concept_recommendation is None and outcome_recommendation is None)
                 or (use_concepts and concept_recommendation is None)
                 or (use_outcome_policy and outcome_recommendation is None)
+                or (review_reward_drift and drift_result is not None and drift_result["status"] in {"detected", "abstain"})
             ),
         }
 
