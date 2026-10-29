@@ -245,13 +245,10 @@ class FragmentMemory:
                 if row is None:
                     raise KeyError(fragment_id)
                 before = float(row["importance"])
-                # Explicitly pinned memories are protected from negative
-                # usefulness feedback; the archive and active priority remain
-                # available even when a particular retrieval was unhelpful.
-                if bool(row["pinned"]) and delta < 0:
-                    after = before
-                else:
-                    after = min(1.0, max(0.0, before + delta))
+                # Pinning protects retention and active-view priority, not
+                # task relevance. Importance can still adapt while the pinned
+                # fragment remains protected from active-view pruning.
+                after = min(1.0, max(0.0, before + delta))
                 before_after[fragment_id] = {"before": before, "after": after}
             for fragment_id, values in before_after.items():
                 self._db.execute(
