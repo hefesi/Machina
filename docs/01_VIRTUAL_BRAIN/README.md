@@ -31,3 +31,7 @@ A teoria deve investigar, entre outros pontos:
 - quais capacidades adicionais podem ser necessárias para AGI.
 
 Este diretório não define hardware nem implementação do corpo. A interação entre mente e corpo pertence a `03_BRAIN_ORGANISM_INTERACTION`.
+
+## Enquadramento na hipótese fundamental
+
+As seis bases funcionais não são uma receita comprovada para consciência nem uma lista fechada de módulos. São recortes de investigação sobre identidade, integração, memória, cognição, agência e aprendizagem. Devem ser estudadas também pelas relações dinâmicas entre si e com a MNN e o Virtual Organism. O objetivo maior é investigar a possibilidade de um ser artificial, não apenas alcançar AGI ou reproduzir comportamento humano. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
