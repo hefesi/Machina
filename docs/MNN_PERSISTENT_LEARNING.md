@@ -53,3 +53,7 @@ explícito usando `run_benchmark(checkpoint_path=...)`.
 Após confirmar o teste de reinicialização, medir transferência para combinações
 não vistas e testar se a MNN consegue melhorar o resultado de uma tarefa sem
 apenas memorizar os dois contextos de treinamento.
+
+## Enquadramento na hipótese fundamental
+
+O aprendizado persistente deve ser documentado com estado anterior e posterior, dados de experiência, critérios de atualização, regressões e retenção após reinicialização. O objetivo é demonstrar transformação funcional duradoura, sem extrapolar para alegações sobre experiência subjetiva. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
