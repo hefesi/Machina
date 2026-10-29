@@ -420,7 +420,16 @@ class VirtualBrain:
                 "memory.episode_recorded",
                 lambda: self._episode_memory(experience, observation, intent, action_result),
             )
-            self._persist_fragment_memory(episode)
+            self._persist_fragment_memory(
+                episode,
+                retrieved_fragment_ids=[
+                    item["fragment_id"]
+                    for item in retrieval.data.get("fragment_context", [])
+                    if isinstance(item, Mapping)
+                    and isinstance(item.get("fragment_id"), str)
+                ],
+                context=self._text(goal.data.get("description", "")) or "general",
+            )
             if self._stop_if_requested(cycle_id, "memory.episode_recorded", stop_after):
                 return None
 
@@ -1040,36 +1049,57 @@ class VirtualBrain:
         )
         return artifact
 
-    def _persist_fragment_memory(self, episode: Artifact) -> None:
-        """Mirror an episodic event into the optional durable fragment archive.
+    def _persist_fragment_memory(
+        self,
+        episode: Artifact,
+        *,
+        retrieved_fragment_ids: list[str] | None = None,
+        context: str = "general",
+    ) -> None:
+        """Persist an episode and consolidate the fragments co-retrieved with it.
 
-        The episode artifact ID is the fragment ID, making retries idempotent
-        when a cycle resumes after the journal append but before the mirror write.
-        The event journal remains the source of truth for the cognitive cycle.
+        Deterministic operation IDs make both the episode mirror and co-activation
+        evidence safe to replay when a cycle resumes. Co-retrieved fragments are
+        associated through repeated observations; one observation alone does not
+        cross the default consolidation threshold. Context comes from the cycle
+        objective, not from a guessed action-success causal explanation.
         """
         if self.fragment_memory is None:
             return
         fragment_id = episode.id
         try:
             self.fragment_memory.get(fragment_id, record_access=False)
-            return
         except KeyError:
-            pass
-        data = episode.data
-        content = self._text(data["content"])
-        self.fragment_memory.add(
-            content,
-            kind=str(data["memory_type"]),
-            source_uri=f"machina://memory/{fragment_id}",
-            importance=float(data.get("importance", 0.5)),
-            confidence=float(data.get("confidence", 0.5)),
-            tags=(str(data["memory_type"]), str(data.get("consolidation_state", "recorded"))),
-            metadata={
-                "episode_artifact_id": fragment_id,
-                "cycle_id": episode.cycle_id,
-                "evidence_refs": list(data.get("evidence_refs", [])),
-            },
-            fragment_id=fragment_id,
+            data = episode.data
+            content = self._text(data["content"])
+            self.fragment_memory.add(
+                content,
+                kind=str(data["memory_type"]),
+                source_uri=f"machina://memory/{fragment_id}",
+                importance=float(data.get("importance", 0.5)),
+                confidence=float(data.get("confidence", 0.5)),
+                tags=(str(data["memory_type"]), str(data.get("consolidation_state", "recorded"))),
+                metadata={
+                    "episode_artifact_id": fragment_id,
+                    "cycle_id": episode.cycle_id,
+                    "evidence_refs": list(data.get("evidence_refs", [])),
+                },
+                fragment_id=fragment_id,
+            )
+
+        # Only fragments returned by this cycle's retrieval are considered.
+        # Include the new episode so future retrievals can connect experience to
+        # the material that was present during that cycle.
+        coactivated = list(dict.fromkeys([
+            *(retrieved_fragment_ids or []),
+            fragment_id,
+        ]))
+        if len(coactivated) < 2:
+            return
+        self.fragment_memory.observe_coactivation(
+            coactivated,
+            operation_id=f"{fragment_id}:coactivation:v1",
+            context=context,
         )
 
     def _episode_memory(
