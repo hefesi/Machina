@@ -10,6 +10,7 @@ import re
 from typing import Mapping
 
 from .mnn_agent import MNNLearningAgent
+from .mnn_contextual_action_learning import MNNContextualActionLearner
 from .mnn_experience import MNNExperienceCycle
 
 
@@ -23,6 +24,7 @@ class MNNIntegratedExperienceLoop:
         *,
         action_inputs: Mapping[str, str],
         context_inputs: Mapping[str, str] | None = None,
+        contextual_learner: MNNContextualActionLearner | None = None,
     ) -> None:
         if not isinstance(agent, MNNLearningAgent):
             raise ValueError("agent must be an MNNLearningAgent")
@@ -61,7 +63,12 @@ class MNNIntegratedExperienceLoop:
         self.agent = agent
         self.experience_cycle = experience_cycle
         self.action_inputs = dict(action_inputs)
+        if contextual_learner is not None and not isinstance(contextual_learner, MNNContextualActionLearner):
+            raise ValueError("contextual_learner must be an MNNContextualActionLearner or None")
+        if contextual_learner is not None and tuple(contextual_learner.actions) != tuple(agent.learner.actions):
+            raise ValueError("contextual learner actions must match agent actions in the same order")
         self.context_inputs = normalized_context
+        self.contextual_learner = contextual_learner
 
     @staticmethod
     def _tokens(context: str) -> set[str]:
@@ -89,6 +96,15 @@ class MNNIntegratedExperienceLoop:
         context_activations = self.encode_context(context_text)
         decision = self.agent.decide(**decision_options)
         action = decision["action"]
+        contextual_result = None
+        if self.contextual_learner is not None and context_text.strip():
+            contextual_result = self.contextual_learner.recommend(context_text)
+            if contextual_result.get("status") == "recommended":
+                action = contextual_result["action"]
+                self.agent.pending_action = action
+                self.agent.pending_action_source = "contextual_learner"
+                decision = {**decision, "action": action, "predicted_utility": self.agent.learner.predictions()[action], "selection_source": "contextual_learner"}
+        decision["contextual_learning"] = contextual_result
         inputs = {
             unit: float(candidate == action)
             for candidate, unit in self.action_inputs.items()
@@ -127,10 +143,15 @@ class MNNIntegratedExperienceLoop:
             raise ValueError("reward must be a finite number")
         if not isinstance(context, str):
             raise ValueError("context must be a string")
+        action_before_resolve = self.agent.pending_action
         agent_result = self.agent.resolve(value, context=context)
+        contextual_update = None
+        if self.contextual_learner is not None and context.strip() and action_before_resolve is not None:
+            contextual_update = self.contextual_learner.observe(context, action_before_resolve, value)
         neural_result = self.experience_cycle.resolve(value)
         return {
             "action_learning": agent_result["learning_update"],
+            "contextual_learning_update": contextual_update,
             "neural_plasticity": neural_result["weight_changes"],
             "experience_id": agent_result["experience_id"],
             "experience_count": agent_result["experience_count"],
@@ -142,9 +163,10 @@ class MNNIntegratedExperienceLoop:
     def snapshot(self) -> dict:
         """Checkpoint both learning states; SQLite memory is stored separately."""
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "action_inputs": dict(self.action_inputs),
             "context_inputs": dict(self.context_inputs),
+            "contextual_learner": self.contextual_learner.snapshot() if self.contextual_learner else None,
             "agent": self.agent.snapshot(),
             "experience_cycle": self.experience_cycle.snapshot(),
         }
@@ -152,7 +174,7 @@ class MNNIntegratedExperienceLoop:
     @classmethod
     def from_snapshot(cls, data: Mapping, *, memory) -> "MNNIntegratedExperienceLoop":
         """Restore a checkpoint while reconnecting the caller's durable memory."""
-        if data.get("schema_version") != 1:
+        if data.get("schema_version") not in (1, 2):
             raise ValueError("unsupported integrated experience-loop snapshot schema")
         agent = MNNLearningAgent.from_snapshot(data["agent"], memory)
         cycle = MNNExperienceCycle.from_snapshot(data["experience_cycle"])
@@ -161,4 +183,5 @@ class MNNIntegratedExperienceLoop:
             cycle,
             action_inputs=data["action_inputs"],
             context_inputs=data.get("context_inputs", {}),
+            contextual_learner=(MNNContextualActionLearner.from_snapshot(data["contextual_learner"]) if data.get("contextual_learner") is not None else None),
         )
