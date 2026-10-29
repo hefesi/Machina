@@ -564,6 +564,57 @@ class FragmentMemoryTests(unittest.TestCase):
                 context="temperature control",
             )
 
+    def test_sequence_feedback_adjusts_contextual_strength_idempotently(self) -> None:
+        for fragment_id in ("observe", "decide"):
+            self.memory.add(
+                f"sensor sequence {fragment_id}",
+                source_uri=f"test://{fragment_id}",
+                fragment_id=fragment_id,
+            )
+        self.memory.observe_sequence(
+            ["observe", "decide"],
+            operation_id="sequence-feedback-evidence",
+            context="sensor control",
+        )
+        baseline = self.memory.sequence_strength(
+            "observe", "decide", context="sensor control"
+        )
+        scores, applied = self.memory.apply_sequence_feedback_batch(
+            {("observe", "decide"): False},
+            context="sensor control",
+            operation_id="sequence-feedback-negative",
+            strength=0.20,
+        )
+        self.assertTrue(applied)
+        self.assertAlmostEqual(0.30, scores[("observe", "decide")])
+        reduced = self.memory.sequence_strength(
+            "observe", "decide", context="sensor control"
+        )
+        self.assertLess(reduced, baseline)
+
+        retry_scores, applied = self.memory.apply_sequence_feedback_batch(
+            {("observe", "decide"): False},
+            context="SENSOR CONTROL",
+            operation_id="sequence-feedback-negative",
+            strength=0.20,
+        )
+        self.assertFalse(applied)
+        self.assertEqual(scores, retry_scores)
+        self.assertAlmostEqual(reduced, self.memory.sequence_strength(
+            "observe", "decide", context="sensor control"
+        ))
+        self.assertGreater(
+            self.memory.sequence_strength("observe", "decide", context="other task"),
+            0.0,
+        )
+        with self.assertRaisesRegex(ValueError, "different sequence feedback"):
+            self.memory.apply_sequence_feedback_batch(
+                {("observe", "decide"): True},
+                context="sensor control",
+                operation_id="sequence-feedback-negative",
+                strength=0.20,
+            )
+
     def test_directional_sequence_evidence_persists_after_restart(self) -> None:
         for fragment_id in ("before", "after"):
             self.memory.add(
