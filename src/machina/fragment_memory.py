@@ -176,6 +176,20 @@ class FragmentMemory:
             )
         """)
         self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_association_context_evidence (
+                fragment_a TEXT NOT NULL,
+                fragment_b TEXT NOT NULL,
+                context_key TEXT NOT NULL,
+                observations INTEGER NOT NULL CHECK (observations >= 1),
+                last_observed_at TEXT NOT NULL,
+                PRIMARY KEY (fragment_a, fragment_b, context_key),
+                CHECK (fragment_a < fragment_b),
+                FOREIGN KEY (fragment_a, fragment_b)
+                    REFERENCES memory_association_evidence(fragment_a, fragment_b)
+                    ON DELETE CASCADE
+            )
+        """)
+        self._db.execute("""
             CREATE TABLE IF NOT EXISTS memory_association_observations (
                 operation_id TEXT PRIMARY KEY,
                 payload_json TEXT NOT NULL,
@@ -473,6 +487,15 @@ class FragmentMemory:
                 linked = observations >= min_observations
                 if linked:
                     self._link_without_commit(first, second)
+                if context_key is not None:
+                    self._db.execute(
+                        "INSERT INTO memory_association_context_evidence "
+                        "(fragment_a, fragment_b, context_key, observations, last_observed_at) "
+                        "VALUES (?, ?, ?, 1, ?) "
+                        "ON CONFLICT(fragment_a, fragment_b, context_key) DO UPDATE SET "
+                        "observations = observations + 1, last_observed_at = excluded.last_observed_at",
+                        (first, second, context_key, now),
+                    )
                 pair_results.append({
                     "fragment_a": first,
                     "fragment_b": second,
@@ -522,6 +545,7 @@ class FragmentMemory:
         fragment_id: str,
         related_id: str,
         *,
+        context: str | None = None,
         as_of: datetime | None = None,
         half_life_seconds: float | None = None,
     ) -> float:
@@ -539,6 +563,9 @@ class FragmentMemory:
             raise ValueError("related_id must be a non-empty string")
         if fragment_id == related_id:
             raise ValueError("a fragment cannot be associated with itself")
+        if context is not None and (not isinstance(context, str) or not context.strip()):
+            raise ValueError("context must be a non-empty string when provided")
+        context_key = context.strip().casefold() if context is not None else None
         half_life = (
             self.association_decay_half_life_seconds
             if half_life_seconds is None else half_life_seconds
@@ -558,6 +585,15 @@ class FragmentMemory:
         ).fetchone()
         if row is None:
             return 1.0
+        if context_key is not None:
+            contextual_row = self._db.execute(
+                "SELECT observations, last_observed_at FROM memory_association_context_evidence "
+                "WHERE fragment_a = ? AND fragment_b = ? AND context_key = ?",
+                (first, second, context_key),
+            ).fetchone()
+            if contextual_row is None:
+                return 0.0
+            row = contextual_row
         observations = int(row["observations"])
         strength = 1.0 - math.exp(-observations / 2.0)
         if half_life is None:
@@ -682,7 +718,8 @@ class FragmentMemory:
                 # their previous ranking behavior.
                 strengths = [
                     self.association_strength(
-                        source_id, related_id, as_of=datetime.now(timezone.utc)
+                        source_id, related_id, context=context_key,
+                        as_of=datetime.now(timezone.utc)
                     )
                     for source_id in direct_matches
                     if related_id in fragments[source_id].related_ids
