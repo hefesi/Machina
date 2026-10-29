@@ -41,3 +41,7 @@ Os testes cobrem recompensa positiva, recompensa atrasada, erro negativo,
 limites de peso, conexões desabilitadas e restauração de snapshot. A eficácia
 cognitiva mais ampla ainda precisa ser avaliada em benchmarks de tarefas e
 comparada com uma linha de base sem modulação.
+
+## Enquadramento na hipótese fundamental
+
+Modulação por recompensa é uma abstração funcional inspirada em mecanismos biológicos. Não deve ser descrita como dopamina real, prazer ou sentimento. Investigar como sinais de valor e erro de previsão afetam plasticidade, exploração, persistência e escolha, e se essas alterações se integram a uma dinâmica interna estável. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
