@@ -39,7 +39,7 @@ class RetrievalEvaluationTests(unittest.TestCase):
                 )
                 after = evaluate_retrieval(memory, "alpha beta task", ["relevant"], k=2)
                 self.assertEqual(("relevant", "distractor"), after.retrieved_ids)
-                self.assertEqual(1.0, after.precision_at_k)
+                self.assertEqual(0.5, after.precision_at_k)
                 self.assertEqual(1.0, after.recall_at_k)
                 self.assertEqual(1.0, after.reciprocal_rank)
 
