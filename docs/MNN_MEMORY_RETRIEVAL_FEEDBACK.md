@@ -269,3 +269,19 @@ chamador deve fornecer uma sequência sustentada por eventos/episódios ordenado
 isso evita transformar similaridade textual em uma falsa relação de causa e
 efeito. Esta etapa fornece a base persistente para, futuramente, comparar
 sequências e resultados sem apagar o histórico original.
+
+## Feedback explícito sobre sequências
+
+`apply_sequence_feedback_batch(outcomes, context, operation_id, strength=0.10)`
+permite avaliar explicitamente transições direcionais já observadas. Um rótulo
+positivo eleva a utilidade contextual da transição; um rótulo negativo a reduz.
+A utilidade começa em 0.5 e escala a força da sequência por `2 * utilidade`,
+com o resultado limitado a [0, 1]. O valor neutro mantém a força de evidência
+original; isso separa frequência observada de utilidade aprendida.
+
+O feedback é transacional e idempotente, exige uma transição registrada no
+contexto indicado e rejeita a reutilização de um ID com payload diferente.
+Rótulos são fornecidos explicitamente pelo chamador: o sistema não deduz
+causalidade a partir de sucesso ou fracasso, nem altera o conteúdo ou a
+procedência dos fragmentos. A utilidade aprendida num contexto não altera a
+força em outro contexto.
