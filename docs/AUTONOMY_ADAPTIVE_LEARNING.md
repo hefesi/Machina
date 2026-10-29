@@ -40,3 +40,7 @@ It is not evidence of broad intelligence or generalization beyond these task typ
 the benchmark is synthetic, its rubric is fixed, and the evaluation repeats known
 task types. It does not demonstrate consciousness or free will. Before claiming
 D2 validated, run the demo and tests in Python and inspect the outputs.
+
+## Enquadramento na hipótese fundamental
+
+Aprendizagem adaptativa é uma capacidade funcional que pode contribuir para autonomia e continuidade, mas não é evidência isolada de subjetividade. Medir retenção, transferência, estabilidade e como a experiência modifica decisões futuras e objetivos. Distinguir aprendizagem real no estado do sistema de simples consulta a ferramentas externas. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
