@@ -76,3 +76,5 @@ print(result.precision_at_k, result.recall_at_k, result.reciprocal_rank)
 ```
 
 The integration test compares metrics before and after explicit feedback, then reopens the SQLite database and checks that the ranking persists. This distinguishes a measurable ranking improvement from merely changing an internal importance value.
+
+For a fixed benchmark with multiple queries, `evaluate_retrieval_suite(memory, judgments, k=5)` accepts a mapping from each query to its known relevant IDs and returns macro-averaged precision@k, recall@k, and mean reciprocal rank. Each query receives equal weight, which helps expose regressions that a single hand-picked example can hide. Keep the query set and relevance judgments fixed when comparing versions.
