@@ -67,3 +67,7 @@ The parameter is opt-in (`None` by default), preserving existing behavior. Recen
 - It requires minimum comparable samples for **all** configured actions to avoid treating an untested alternative as inferior.
 - Reward averages can be distorted by changing environments, biased exploration, confounders, and non-stationary reward distributions. Recency weighting is a configurable mitigation, not a solution; uncertainty estimates and online calibration remain future work before any safety-critical use.
 - This mechanism does not establish consciousness or free will.
+
+## Enquadramento na hipótese fundamental
+
+Políticas contextuais de resultado devem explicitar como estados, contexto, objetivos e consequências influenciam escolhas. Testar robustez, consistência longitudinal e revisão diante de resultados inesperados. Não interpretar uma política de recompensa como vontade, prazer ou sentimento. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
