@@ -907,6 +907,139 @@ class VirtualBrain:
         )
         return artifact
 
+    def apply_association_feedback(
+        self,
+        cycle_id: str,
+        outcomes: Mapping[tuple[str, str], bool],
+        *,
+        context: str,
+        strength: float = 0.10,
+        feedback_id: str | None = None,
+    ) -> Artifact:
+        """Learn utility for explicit associations after a persisted cycle outcome.
+
+        Both endpoints of every rated pair must have been retrieved in this
+        cycle. This records an auditable outcome link but does not infer that an
+        association caused success: callers provide the pair labels explicitly.
+        """
+        self._require_cycle(cycle_id)
+        if self.fragment_memory is None:
+            raise RuntimeError("fragment memory is not configured for this VirtualBrain")
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("context must be a non-empty string")
+        if not isinstance(outcomes, Mapping) or not outcomes:
+            raise ValueError("outcomes must be a non-empty mapping")
+        normalized: dict[tuple[str, str], bool] = {}
+        for pair, useful in outcomes.items():
+            if not isinstance(pair, tuple) or len(pair) != 2:
+                raise ValueError("each association key must be a pair of fragment IDs")
+            left, right = pair
+            if (
+                not isinstance(left, str) or not left.strip()
+                or not isinstance(right, str) or not right.strip()
+            ):
+                raise ValueError("association fragment IDs must be non-empty strings")
+            if left == right:
+                raise ValueError("a fragment cannot be associated with itself")
+            if not isinstance(useful, bool):
+                raise ValueError("every usefulness label must be boolean")
+            normalized[tuple(sorted((left, right)))] = useful
+
+        retrieval = self.store.latest_artifact(cycle_id, "memory.retrieved")
+        action_result = self.store.latest_artifact(cycle_id, "action.result")
+        evaluation = self.store.latest_artifact(cycle_id, "evaluation.completed")
+        if retrieval is None:
+            raise ValueError("cycle has no persisted memory retrieval to evaluate")
+        if action_result is None or evaluation is None:
+            raise ValueError(
+                "association feedback requires a persisted action result and evaluation"
+            )
+        retrieved_ids = {
+            item.get("fragment_id")
+            for item in retrieval.data.get("fragment_context", [])
+            if isinstance(item, Mapping) and isinstance(item.get("fragment_id"), str)
+        }
+        unknown = sorted({
+            fragment_id for pair in normalized for fragment_id in pair
+            if fragment_id not in retrieved_ids
+        })
+        if unknown:
+            raise ValueError(
+                "association feedback may only rate pairs whose fragments were retrieved "
+                "in this cycle: " + ", ".join(unknown)
+            )
+
+        operation_id = (
+            f"{cycle_id}:association-feedback:v1"
+            if feedback_id is None else feedback_id
+        )
+        if not isinstance(operation_id, str) or not operation_id.strip():
+            raise ValueError("feedback_id must be a non-empty string")
+        serialized_outcomes = [
+            {"fragment_ids": list(pair), "useful": useful}
+            for pair, useful in sorted(normalized.items())
+        ]
+        existing = self.store.latest_artifact(
+            cycle_id, "memory.association_feedback_applied"
+        )
+        if existing is not None:
+            if existing.data.get("feedback_id") != operation_id:
+                raise ValueError("this cycle already has a different association feedback batch")
+            if existing.data.get("outcomes") != serialized_outcomes:
+                raise ValueError("feedback_id was already recorded with different outcomes")
+            if existing.data.get("context") != context.strip().casefold():
+                raise ValueError("feedback_id was already recorded with different context")
+            if existing.data.get("strength") != strength:
+                raise ValueError("feedback_id was already recorded with different strength")
+            return existing
+
+        scores, applied = self.fragment_memory.apply_association_feedback_batch(
+            normalized,
+            context=context,
+            operation_id=operation_id,
+            strength=strength,
+        )
+        artifact = Artifact.create(
+            ContractKind.CYCLE_STATUS,
+            cycle_id=cycle_id,
+            producer="mnn_association_feedback",
+            data={
+                "status": "association_feedback_applied",
+                "checkpoint": "memory.association_feedback_applied",
+                "feedback_id": operation_id,
+                "context": context.strip().casefold(),
+                "strength": float(strength),
+                "outcomes": serialized_outcomes,
+                "scores": [
+                    {
+                        "fragment_ids": list(pair),
+                        "useful": normalized[pair],
+                        "utility_score": score,
+                        "applied": applied,
+                    }
+                    for pair, score in sorted(scores.items())
+                ],
+                "outcome_evidence": {
+                    "action_result_ref": action_result.id,
+                    "action_status": action_result.data["status"],
+                    "observed_result": action_result.data["observed_result"],
+                    "evaluation_ref": evaluation.id,
+                    "evaluation_success": evaluation.data["success"],
+                    "prediction_error": evaluation.data["prediction_error"],
+                },
+            },
+            input_refs=[retrieval.id, action_result.id, evaluation.id],
+            source_refs=retrieval.source_refs,
+            epistemic_status=EpistemicStatus.INTERPRETED,
+            confidence=1.0,
+        )
+        self.store.append(
+            "memory.association_feedback_applied",
+            artifact,
+            causation_id=retrieval.id,
+        )
+        return artifact
+
     def _persist_fragment_memory(self, episode: Artifact) -> None:
         """Mirror an episodic event into the optional durable fragment archive.
 
