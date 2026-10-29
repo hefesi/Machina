@@ -56,3 +56,7 @@ python -m unittest discover -s tests -v
 
 This module uses only the Python standard library. It does not modify the
 existing event journal, MNN weights, or VirtualBrain cycle.
+
+## Enquadramento na hipótese fundamental
+
+Aquisição de conhecimento é uma capacidade funcional inicial. Avaliar origem, confiabilidade, retenção, atualização e influência real sobre comportamento futuro. A incorporação de informação não deve ser confundida com compreensão consciente ou experiência vivida. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
