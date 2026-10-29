@@ -34,8 +34,8 @@ def evaluate_retrieval(
 ) -> RetrievalEvaluation:
     """Evaluate lexical retrieval using explicit relevant fragment IDs.
 
-    Precision is hits divided by the number of returned results (bounded by k),
-    recall is hits divided by the number of relevant IDs, and reciprocal rank
+    Precision@k is hits divided by k, recall@k is hits divided by the number
+    of relevant IDs, and reciprocal rank
     is the inverse rank of the first relevant result (zero if none is found).
     This function does not modify the memory or learn from the labels.
     """
@@ -57,7 +57,7 @@ def evaluate_retrieval(
     retrieved = tuple(item.id for item in memory.recall(query, limit=k))
     relevant_set = set(relevant)
     hits = sum(item_id in relevant_set for item_id in retrieved)
-    precision = hits / len(retrieved) if retrieved else 0.0
+    precision = hits / k
     recall = hits / len(relevant)
     reciprocal_rank = next(
         (1.0 / rank for rank, item_id in enumerate(retrieved, start=1) if item_id in relevant_set),
