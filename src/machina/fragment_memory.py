@@ -627,6 +627,7 @@ class FragmentMemory:
             if utility_row is not None:
                 # 0.5 is neutral, 1.0 doubles influence, 0.0 suppresses it.
                 strength *= 2.0 * float(utility_row["score"])
+        strength = min(1.0, max(0.0, strength))
         if half_life is None:
             return strength
         reference = as_of or datetime.now(timezone.utc)
