@@ -78,6 +78,59 @@ class FragmentMemoryTests(unittest.TestCase):
         results = self.memory.recall("corrente elétrica", include_related=True)
         self.assertEqual({"current", "ohm"}, {item.id for item in results})
 
+    def test_context_feedback_changes_only_contextual_ranking(self) -> None:
+        relevant = self.memory.add(
+            "alpha beta task memory",
+            source_uri="local://context-relevant",
+            importance=0.5,
+            confidence=0.5,
+            fragment_id="z-relevant",
+        )
+        distractor = self.memory.add(
+            "alpha beta task memory",
+            source_uri="local://context-distractor",
+            importance=0.5,
+            confidence=0.5,
+            fragment_id="a-distractor",
+        )
+        baseline = self.memory.recall("alpha beta task", limit=2)
+        self.assertEqual(["a-distractor", "z-relevant"], [item.id for item in baseline])
+
+        scores, applied = self.memory.apply_context_feedback_batch(
+            {"z-relevant": True, "a-distractor": False},
+            context="maintenance",
+            operation_id="maintenance-feedback-1",
+            strength=0.4,
+        )
+        self.assertTrue(applied)
+        self.assertEqual({"z-relevant": 0.9, "a-distractor": 0.1}, scores)
+        contextual = self.memory.recall("alpha beta task", limit=2, context="maintenance")
+        self.assertEqual(["z-relevant", "a-distractor"], [item.id for item in contextual])
+
+        # Another task keeps its neutral contextual scores and original tie-break.
+        other_context = self.memory.recall("alpha beta task", limit=2, context="research")
+        self.assertEqual(["a-distractor", "z-relevant"], [item.id for item in other_context])
+        self.assertEqual(0.5, self.memory.context_importance("z-relevant", "research"))
+        self.assertAlmostEqual(relevant.importance, self.memory.get("z-relevant", record_access=False).importance)
+        self.assertAlmostEqual(distractor.importance, self.memory.get("a-distractor", record_access=False).importance)
+
+        replay_scores, replay_applied = self.memory.apply_context_feedback_batch(
+            {"z-relevant": True, "a-distractor": False},
+            context="MAINTENANCE",
+            operation_id="maintenance-feedback-1",
+            strength=0.4,
+        )
+        self.assertFalse(replay_applied)
+        self.assertEqual(scores, replay_scores)
+        self.assertAlmostEqual(0.9, self.memory.context_importance("z-relevant", "maintenance"))
+        with self.assertRaisesRegex(ValueError, "different context feedback"):
+            self.memory.apply_context_feedback_batch(
+                {"z-relevant": False},
+                context="maintenance",
+                operation_id="maintenance-feedback-1",
+                strength=0.4,
+            )
+
     def test_recall_validates_query_and_limit(self) -> None:
         with self.assertRaises(ValueError):
             self.memory.recall("   ")
