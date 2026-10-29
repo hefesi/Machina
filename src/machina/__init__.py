@@ -18,6 +18,18 @@ from .self_model import SelfModel
 from .mnn_reward import RewardModulator
 from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
+from .mnn_action_learning import MNNActionLearner
+from .mnn_agent import MNNLearningAgent
+from .mnn_concept_review import ConceptReview, MNNConceptReviewer
+from .mnn_concept_advisor import ConceptRecommendation, MNNConceptAdvisor
+from .mnn_concepts import ConceptHypothesis, MNNConceptBuilder
+from .mnn_contextual_outcome_policy import MNNContextualOutcomePolicy
+from .mnn_experience import MNNExperienceCycle
+from .mnn_memory_consolidation import ConsolidatedMemory, MNNMemoryConsolidator
+from .mnn_reward_drift import MNNRewardDriftDetector
+from .mnn_strategy_review import MNNStrategyReviewer
+from .mnn_strategy_experiment import MNNStrategyExperimentLog
+from .mnn_strategy_evaluation import MNNStrategyExperimentEvaluator
 
 __all__ = [
     "Artifact",
@@ -53,4 +65,20 @@ __all__ = [
     "RewardModulator",
     "Unit",
     "VirtualBrain",
+    "ConsolidatedMemory",
+    "MNNMemoryConsolidator",
+    "ConceptHypothesis",
+    "MNNConceptBuilder",
+    "ConceptReview",
+    "MNNConceptReviewer",
+    "ConceptRecommendation",
+    "MNNConceptAdvisor",
+    "MNNContextualOutcomePolicy",
+    "MNNActionLearner",
+    "MNNLearningAgent",
+    "MNNRewardDriftDetector",
+    "MNNStrategyReviewer",
+    "MNNStrategyExperimentLog",
+    "MNNStrategyExperimentEvaluator",
+    "MNNExperienceCycle",
 ]
