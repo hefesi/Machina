@@ -43,3 +43,7 @@ onde:
 Tipos de relação podem incluir neural, associativa, episódica, semântica, preditiva e causal.
 
 A lista é extensível e deve ser validada experimentalmente.
+
+## Enquadramento na hipótese fundamental
+
+O grafo neural representa relações estruturais entre unidades, mas sua existência não demonstra, isoladamente, processamento cognitivo integrado ou experiência subjetiva. Investigar propriedades topológicas e dinâmicas com controles e medidas funcionais, relacionando os resultados ao comportamento longitudinal do sistema. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
