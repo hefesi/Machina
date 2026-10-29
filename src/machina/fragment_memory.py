@@ -190,6 +190,28 @@ class FragmentMemory:
             )
         """)
         self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_association_context_utility (
+                fragment_a TEXT NOT NULL,
+                fragment_b TEXT NOT NULL,
+                context_key TEXT NOT NULL,
+                score REAL NOT NULL CHECK (score BETWEEN 0 AND 1),
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (fragment_a, fragment_b, context_key),
+                CHECK (fragment_a < fragment_b),
+                FOREIGN KEY (fragment_a, fragment_b)
+                    REFERENCES memory_association_evidence(fragment_a, fragment_b)
+                    ON DELETE CASCADE
+            )
+        """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_association_feedback_batches (
+                operation_id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        self._db.execute("""
             CREATE TABLE IF NOT EXISTS memory_association_observations (
                 operation_id TEXT PRIMARY KEY,
                 payload_json TEXT NOT NULL,
@@ -596,6 +618,15 @@ class FragmentMemory:
             row = contextual_row
         observations = int(row["observations"])
         strength = 1.0 - math.exp(-observations / 2.0)
+        if context_key is not None:
+            utility_row = self._db.execute(
+                "SELECT score FROM memory_association_context_utility "
+                "WHERE fragment_a = ? AND fragment_b = ? AND context_key = ?",
+                (first, second, context_key),
+            ).fetchone()
+            if utility_row is not None:
+                # 0.5 is neutral, 1.0 doubles influence, 0.0 suppresses it.
+                strength *= 2.0 * float(utility_row["score"])
         if half_life is None:
             return strength
         reference = as_of or datetime.now(timezone.utc)
@@ -606,6 +637,122 @@ class FragmentMemory:
             observed_at = observed_at.replace(tzinfo=timezone.utc)
         elapsed = max(0.0, (reference - observed_at).total_seconds())
         return strength * math.pow(0.5, elapsed / float(half_life))
+
+    def apply_association_feedback_batch(
+        self,
+        outcomes: Mapping[tuple[str, str], bool],
+        *,
+        context: str,
+        operation_id: str,
+        strength: float = 0.10,
+    ) -> tuple[dict[tuple[str, str], float], bool]:
+        """Adjust the utility of specific associations for one context.
+
+        Positive outcomes raise the contextual utility score; negative outcomes
+        lower it. Scores start neutral at 0.5 and clamp to [0, 1]. The evidence
+        ledger and fragment records are never changed. Operation IDs are
+        idempotent and cannot be reused with a different payload.
+        """
+        self._ensure_open()
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("context must be a non-empty string")
+        context_key = context.strip().casefold()
+        if not isinstance(operation_id, str) or not operation_id.strip():
+            raise ValueError("operation_id must be a non-empty string")
+        amount = _score(strength, "strength")
+        if not isinstance(outcomes, Mapping) or not outcomes:
+            raise ValueError("outcomes must be a non-empty mapping")
+        normalized: dict[tuple[str, str], bool] = {}
+        for pair, useful in outcomes.items():
+            if not isinstance(pair, tuple) or len(pair) != 2:
+                raise ValueError("each association key must be a pair of fragment IDs")
+            left, right = pair
+            if (
+                not isinstance(left, str) or not left.strip()
+                or not isinstance(right, str) or not right.strip()
+            ):
+                raise ValueError("association fragment IDs must be non-empty strings")
+            if left == right:
+                raise ValueError("a fragment cannot be associated with itself")
+            if not isinstance(useful, bool):
+                raise ValueError("every usefulness label must be boolean")
+            normalized[tuple(sorted((left, right)))] = useful
+        payload = {
+            "context": context_key,
+            "outcomes": [
+                {"pair": list(pair), "useful": useful}
+                for pair, useful in sorted(normalized.items())
+            ],
+            "strength": amount,
+        }
+        payload_json = _json(payload)
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            prior = self._db.execute(
+                "SELECT payload_json, result_json FROM memory_association_feedback_batches "
+                "WHERE operation_id = ?", (operation_id,)
+            ).fetchone()
+            if prior is not None:
+                if prior["payload_json"] != payload_json:
+                    raise ValueError("operation_id was already used with different association feedback")
+                saved = json.loads(prior["result_json"])
+                self._db.commit()
+                return {
+                    (item["pair"][0], item["pair"][1]): float(item["score"])
+                    for item in saved
+                }, False
+
+            results: list[dict[str, Any]] = []
+            now = _now()
+            for pair, useful in sorted(normalized.items()):
+                first, second = pair
+                for fragment_id in pair:
+                    exists = self._db.execute(
+                        "SELECT 1 FROM memory_fragments WHERE id = ?", (fragment_id,)
+                    ).fetchone()
+                    if exists is None:
+                        raise KeyError(f"unknown memory fragment: {fragment_id}")
+                evidence = self._db.execute(
+                    "SELECT 1 FROM memory_association_evidence WHERE fragment_a = ? AND fragment_b = ?",
+                    pair,
+                ).fetchone()
+                if evidence is None:
+                    raise KeyError(f"unknown association: {first}, {second}")
+                row = self._db.execute(
+                    "SELECT score FROM memory_association_context_utility "
+                    "WHERE fragment_a = ? AND fragment_b = ? AND context_key = ?",
+                    (first, second, context_key),
+                ).fetchone()
+                before = float(row["score"]) if row is not None else 0.5
+                after = min(1.0, max(0.0, before + (amount if useful else -amount)))
+                results.append({
+                    "pair": [first, second], "useful": useful,
+                    "before": before, "score": after,
+                })
+
+            for item in results:
+                first, second = item["pair"]
+                self._db.execute(
+                    """INSERT INTO memory_association_context_utility
+                    (fragment_a, fragment_b, context_key, score, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(fragment_a, fragment_b, context_key) DO UPDATE SET
+                    score = excluded.score, updated_at = excluded.updated_at""",
+                    (first, second, context_key, item["score"], now),
+                )
+            self._db.execute(
+                "INSERT INTO memory_association_feedback_batches "
+                "(operation_id, payload_json, result_json, created_at) VALUES (?, ?, ?, ?)",
+                (operation_id, payload_json, _json(results), now),
+            )
+            self._db.commit()
+            return {
+                (item["pair"][0], item["pair"][1]): float(item["score"])
+                for item in results
+            }, True
+        except Exception:
+            self._db.rollback()
+            raise
 
     def active(self, *, limit: int = 20, query_tags: tuple[str, ...] | list[str] = ()) -> list[MemoryFragment]:
         """Return a bounded active view; archived fragments remain untouched."""
