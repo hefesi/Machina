@@ -35,3 +35,7 @@ No consumer is required to accept a chemical signal as the sole decision criteri
 ## Limitations and validation plan
 
 The coefficients are initial hypotheses, not biologically calibrated parameters. Unit tests verify determinism, bounded concentrations, prediction-error direction, novelty response, and snapshot round-tripping. They do not prove that the mechanism improves learning. A follow-up benchmark should compare matched agents with and without chemical modulation on reward exploitation, task completion, generalization, retention, and compute cost.
+
+## Enquadramento na hipótese fundamental
+
+A sinalização química é uma abstração computacional inspirada em processos neuromodulatórios, não uma reprodução bioquímica literal nem evidência de emoção ou sentimento. Seus sinais devem ser tratados como variáveis regulatórias com origem, dinâmica, efeitos e limites mensuráveis. Investigar como estados moduladores alteram atenção, exploração, plasticidade, persistência e prioridades na dinâmica integrada de Machina. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
