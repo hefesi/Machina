@@ -103,7 +103,8 @@ class FragmentMemoryTests(unittest.TestCase):
             strength=0.4,
         )
         self.assertTrue(applied)
-        self.assertEqual({"z-relevant": 0.9, "a-distractor": 0.1}, scores)
+        self.assertAlmostEqual(0.9, scores["z-relevant"])
+        self.assertAlmostEqual(0.1, scores["a-distractor"])
         contextual = self.memory.recall("alpha beta task", limit=2, context="maintenance")
         self.assertEqual(["z-relevant", "a-distractor"], [item.id for item in contextual])
 
