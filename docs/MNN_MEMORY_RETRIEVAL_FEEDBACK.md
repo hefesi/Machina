@@ -105,3 +105,26 @@ print(comparison.improved_queries, comparison.regressed_queries)
 ```
 
 Capture `before` before changing importance and `after` only after feedback. The example above leaves the feedback call as an application-specific step because the feedback must be grounded in an observed outcome, not invented labels. This comparison is a measurement aid, not a learning algorithm by itself.
+
+
+## End-to-end feedback experiment
+
+`run_retrieval_feedback_experiment()` combines the measured loop: it verifies that every feedback target was retrieved for the supplied feedback query, captures the benchmark before feedback, applies one idempotent feedback batch, captures it again, and reports per-query and macro metric changes. Both feedback outcomes and relevance judgments remain explicit inputs; the helper does not infer task success.
+
+```python
+from machina.mnn_retrieval_evaluation import run_retrieval_feedback_experiment
+
+result = run_retrieval_feedback_experiment(
+    memory,
+    feedback_query="Recall the sensor calibration",
+    outcomes={"calibration-fragment": True},  # grounded in observed task outcome
+    judgments={"sensor calibration": ["calibration-fragment"]},
+    feedback_id="task-cycle-42",
+    strength=0.1,
+    k=5,
+)
+print(result.comparison.mean_reciprocal_rank_delta)
+print(result.comparison.improved_queries, result.comparison.regressed_queries)
+```
+
+A feedback target outside the query's retrieved results is rejected before mutation. Reusing a feedback ID remains idempotent; rerunning an experiment after the first application can therefore correctly report no additional change.
