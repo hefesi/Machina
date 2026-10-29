@@ -28,7 +28,7 @@ class MNNContextualActionLearnerTests(unittest.TestCase):
         self.train_context(learner, "quiet workload", "left")
         result = learner.recommend("stormy evening")
         self.assertEqual(result["status"], "abstain")
-        self.assertEqual(result["reason"], "insufficient_contextual_observations")
+        self.assertEqual(result["reason"], "insufficient_similar_context_evidence")
 
     def test_abstains_when_contextual_values_are_too_close(self):
         learner = MNNContextualActionLearner(
