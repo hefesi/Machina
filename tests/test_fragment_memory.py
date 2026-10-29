@@ -504,6 +504,86 @@ class FragmentMemoryTests(unittest.TestCase):
             "alpha beta task", context="maintenance"
         )])
 
+    def test_directional_sequence_evidence_is_contextual_and_idempotent(self) -> None:
+        for fragment_id, content in (
+            ("observe", "sensor observes temperature"),
+            ("decide", "controller decides to cool"),
+            ("act", "cooling action executes"),
+        ):
+            self.memory.add(
+                content, source_uri=f"test://{fragment_id}", fragment_id=fragment_id
+            )
+
+        first = self.memory.observe_sequence(
+            ["observe", "decide", "act"],
+            operation_id="episode-sequence-1",
+            context="temperature control",
+        )
+        self.assertTrue(first["applied"])
+        retry = self.memory.observe_sequence(
+            ["observe", "decide", "act"],
+            operation_id="episode-sequence-1",
+            context="TEMPERATURE CONTROL",
+        )
+        self.assertFalse(retry["applied"])
+        self.assertEqual(
+            1,
+            self.memory.sequence_evidence(
+                "observe", "decide", context="temperature control"
+            )["observations"],
+        )
+        self.assertIsNone(
+            self.memory.sequence_evidence("decide", "observe", context="temperature control")
+        )
+        self.assertIsNone(
+            self.memory.sequence_evidence("observe", "decide", context="other task")
+        )
+
+        self.memory.observe_sequence(
+            ["observe", "decide", "act"],
+            operation_id="episode-sequence-2",
+            context="temperature control",
+        )
+        evidence = self.memory.sequence_evidence(
+            "observe", "decide", context="temperature control"
+        )
+        self.assertEqual(2, evidence["observations"])
+        self.assertGreater(
+            self.memory.sequence_strength(
+                "observe", "decide", context="temperature control"
+            ),
+            0.0,
+        )
+        self.assertEqual(
+            0.0, self.memory.sequence_strength("decide", "observe", context="temperature control")
+        )
+        with self.assertRaisesRegex(ValueError, "different sequence payload"):
+            self.memory.observe_sequence(
+                ["act", "decide"],
+                operation_id="episode-sequence-1",
+                context="temperature control",
+            )
+
+    def test_directional_sequence_evidence_persists_after_restart(self) -> None:
+        for fragment_id in ("before", "after"):
+            self.memory.add(
+                f"episode {fragment_id}",
+                source_uri=f"test://{fragment_id}",
+                fragment_id=fragment_id,
+            )
+        self.memory.observe_sequence(
+            ["before", "after"],
+            operation_id="sequence-persist-1",
+            context="workflow",
+        )
+        self.memory.close()
+        self.memory = FragmentMemory(self.path)
+        evidence = self.memory.sequence_evidence(
+            "before", "after", context="workflow"
+        )
+        self.assertIsNotNone(evidence)
+        self.assertEqual(1, evidence["observations"])
+
     def test_recall_validates_query_and_limit(self) -> None:
         with self.assertRaises(ValueError):
             self.memory.recall("   ")
