@@ -131,6 +131,20 @@ class VirtualBrainFragmentMemoryTests(unittest.TestCase):
                 feedback_id="sensor-cycle-feedback",
             )
             self.assertEqual(feedback_event.id, replay.id)
+            with self.assertRaisesRegex(ValueError, "different strength"):
+                brain.apply_retrieval_feedback(
+                    result.cycle_id,
+                    {fragment.id: True},
+                    strength=0.3,
+                    feedback_id="sensor-cycle-feedback",
+                )
+            with self.assertRaisesRegex(ValueError, "different outcomes"):
+                brain.apply_retrieval_feedback(
+                    result.cycle_id,
+                    {fragment.id: False},
+                    strength=0.2,
+                    feedback_id="sensor-cycle-feedback",
+                )
             self.assertEqual(
                 1,
                 sum(
