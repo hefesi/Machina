@@ -168,12 +168,82 @@ class MNNCognitionAdapterTests(unittest.TestCase):
             brain.store.verify_integrity()
             brain.close()
 
+    def test_adapter_prunes_grown_connection_after_repeated_failures(self):
+        from machina.components import AcknowledgeExecutor
+
+        class FailAfterFirst:
+            def __init__(self):
+                self.delegate = AcknowledgeExecutor()
+                self.calls = 0
+
+            def execute(self, intent):
+                self.calls += 1
+                if self.calls > 1:
+                    raise RuntimeError("controlled failure")
+                return self.delegate.execute(intent)
+
+        with tempfile.TemporaryDirectory() as directory:
+            network = MNN(weight_limit=2.0)
+            network.add_unit(Unit("cue", activation="identity"))
+            network.add_unit(Unit("response", activation="identity"))
+            policy = ActivityGrowthPolicy(
+                max_new_connections=1,
+                initial_weight=0.75,
+                min_activity=0.001,
+                allowed_sources={"cue"},
+                allowed_targets={"response"},
+            )
+            adapter = MNNCognitionAdapter(
+                network,
+                input_features={
+                    "cue": "text_length",
+                    "response": "goal_length",
+                },
+                delayed_reward=True,
+                growth_policy=policy,
+                prune_after_negative_outcomes=2,
+            )
+            brain = VirtualBrain(
+                Path(directory) / "brain.sqlite",
+                cognition=adapter,
+                action_executor=FailAfterFirst(),
+            )
+            brain.run_cycle("Grow the association.", "Record it")
+            edge_id = "grown:cue->response"
+            self.assertIn(edge_id, adapter.network.connections)
+            self.assertEqual(adapter.prune_after_negative_outcomes, 2)
+
+            brain.run_cycle("First negative observation.", "Record it")
+            self.assertIn(edge_id, adapter.network.connections)
+            self.assertEqual(adapter.cycle.structural_utility, {edge_id: -1})
+
+            third = brain.run_cycle("Second negative observation.", "Record it")
+            plasticity = next(
+                event.artifact
+                for event in third.events
+                if event.event_type == "mnn.plasticity_applied"
+            )
+            self.assertEqual(
+                plasticity.data["change"]["pruned_connections"], [edge_id]
+            )
+            self.assertNotIn(edge_id, adapter.network.connections)
+            self.assertEqual(adapter.cycle.structural_utility, {})
+            self.assertTrue(brain.audit_cycle(third.cycle_id).valid)
+            brain.store.verify_integrity()
+            brain.close()
+
     def test_growth_policy_requires_delayed_reward(self):
         with self.assertRaisesRegex(ValueError, "requires delayed_reward"):
             MNNCognitionAdapter(
                 self.make_network(),
                 input_features={"text": "text_length"},
                 growth_policy=ActivityGrowthPolicy(),
+            )
+        with self.assertRaisesRegex(ValueError, "requires delayed_reward"):
+            MNNCognitionAdapter(
+                self.make_network(),
+                input_features={"text": "text_length"},
+                prune_after_negative_outcomes=2,
             )
 
     def test_adapter_can_abort_an_orphaned_delayed_experience(self):

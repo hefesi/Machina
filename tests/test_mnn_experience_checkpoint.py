@@ -107,6 +107,38 @@ class MNNExperienceCheckpointTests(unittest.TestCase):
             self.assertEqual(len(result["grown_connections"]), 1)
             self.assertIn("grown:cue->response", restored.network.connections)
 
+    def test_checkpoint_preserves_structural_utility_across_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            network = MNN(weight_limit=2.0)
+            network.add_unit(Unit("cue", activation="identity"))
+            network.add_unit(Unit("response", activation="identity"))
+            policy = ActivityGrowthPolicy(
+                max_new_connections=1,
+                initial_weight=0.75,
+                allowed_sources={"cue"},
+                allowed_targets={"response"},
+            )
+            cycle = MNNExperienceCycle(
+                network,
+                learning_rate=0.1,
+                growth_policy=policy,
+                prune_after_negative_outcomes=2,
+            )
+            edge_id = "grown:cue->response"
+            cycle.step({"cue": 1.0, "response": 1.0})
+            cycle.resolve(1.0)
+            cycle.step({"cue": 1.0, "response": 1.0})
+            cycle.resolve(-1.0)
+            store = MNNExperienceCheckpointStore(Path(directory) / "experience.json")
+            store.save(cycle)
+
+            restored = store.load()
+            self.assertEqual(restored.structural_utility, {edge_id: -1})
+            restored.step({"cue": 1.0, "response": 1.0})
+            result = restored.resolve(-1.0)
+            self.assertEqual(result["pruned_connections"], [edge_id])
+            self.assertNotIn(edge_id, restored.network.connections)
+
     def test_invalid_checkpoint_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "broken.json"

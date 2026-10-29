@@ -53,7 +53,9 @@ process restart and still credit the connections that were active before the
 interruption. An optional `growth_policy` plus `growth_min_reward` can create a
 bounded structural edge after a sufficiently positive outcome; the policy and
 the grown topology are persisted in the experience snapshot. A failed outcome
-does not grow connections.
+does not grow connections. With `prune_after_negative_outcomes`, a grown edge is
+removed after that many consecutive negative outcomes, and its persisted
+utility counter is reset by a positive outcome.
 
 The proposed snapshot and weight deltas are written as an
 `mnn.plasticity_applied` journal event before the live adapter restores that

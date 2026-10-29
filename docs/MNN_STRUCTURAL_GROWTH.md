@@ -54,14 +54,35 @@ snapshot do ciclo persiste a configuração da política. `abort()` nunca cresce
 conexões. A política ainda não escolhe objetivos nem decide sozinha quando
 aprender; o limite de recompensa e o momento da resolução são explícitos.
 
+### Poda de conexões crescidas
+
+```python
+cycle = MNNExperienceCycle(
+    network,
+    growth_policy=policy,
+    prune_after_negative_outcomes=2,
+)
+```
+
+- Apenas conexões criadas pela política de crescimento entram no contador.
+- Cada desfecho negativo consecutivo decrementa a utilidade da conexão.
+- Um desfecho positivo zera o contador; um desfecho neutro não altera.
+- Quando a utilidade chega a `-prune_after_negative_outcomes`, a conexão é
+  removida e seus traços de elegibilidade são descartados.
+- `resolve` retorna `pruned_connections`, e o contador é persistido em
+  `structural_utility` no snapshot do ciclo.
+- A poda exige `growth_policy`; sem ela, a configuração é rejeitada.
+
 ## Benchmarks
 
 ```bash
 python -m benchmarks.mnn_structural_growth
 python -m benchmarks.mnn_rewarded_structural_growth
+python -m benchmarks.mnn_structural_pruning
 python -m unittest tests.test_mnn_structure \
   tests.test_mnn_structural_growth_benchmark \
-  tests.test_mnn_rewarded_structural_growth -v
+  tests.test_mnn_rewarded_structural_growth \
+  tests.test_mnn_structural_pruning -v
 ```
 
 Protocolo:
@@ -78,6 +99,12 @@ de recompensa atrasada: a experiência pendente é salva, recarregada, resolvida
 com recompensa `+1` e só então cresce. Um controle com recompensa `-1` não pode
 criar a aresta.
 
+O benchmark `mnn_structural_pruning` cresce a aresta com recompensa `+1` e aplica
+duas falhas consecutivas com `learning_rate=0`, isolando a manutenção estrutural
+da plasticidade de pesos. A primeira falha preserva a aresta e persiste utilidade
+`-1`; após reinício, a segunda falha remove a aresta e a resposta volta a `0.0`.
+Um controle sem poda mantém a aresta após as mesmas falhas.
+
 Critérios de aprovação:
 
 - resposta inicial: `0.0`;
@@ -85,13 +112,16 @@ Critérios de aprovação:
 - resposta após o crescimento: `0.75`;
 - resposta após reinício: `0.75`;
 - exatamente uma conexão criada, com origem `cue`, destino `response`;
-- pesos e topologia preservados após o checkpoint.
+- pesos e topologia preservados após o checkpoint;
+- poda somente após o número configurado de falhas consecutivas;
+- contador de utilidade preservado após checkpoint.
 
 ## Limitações
 
 Este experimento demonstra apenas uma associação estrutural pequena com teacher
-forcing e recompensa explícita. Ele não demonstra descoberta autônoma de
-topologia, seleção de objetivos, generalização entre tarefas, compreensão
-semântica, consciência ou inteligência geral. O próximo passo é validar se o
-crescimento melhora uma tarefa mantida fora do treino e se a política evita
-crescimento inútil sob recompensa ruidosa ou sinais contraditórios.
+forcing, recompensa explícita e uma regra simples de poda. Ele não demonstra
+descoberta autônoma de topologia, seleção de objetivos, generalização entre
+tarefas, compreensão semântica, consciência ou inteligência geral. O próximo
+passo é validar se o crescimento melhora uma tarefa mantida fora do treino e se
+a manutenção evita crescimento inútil sob recompensa ruidosa, sinais
+contraditórios e ambientes não estacionários.

@@ -41,6 +41,7 @@ class MNNCognitionAdapter:
         max_pending_steps: int | None = None,
         growth_policy: ActivityGrowthPolicy | None = None,
         growth_min_reward: float = 0.0,
+        prune_after_negative_outcomes: int | None = None,
     ) -> None:
         if not input_features:
             raise ValueError("input_features must map at least one unit to a feature")
@@ -56,6 +57,10 @@ class MNNCognitionAdapter:
             raise ValueError("max_pending_steps requires delayed_reward=True")
         if growth_policy is not None and not delayed_reward:
             raise ValueError("growth_policy requires delayed_reward=True")
+        if prune_after_negative_outcomes is not None and not delayed_reward:
+            raise ValueError(
+                "prune_after_negative_outcomes requires delayed_reward=True"
+            )
         self.network = network
         self.input_features = dict(input_features)
         self.base_engine = base_engine or DeterministicCognition()
@@ -70,6 +75,7 @@ class MNNCognitionAdapter:
                 max_pending_steps=max_pending_steps,
                 growth_policy=growth_policy,
                 growth_min_reward=growth_min_reward,
+                prune_after_negative_outcomes=prune_after_negative_outcomes,
             )
             if delayed_reward
             else None
@@ -80,6 +86,11 @@ class MNNCognitionAdapter:
         self.growth_policy = self.cycle.growth_policy if self.cycle is not None else None
         self.growth_min_reward = (
             self.cycle.growth_min_reward if self.cycle is not None else 0.0
+        )
+        self.prune_after_negative_outcomes = (
+            self.cycle.prune_after_negative_outcomes
+            if self.cycle is not None
+            else None
         )
 
     def propose_evaluated_outcome(
@@ -106,6 +117,7 @@ class MNNCognitionAdapter:
                 "validation_status": validation.data["status"],
                 "weight_deltas": resolution["weight_changes"],
                 "grown_connections": resolution["grown_connections"],
+                "pruned_connections": resolution["pruned_connections"],
                 "snapshot": candidate.network.snapshot(),
                 "experience_snapshot": candidate.snapshot(),
                 "pending_steps": resolution["pending_steps"],
@@ -166,8 +178,18 @@ class MNNCognitionAdapter:
                 if cycle.growth_policy is None and self.growth_policy is not None:
                     cycle.growth_policy = self.growth_policy
                     cycle.growth_min_reward = self.growth_min_reward
+                if (
+                    cycle.prune_after_negative_outcomes is None
+                    and self.prune_after_negative_outcomes is not None
+                ):
+                    cycle.prune_after_negative_outcomes = (
+                        self.prune_after_negative_outcomes
+                    )
                 self.growth_policy = cycle.growth_policy
                 self.growth_min_reward = cycle.growth_min_reward
+                self.prune_after_negative_outcomes = (
+                    cycle.prune_after_negative_outcomes
+                )
             self.network = cycle.network
             self.cycle = cycle if self.delayed_reward else None
             return
@@ -181,6 +203,7 @@ class MNNCognitionAdapter:
                 max_pending_steps=self.max_pending_steps,
                 growth_policy=self.growth_policy,
                 growth_min_reward=self.growth_min_reward,
+                prune_after_negative_outcomes=self.prune_after_negative_outcomes,
             )
 
     def restore_from_outcome(self, change: Mapping[str, object]) -> None:

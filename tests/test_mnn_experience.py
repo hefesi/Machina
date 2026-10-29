@@ -22,6 +22,7 @@ class MNNExperienceCycleTests(unittest.TestCase):
         self,
         *,
         growth_min_reward: float = 0.0,
+        prune_after_negative_outcomes: int | None = None,
     ) -> MNNExperienceCycle:
         network = MNN(weight_limit=2.0)
         network.add_unit(Unit("cue", activation="identity"))
@@ -38,6 +39,7 @@ class MNNExperienceCycleTests(unittest.TestCase):
             learning_rate=0.1,
             growth_policy=policy,
             growth_min_reward=growth_min_reward,
+            prune_after_negative_outcomes=prune_after_negative_outcomes,
         )
 
     def test_positive_outcome_can_grow_connections(self):
@@ -76,6 +78,63 @@ class MNNExperienceCycleTests(unittest.TestCase):
         cycle.abort()
         self.assertEqual(cycle.network.connections, {})
 
+    def test_grown_connection_is_pruned_after_repeated_negative_outcomes(self):
+        cycle = self.make_growth_cycle(prune_after_negative_outcomes=2)
+        cycle.step({"cue": 1.0, "response": 1.0})
+        cycle.resolve(1.0)
+        edge_id = "grown:cue->response"
+        self.assertEqual(cycle.structural_utility, {edge_id: 0})
+
+        cycle.step({"cue": 1.0, "response": 1.0})
+        first_failure = cycle.resolve(-1.0)
+        self.assertEqual(first_failure["pruned_connections"], [])
+        self.assertEqual(cycle.structural_utility, {edge_id: -1})
+        self.assertIn(edge_id, cycle.network.connections)
+
+        cycle.step({"cue": 1.0, "response": 1.0})
+        second_failure = cycle.resolve(-1.0)
+        self.assertEqual(second_failure["pruned_connections"], [edge_id])
+        self.assertNotIn(edge_id, cycle.network.connections)
+        self.assertEqual(cycle.structural_utility, {})
+        self.assertEqual(cycle.modulator.eligibility, {})
+
+    def test_positive_outcome_resets_grown_connection_utility(self):
+        cycle = self.make_growth_cycle(prune_after_negative_outcomes=2)
+        cycle.step({"cue": 1.0, "response": 1.0})
+        cycle.resolve(1.0)
+        edge_id = "grown:cue->response"
+
+        cycle.step({"cue": 1.0, "response": 1.0})
+        cycle.resolve(-1.0)
+        self.assertEqual(cycle.structural_utility[edge_id], -1)
+
+        cycle.step({"cue": 1.0, "response": 1.0})
+        cycle.resolve(1.0)
+        self.assertEqual(cycle.structural_utility[edge_id], 0)
+
+        cycle.step({"cue": 1.0, "response": 1.0})
+        cycle.resolve(-1.0)
+        self.assertIn(edge_id, cycle.network.connections)
+        self.assertEqual(cycle.structural_utility[edge_id], -1)
+
+    def test_structural_utility_survives_snapshot(self):
+        cycle = self.make_growth_cycle(prune_after_negative_outcomes=2)
+        cycle.step({"cue": 1.0, "response": 1.0})
+        cycle.resolve(1.0)
+        cycle.step({"cue": 1.0, "response": 1.0})
+        cycle.resolve(-1.0)
+        edge_id = "grown:cue->response"
+
+        snapshot = json.loads(json.dumps(cycle.snapshot()))
+        restored = MNNExperienceCycle.from_snapshot(snapshot)
+
+        self.assertEqual(restored.prune_after_negative_outcomes, 2)
+        self.assertEqual(restored.structural_utility, {edge_id: -1})
+        restored.step({"cue": 1.0, "response": 1.0})
+        result = restored.resolve(-1.0)
+        self.assertEqual(result["pruned_connections"], [edge_id])
+        self.assertNotIn(edge_id, restored.network.connections)
+
     def test_growth_policy_survives_snapshot_and_legacy_loads(self):
         cycle = self.make_growth_cycle()
         cycle.step({"cue": 1.0, "response": 1.0})
@@ -89,11 +148,18 @@ class MNNExperienceCycleTests(unittest.TestCase):
         legacy = {
             key: value
             for key, value in snapshot.items()
-            if key not in {"growth_policy", "growth_min_reward"}
+            if key not in {
+                "growth_policy",
+                "growth_min_reward",
+                "prune_after_negative_outcomes",
+                "structural_utility",
+            }
         }
         legacy_restored = MNNExperienceCycle.from_snapshot(legacy)
         self.assertIsNone(legacy_restored.growth_policy)
         self.assertEqual(legacy_restored.growth_min_reward, 0.0)
+        self.assertIsNone(legacy_restored.prune_after_negative_outcomes)
+        self.assertEqual(legacy_restored.structural_utility, {})
 
     def test_delayed_outcome_updates_prior_eligible_connection(self):
         cycle = self.make_cycle()
@@ -234,6 +300,19 @@ class MNNExperienceCycleTests(unittest.TestCase):
             "negative pending steps": {**valid, "pending_steps": -1},
             "non-mapping network": {**valid, "network": []},
             "non-mapping modulator": {**valid, "modulator": []},
+            "non-mapping structural utility": {**valid, "structural_utility": []},
+            "boolean structural utility": {
+                **valid,
+                "structural_utility": {"action-outcome": True},
+            },
+            "positive structural utility": {
+                **valid,
+                "structural_utility": {"action-outcome": 1},
+            },
+            "unknown structural utility edge": {
+                **valid,
+                "structural_utility": {"missing": -1},
+            },
         }
         for label, snapshot in cases.items():
             with self.subTest(label=label):
@@ -246,6 +325,15 @@ class MNNExperienceCycleTests(unittest.TestCase):
         snapshot = cycle.snapshot()
         snapshot["pending_steps"] = 0
         with self.assertRaisesRegex(ValueError, "closed experience"):
+            MNNExperienceCycle.from_snapshot(snapshot)
+
+    def test_snapshot_rejects_utility_that_should_have_been_pruned(self):
+        cycle = self.make_growth_cycle(prune_after_negative_outcomes=2)
+        cycle.step({"cue": 1.0, "response": 1.0})
+        cycle.resolve(1.0)
+        snapshot = cycle.snapshot()
+        snapshot["structural_utility"] = {"grown:cue->response": -2}
+        with self.assertRaisesRegex(ValueError, "should have been pruned"):
             MNNExperienceCycle.from_snapshot(snapshot)
 
     def test_snapshot_rejects_unknown_eligibility_edge(self):
@@ -273,6 +361,18 @@ class MNNExperienceCycleTests(unittest.TestCase):
             with self.subTest(threshold=threshold):
                 with self.assertRaises(ValueError):
                     MNNExperienceCycle(network, growth_min_reward=threshold)
+        for prune_after in (0, -1, True, 1.5, "2"):
+            with self.subTest(prune_after=prune_after):
+                with self.assertRaises(ValueError):
+                    MNNExperienceCycle(
+                        network,
+                        prune_after_negative_outcomes=prune_after,
+                    )
+        with self.assertRaisesRegex(ValueError, "requires a growth_policy"):
+            MNNExperienceCycle(
+                network,
+                prune_after_negative_outcomes=1,
+            )
 
     def test_modulator_snapshot_requires_explicit_fields(self):
         modulator = RewardModulator()

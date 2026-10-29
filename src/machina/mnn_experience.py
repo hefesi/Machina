@@ -42,6 +42,14 @@ def _pending_limit(value: int | None) -> int | None:
     return value
 
 
+def _positive_limit(value: int | None, name: str) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"{name} must be a positive integer or None")
+    return value
+
+
 class MNNExperienceCycle:
     """Coordinate network steps, eligibility accumulation, and delayed outcomes."""
 
@@ -54,6 +62,7 @@ class MNNExperienceCycle:
         max_pending_steps: int | None = None,
         growth_policy: ActivityGrowthPolicy | None = None,
         growth_min_reward: float = 0.0,
+        prune_after_negative_outcomes: int | None = None,
     ) -> None:
         if not isinstance(network, MNN):
             raise ValueError("network must be an MNN instance")
@@ -73,6 +82,18 @@ class MNNExperienceCycle:
         self.growth_min_reward = _finite_number(
             growth_min_reward, "growth_min_reward"
         )
+        self.prune_after_negative_outcomes = _positive_limit(
+            prune_after_negative_outcomes,
+            "prune_after_negative_outcomes",
+        )
+        if (
+            self.prune_after_negative_outcomes is not None
+            and self.growth_policy is None
+        ):
+            raise ValueError(
+                "prune_after_negative_outcomes requires a growth_policy"
+            )
+        self.structural_utility: dict[str, int] = {}
         self.network = network
         self.modulator = modulator or RewardModulator()
         self.pending_steps = 0
@@ -108,6 +129,7 @@ class MNNExperienceCycle:
             learning_rate=self.learning_rate,
         )
         reward_value = float(reward)
+        pruned_connections = self._prune_weak_grown_connections(reward_value)
         grown_connections = []
         if (
             self.growth_policy is not None
@@ -123,11 +145,15 @@ class MNNExperienceCycle:
                 }
                 for item in self.growth_policy.grow(self.network)
             ]
+            if self.prune_after_negative_outcomes is not None:
+                for item in grown_connections:
+                    self.structural_utility[item["id"]] = 0
         result = {
             "reward": reward_value,
             "pending_steps": self.pending_steps,
             "weight_changes": changes,
             "grown_connections": grown_connections,
+            "pruned_connections": pruned_connections,
             "network_snapshot": self.network.snapshot(),
             "modulator_snapshot": self.modulator.snapshot(),
         }
@@ -154,6 +180,39 @@ class MNNExperienceCycle:
         self.pending_steps = 0
         return result
 
+    def _prune_weak_grown_connections(self, reward: float) -> list[str]:
+        """Track negative outcomes for grown edges and prune them when exhausted.
+
+        Positive outcomes reset an edge's consecutive-negative counter; neutral
+        outcomes leave it unchanged. Only edges created by the configured growth
+        policy are considered.
+        """
+        if self.prune_after_negative_outcomes is None:
+            return []
+        stale = [
+            edge_id
+            for edge_id in self.structural_utility
+            if edge_id not in self.network.connections
+        ]
+        for edge_id in stale:
+            del self.structural_utility[edge_id]
+        if reward < 0:
+            for edge_id in self.structural_utility:
+                self.structural_utility[edge_id] -= 1
+        elif reward > 0:
+            for edge_id in self.structural_utility:
+                self.structural_utility[edge_id] = 0
+        pruned = [
+            edge_id
+            for edge_id, utility in sorted(self.structural_utility.items())
+            if utility <= -self.prune_after_negative_outcomes
+        ]
+        for edge_id in pruned:
+            self.network.remove_connection(edge_id)
+            self.modulator.eligibility.pop(edge_id, None)
+            del self.structural_utility[edge_id]
+        return pruned
+
     def snapshot(self) -> dict:
         """Return JSON-compatible state, including an in-flight experience."""
         return {
@@ -166,6 +225,8 @@ class MNNExperienceCycle:
                 else self.growth_policy.snapshot()
             ),
             "growth_min_reward": self.growth_min_reward,
+            "prune_after_negative_outcomes": self.prune_after_negative_outcomes,
+            "structural_utility": dict(sorted(self.structural_utility.items())),
             "pending_steps": self.pending_steps,
             "network": self.network.snapshot(),
             "modulator": self.modulator.snapshot(),
@@ -187,6 +248,8 @@ class MNNExperienceCycle:
             "max_pending_steps",
             "growth_policy",
             "growth_min_reward",
+            "prune_after_negative_outcomes",
+            "structural_utility",
         }
         unknown = set(data) - allowed
         if unknown:
@@ -224,6 +287,38 @@ class MNNExperienceCycle:
             raise ValueError("growth_policy snapshot must be a mapping")
         else:
             growth_policy = ActivityGrowthPolicy.from_snapshot(growth_data)
+        prune_after = _positive_limit(
+            data.get("prune_after_negative_outcomes"),
+            "prune_after_negative_outcomes",
+        )
+        utility_data = data.get("structural_utility", {})
+        if not isinstance(utility_data, Mapping):
+            raise ValueError("structural_utility must be a mapping")
+        structural_utility: dict[str, int] = {}
+        for edge_id, utility in utility_data.items():
+            if not isinstance(edge_id, str) or not edge_id:
+                raise ValueError("structural_utility keys must be edge IDs")
+            if isinstance(utility, bool) or not isinstance(utility, int):
+                raise ValueError(
+                    f"structural_utility for {edge_id!r} must be an integer"
+                )
+            if utility > 0:
+                raise ValueError(
+                    f"structural_utility for {edge_id!r} cannot be positive"
+                )
+            structural_utility[edge_id] = utility
+        unknown_utility_edges = set(structural_utility) - set(network.connections)
+        if unknown_utility_edges:
+            raise ValueError(
+                "structural_utility references unknown edges: "
+                f"{sorted(unknown_utility_edges)}"
+            )
+        if prune_after is not None and any(
+            utility <= -prune_after for utility in structural_utility.values()
+        ):
+            raise ValueError(
+                "structural_utility contains an edge that should have been pruned"
+            )
         cycle = cls(
             network,
             modulator=modulator,
@@ -231,7 +326,9 @@ class MNNExperienceCycle:
             max_pending_steps=max_pending_steps,
             growth_policy=growth_policy,
             growth_min_reward=data.get("growth_min_reward", 0.0),
+            prune_after_negative_outcomes=prune_after,
         )
+        cycle.structural_utility = structural_utility
         cycle.pending_steps = pending_steps
         return cycle
 
