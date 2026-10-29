@@ -58,3 +58,7 @@ The benchmark uses one critical record, one repeatedly accessed record, and one 
 ## Limits and next experiments
 
 The score weights and tier thresholds are engineering heuristics, not learned parameters or biological constants. The current tier is derived when queried and is not a permanent label written onto a fragment. Future experiments should compare retrieval precision/recall and task reward under realistic streams, test noisy importance estimates, and examine whether consolidation protects useful information without crowding out new evidence. No record is physically forgotten by this component.
+
+## Enquadramento na hipótese fundamental
+
+Consolidação de memória é relevante quando experiências deixam efeitos organizados e duradouros no sistema. Testar quais informações são preservadas, transformadas ou esquecidas e como isso influencia a trajetória futura. Não equiparar consolidação computacional a memória autobiográfica vivida em sentido fenomenal. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
