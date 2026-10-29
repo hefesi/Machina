@@ -121,11 +121,10 @@ class MNNMemoryRetrievalFeedback:
             raise ValueError("strength must be a finite number in [0, 1]")
 
         before = self.memory.get(fragment_id, record_access=False)
+        # Pinning protects retention and active-view priority; it does not
+        # freeze task relevance. A pinned fragment can become less useful for
+        # one retrieval context without being removed or unpinned.
         delta = amount if useful else -amount
-        if before.pinned and delta < 0:
-            # A negative usefulness label is contextual, not permission to
-            # demote an explicitly protected memory.
-            delta = 0.0
         after = self.memory.reinforce(fragment_id, importance_delta=delta)
         event = MemoryFeedbackResult(fragment_id, useful, amount, before.importance, after.importance, feedback_id=None, applied=True)
         return after, event
