@@ -84,6 +84,14 @@ class FragmentMemory:
         self._db.row_factory = sqlite3.Row
         self._db.execute("PRAGMA busy_timeout = 5000")
         self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_feedback_batches (
+                operation_id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
+        self._db.execute("""
             CREATE TABLE IF NOT EXISTS memory_fragments (
                 id TEXT PRIMARY KEY,
                 content TEXT NOT NULL,
@@ -178,6 +186,90 @@ class FragmentMemory:
                 "SELECT * FROM memory_fragments WHERE id = ?", (fragment_id,)
             ).fetchone()
         return self._from_row(row)
+
+    def apply_importance_feedback_batch(
+        self,
+        deltas: Mapping[str, float],
+        *,
+        operation_id: str,
+    ) -> tuple[dict[str, MemoryFragment], dict[str, dict[str, float]], bool]:
+        """Apply an idempotent batch of importance deltas in one SQLite transaction.
+
+        Reusing an operation ID with the same payload returns the original
+        before/after audit values without applying the deltas a second time.
+        Reusing it with different input is rejected. This supports safe retries
+        when a caller also records the outcome in a separate event journal.
+        """
+        self._ensure_open()
+        if not isinstance(operation_id, str) or not operation_id.strip():
+            raise ValueError("operation_id must be a non-empty string")
+        if not isinstance(deltas, Mapping) or not deltas:
+            raise ValueError("deltas must be a non-empty mapping")
+
+        normalized: dict[str, float] = {}
+        for fragment_id, delta in deltas.items():
+            if not isinstance(fragment_id, str) or not fragment_id.strip():
+                raise ValueError("fragment IDs must be non-empty strings")
+            if isinstance(delta, bool) or not isinstance(delta, (int, float)) or not math.isfinite(delta):
+                raise ValueError("each importance delta must be finite")
+            normalized[fragment_id] = float(delta)
+        payload_json = _json(normalized)
+
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            prior = self._db.execute(
+                "SELECT payload_json, result_json FROM memory_feedback_batches WHERE operation_id = ?",
+                (operation_id,),
+            ).fetchone()
+            if prior is not None:
+                if prior["payload_json"] != payload_json:
+                    raise ValueError("operation_id was already used with different feedback")
+                results = json.loads(prior["result_json"])
+                fragments: dict[str, MemoryFragment] = {}
+                for fragment_id in normalized:
+                    row = self._db.execute(
+                        "SELECT * FROM memory_fragments WHERE id = ?", (fragment_id,)
+                    ).fetchone()
+                    if row is None:
+                        raise KeyError(fragment_id)
+                    fragments[fragment_id] = self._from_row(row)
+                self._db.commit()
+                return fragments, results, False
+
+            before_after: dict[str, dict[str, float]] = {}
+            now = _now()
+            for fragment_id, delta in normalized.items():
+                row = self._db.execute(
+                    "SELECT importance FROM memory_fragments WHERE id = ?", (fragment_id,)
+                ).fetchone()
+                if row is None:
+                    raise KeyError(fragment_id)
+                before = float(row["importance"])
+                after = min(1.0, max(0.0, before + delta))
+                before_after[fragment_id] = {"before": before, "after": after}
+            for fragment_id, values in before_after.items():
+                self._db.execute(
+                    "UPDATE memory_fragments SET importance = ?, access_count = access_count + 1, last_accessed_at = ? WHERE id = ?",
+                    (values["after"], now, fragment_id),
+                )
+            self._db.execute(
+                "INSERT INTO memory_feedback_batches (operation_id, payload_json, result_json, created_at) VALUES (?, ?, ?, ?)",
+                (operation_id, payload_json, _json(before_after), now),
+            )
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
+
+        fragments = {}
+        for fragment_id in normalized:
+            row = self._db.execute(
+                "SELECT * FROM memory_fragments WHERE id = ?", (fragment_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(fragment_id)
+            fragments[fragment_id] = self._from_row(row)
+        return fragments, before_after, True
 
     def reinforce(
         self,
