@@ -40,3 +40,7 @@ network weight consolidation: the learner stores observations in SQLite rather
 than updating a neural model. Held-out tasks use new entities and values but
 reuse the same narrow templates. No claim is made about broad transfer, AGI,
 consciousness, or free will.
+
+## Enquadramento na hipótese fundamental
+
+Aprendizado contínuo precisa ser estudado longitudinalmente: o que muda, o que permanece, como conflitos são resolvidos e como experiências passadas afetam escolhas futuras. Distinguir continuidade de atualização de parâmetros de continuidade de identidade funcional. Não inferir experiência subjetiva a partir de retenção ou adaptação. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
