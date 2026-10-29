@@ -177,3 +177,7 @@ validation = evaluator.evaluate_with_holdout(
 - Supported audit decisions are `keep_current`, `validate_candidate_further`,
   and `collect_more_data`; these labels do not modify policy.
 - If `campaign_id` is omitted, the trial is isolated under its own experiment ID.
+
+## Enquadramento na hipótese fundamental
+
+Os experimentos estratégicos devem ser organizados por hipóteses explícitas e resultados refutáveis, incluindo baselines e controles. Priorizar perguntas sobre integração, persistência, atividade autoiniciada, autorregulação e autonomia; declarar claramente quando os resultados medem apenas competência funcional. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
