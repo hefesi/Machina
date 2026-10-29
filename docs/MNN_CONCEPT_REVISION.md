@@ -44,3 +44,7 @@ Tests cover matching evidence, new evidence making an old snapshot stale, explic
 ## Limits
 
 The reviewer relies on tags and explicit `metadata["polarity"]` supplied by the environment or an upstream evaluator. It does not infer contradiction from arbitrary text. `current` means only that the evidence ID set matches the current heuristic hypothesis; it is not a claim that the concept is objectively true. Review should be treated as bookkeeping and uncertainty management, not proof of understanding.
+
+## Enquadramento na hipótese fundamental
+
+A revisão de conceitos é relevante para investigar como Machina pode modificar modelos internos diante de novas experiências e evidências. Registrar proveniência, conflito, critérios de revisão e consequências comportamentais, preservando histórico para auditoria. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
