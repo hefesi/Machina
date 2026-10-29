@@ -10,6 +10,7 @@ MNNMemoryRetrievalFeedback provides an explicit feedback loop between a retrieva
 - Importance remains bounded to [0, 1] and is persisted by the existing memory store.
 - The result object records the applied signal and before/after importance for caller-side logging.
 - `apply_many()` accepts explicit per-fragment labels and validates every ID and label before the first update; it does not blindly reward all recalled fragments.
+- Supplying `feedback_id` persists the batch and its before/after values in the same SQLite database as the fragments. Retrying the same ID and payload is idempotent; reusing the ID with different feedback is rejected.
 
 ## Example
 
@@ -29,5 +30,5 @@ Usefulness is task-relative. A memory can be unhelpful for one query and still b
 
 ## Validation
 
-Unit tests cover positive/negative feedback, persistence across reopen, bounds, invalid inputs, missing fragment IDs, mixed batch updates, and prevalidation that prevents partial updates when an ID or label is invalid. Integration tests verify that feedback can change subsequent lexical recall ranking. Run with:
+Unit tests cover positive/negative feedback, persistence across reopen, bounds, invalid inputs, missing fragment IDs, mixed batch updates, prevalidation, and idempotent retries using `feedback_id`. The feedback ledger and importance updates are committed in one SQLite transaction. Integration tests verify that feedback can change subsequent lexical recall ranking. Run with:
 python -m unittest tests.test_mnn_memory_retrieval_feedback
