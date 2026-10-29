@@ -21,6 +21,8 @@ class MemoryFeedbackResult:
     strength: float
     importance_before: float
     importance_after: float
+    feedback_id: str | None = None
+    applied: bool = True
 
 
 class MNNMemoryRetrievalFeedback:
@@ -78,7 +80,7 @@ class MNNMemoryRetrievalFeedback:
                 fragment_id: amount if useful else -amount
                 for fragment_id, useful in normalized
             }
-            fragments, audit, _ = self.memory.apply_importance_feedback_batch(
+            fragments, audit, applied = self.memory.apply_importance_feedback_batch(
                 deltas, operation_id=feedback_id
             )
             return tuple(
@@ -90,6 +92,8 @@ class MNNMemoryRetrievalFeedback:
                         strength=amount,
                         importance_before=audit[fragment_id]["before"],
                         importance_after=audit[fragment_id]["after"],
+                        feedback_id=feedback_id,
+                        applied=applied,
                     ),
                 )
                 for fragment_id, useful in normalized
@@ -119,5 +123,5 @@ class MNNMemoryRetrievalFeedback:
         before = self.memory.get(fragment_id, record_access=False)
         delta = amount if useful else -amount
         after = self.memory.reinforce(fragment_id, importance_delta=delta)
-        event = MemoryFeedbackResult(fragment_id, useful, amount, before.importance, after.importance)
+        event = MemoryFeedbackResult(fragment_id, useful, amount, before.importance, after.importance, feedback_id=None, applied=True)
         return after, event
