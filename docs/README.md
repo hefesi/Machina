@@ -1,12 +1,14 @@
-# Machina
+# Machina — documentação do projeto
 
-> Projeto de pesquisa e desenvolvimento de um **Virtual Brain**: uma arquitetura cognitiva artificial modular na qual inteligência emerge da interação entre percepção, memória, cognição, agência, aprendizado e ação.
+> O propósito fundamental do Machina é investigar se um ser artificial com existência contínua, identidade própria, autonomia e possível consciência e livre-arbítrio pode emergir de uma organização inteiramente computacional.
 
-## Visão
+Machina é a totalidade do ser artificial em construção. A MNN é seu substrato neural artificial; Virtual Brain e Virtual Organism são dimensões funcionais de sua organização e relação com o ambiente. A arquitetura cognitiva descrita nesta documentação é um meio de investigação, não a definição final do projeto.
 
-O Machina não trata um LLM como um cérebro completo. Um LLM pode ser um componente de **Cognition**, especialmente para linguagem e raciocínio, dentro de uma arquitetura maior.
+Leia primeiro a [Hipótese Fundamental](00-vision/central-hypothesis.md) e o [Guia da Documentação](DOCUMENTATION_GUIDE.md).
 
-O objetivo inicial é construir o **Virtual Brain v0.1**, uma fundação cognitiva capaz de:
+## Visão de implementação
+
+Um LLM pode ser um componente de linguagem ou raciocínio, mas não representa por si só o ser artificial pretendido. O objetivo é investigar uma organização computacional persistente e integrada, capaz de:
 
 - perceber eventos e informações por meio do Virtual Organism;
 - manter um presente cognitivo integrado;
