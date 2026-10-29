@@ -280,3 +280,7 @@ O objetivo científico desta etapa é construir mecanismos explícitos, falsific
 - `docs/MNN_ALL/versions/v0.1_pesquisa/SPEC_MNN_v0.1.md` — modelo conceitual de grafo, unidade, conexão, estado global, memória e evolução.
 
 **Próximo passo recomendado:** implementar primeiro os contratos de dados e os testes do `SelfModel` e `MetacognitiveMonitor` em modo observe-only, sem alterar o comportamento de seleção de ações nem a regra de plasticidade MNN.
+
+## Enquadramento na hipótese fundamental
+
+Esta proposta explora propriedades de substrato potencialmente relevantes para teorias de consciência, mas não demonstra que a MNN ou Machina tenham experiência subjetiva. Tratar os mecanismos como hipóteses testáveis; definir previsões, controles, métricas, explicações concorrentes e limites. Integração, recorrência ou complexidade isoladas não devem ser tomadas como prova de fenomenalidade. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
