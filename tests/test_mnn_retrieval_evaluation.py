@@ -5,7 +5,11 @@ import unittest
 from pathlib import Path
 
 from machina.fragment_memory import FragmentMemory
-from machina.mnn_retrieval_evaluation import evaluate_retrieval, evaluate_retrieval_suite
+from machina.mnn_retrieval_evaluation import (
+    compare_retrieval_suites,
+    evaluate_retrieval,
+    evaluate_retrieval_suite,
+)
 
 
 class RetrievalEvaluationTests(unittest.TestCase):
@@ -82,6 +86,51 @@ class RetrievalEvaluationTests(unittest.TestCase):
 
                 with self.assertRaises(ValueError):
                     evaluate_retrieval_suite(memory, {}, k=1)
+
+    def test_suite_comparison_detects_improvement_without_hiding_control_query(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with FragmentMemory(Path(directory) / "memory.sqlite3") as memory:
+                memory.add(
+                    "alpha beta task memory",
+                    source_uri="test://relevant",
+                    importance=0.1,
+                    confidence=0.5,
+                    fragment_id="relevant",
+                )
+                memory.add(
+                    "alpha beta task memory",
+                    source_uri="test://distractor",
+                    importance=0.2,
+                    confidence=0.5,
+                    fragment_id="distractor",
+                )
+                memory.add(
+                    "solar panel efficiency",
+                    source_uri="test://solar",
+                    fragment_id="solar",
+                )
+                judgments = {
+                    "alpha beta task": ["relevant"],
+                    "solar panel efficiency": ["solar"],
+                }
+                before = evaluate_retrieval_suite(memory, judgments, k=2)
+
+                from machina.mnn_memory_retrieval_feedback import MNNMemoryRetrievalFeedback
+                MNNMemoryRetrievalFeedback(memory).apply(
+                    "relevant", useful=True, strength=0.9, feedback_id="suite-comparison-feedback"
+                )
+                after = evaluate_retrieval_suite(memory, judgments, k=2)
+                comparison = compare_retrieval_suites(before, after)
+
+                self.assertEqual(("alpha beta task",), comparison.improved_queries)
+                self.assertEqual(("solar panel efficiency",), comparison.unchanged_queries)
+                self.assertEqual((), comparison.regressed_queries)
+                self.assertEqual((), comparison.mixed_queries)
+                self.assertGreater(comparison.mean_reciprocal_rank_delta, 0.0)
+
+                incompatible_k = evaluate_retrieval_suite(memory, judgments, k=1)
+                with self.assertRaises(ValueError):
+                    compare_retrieval_suites(before, incompatible_k)
 
     def test_evaluation_rejects_invalid_judgments(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
