@@ -80,6 +80,31 @@ label, before/after scores and timestamp. Idempotent retries return the original
 result and do not create duplicate history events. This makes score changes
 inspectable across process restarts without treating the score as truth.
 
+Contextual relevance can optionally decay toward neutral over time. By default,
+decay is disabled to preserve existing ranking behavior. Enable it by passing
+`context_decay_half_life_seconds` to `FragmentMemory`; for example, a half-life
+of 86,400 seconds means the distance from the stored score to neutral 0.5 is
+halved after one day. Scores above and below 0.5 both approach 0.5, so age alone
+does not turn a memory into a negative signal. The decay is computed at read
+time: persisted scores and audit events are not rewritten.
+
+```python
+from machina.fragment_memory import FragmentMemory
+
+with FragmentMemory(
+    "data/machina-memory.sqlite3",
+    context_decay_half_life_seconds=86_400,
+) as memory:
+    score = memory.context_importance("calibration-fragment", "maintenance")
+    results = memory.recall("sensor calibration", context="maintenance", limit=5)
+```
+
+For deterministic simulations, `context_importance()` accepts an aware
+`datetime` through `as_of` and an optional per-call `half_life_seconds`
+override. Context decay affects only the bounded contextual ranking adjustment;
+it does not delete or edit memory content, global importance, provenance, or
+pinning. Pinned memory remains protected by the active-view policy.
+
 ```python
 scores, applied = memory.apply_context_feedback_batch(
     {"calibration-fragment": True, "outdated-fragment": False},
