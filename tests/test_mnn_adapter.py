@@ -111,6 +111,32 @@ class MNNCognitionAdapterTests(unittest.TestCase):
             brain.store.verify_integrity()
             brain.close()
 
+    def test_adapter_can_abort_an_orphaned_delayed_experience(self):
+        network = self.make_network()
+        adapter = MNNCognitionAdapter(
+            network,
+            input_features={"text": "text_length"},
+            delayed_reward=True,
+        )
+        adapter.cycle.step({"text": 0.5})
+        initial_weight = network.connections["text-to-signal"].weight
+
+        result = adapter.abort_pending_experience()
+
+        self.assertEqual(result["pending_steps"], 1)
+        self.assertEqual(result["discarded_edges"], ["text-to-signal"])
+        self.assertEqual(
+            adapter.network.connections["text-to-signal"].weight, initial_weight
+        )
+        self.assertEqual(adapter.cycle.pending_steps, 0)
+        self.assertEqual(adapter.cycle.modulator.eligibility, {})
+
+        immediate = MNNCognitionAdapter(
+            self.make_network(), input_features={"text": "text_length"}
+        )
+        with self.assertRaisesRegex(RuntimeError, "delayed reward is not enabled"):
+            immediate.abort_pending_experience()
+
     def test_resume_before_delayed_reward_restores_pending_eligibility(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "brain.sqlite"

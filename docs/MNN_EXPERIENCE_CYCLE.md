@@ -14,6 +14,10 @@ atividade original.
   neutra, sem reforçar ou punir pesos.
 - `resolve(reward)` aplica o erro de previsão aos traços acumulados, retorna as
   mudanças de peso e os snapshots, e então limpa os traços.
+- `abort()` descarta uma experiência pendente sem aplicar resultado. Os pesos e
+  a baseline de recompensa são preservados; apenas os traços de elegibilidade
+  daquela experiência são removidos. É a operação explícita para resultados que
+  nunca chegarão.
 - `snapshot()` / `from_snapshot(...)` preservam rede, modulador e uma experiência
   em andamento para retomada após reinício.
 - `MNNExperienceCheckpointStore(path)` grava o snapshot completo com substituição
@@ -41,7 +45,9 @@ cognitivo. Nesse modo:
   inclusive quando a pausa ocorreu depois de `cognition.completed` e antes de
   `mnn.plasticity_applied`;
 - o mesmo estado fechado é restaurado depois de `mnn.plasticity_applied`, sem
-  aplicar a recompensa duas vezes.
+  aplicar a recompensa duas vezes;
+- `abort_pending_experience()` descarta uma experiência órfã no adaptador sem
+  alterar pesos nem baseline.
 
 O padrão continua sendo `delayed_reward=False`, que preserva a plasticidade
 Hebbiana imediata existente.

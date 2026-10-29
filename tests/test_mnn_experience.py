@@ -46,6 +46,39 @@ class MNNExperienceCycleTests(unittest.TestCase):
         cycle.resolve(-1.0)
         self.assertLess(cycle.network.connections["action-outcome"].weight, initial)
 
+    def test_abort_discards_pending_traces_without_changing_weights(self):
+        cycle = self.make_cycle()
+        initial_weight = cycle.network.connections["action-outcome"].weight
+        cycle.step({"action": 1.0})
+        cycle.step({"action": 0.0})
+
+        result = cycle.abort()
+
+        self.assertEqual(result["pending_steps"], 2)
+        self.assertEqual(result["discarded_edges"], ["action-outcome"])
+        self.assertEqual(
+            cycle.network.connections["action-outcome"].weight, initial_weight
+        )
+        self.assertEqual(cycle.pending_steps, 0)
+        self.assertEqual(cycle.modulator.eligibility, {})
+        self.assertEqual(cycle.snapshot()["pending_steps"], 0)
+        with self.assertRaises(RuntimeError):
+            cycle.resolve(1.0)
+        with self.assertRaises(RuntimeError):
+            cycle.abort()
+
+    def test_abort_preserves_the_reward_baseline(self):
+        cycle = self.make_cycle()
+        cycle.step({"action": 1.0})
+        cycle.resolve(1.0)
+        baseline = cycle.modulator.baseline
+        cycle.step({"action": 1.0})
+
+        cycle.abort()
+
+        self.assertEqual(cycle.modulator.baseline, baseline)
+        self.assertIsNotNone(cycle.modulator.baseline)
+
     def test_snapshot_restores_in_flight_experience(self):
         cycle = self.make_cycle()
         cycle.step({"action": 1.0})

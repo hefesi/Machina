@@ -105,6 +105,12 @@ class MNNCognitionAdapter:
             "credit_assignment": "immediate hebbian",
         }
 
+    def abort_pending_experience(self) -> dict:
+        """Discard an orphaned delayed experience without changing weights."""
+        if self.cycle is None:
+            raise RuntimeError("delayed reward is not enabled")
+        return self.cycle.abort()
+
     def _validate_network(self, network: MNN) -> None:
         missing = set(self.input_features) - network.units.keys()
         if missing:

@@ -78,6 +78,25 @@ class MNNExperienceCycle:
         self.pending_steps = 0
         return result
 
+    def abort(self) -> dict:
+        """Discard a pending experience without applying any outcome.
+
+        Weights and the reward baseline are preserved; only the eligibility
+        traces accumulated for this experience are cleared. This is the explicit
+        lifecycle operation for outcomes that will never arrive.
+        """
+        if self.pending_steps == 0:
+            raise RuntimeError("cannot abort an outcome before at least one step")
+        result = {
+            "pending_steps": self.pending_steps,
+            "discarded_edges": sorted(self.modulator.eligibility),
+            "network_snapshot": self.network.snapshot(),
+            "modulator_snapshot": self.modulator.snapshot(),
+        }
+        self.modulator.reset_traces()
+        self.pending_steps = 0
+        return result
+
     def snapshot(self) -> dict:
         """Return JSON-compatible state, including an in-flight experience."""
         return {
