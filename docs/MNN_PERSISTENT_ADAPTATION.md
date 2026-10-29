@@ -26,3 +26,7 @@ The experiment reports reward rate over each phase and the last ten decisions, a
 ## Scope and limitations
 
 This is a small two-action bandit task with deterministic rewards. It does not demonstrate generalization to unseen contexts, causal understanding, biological dopamine, consciousness, or general intelligence. The action learner and fragment memory remain separate subsystems coordinated by the experiment; the memory record documents the environment change rather than autonomously changing the learner's policy.
+
+## Enquadramento na hipótese fundamental
+
+Adaptação persistente deve ser verificada por experimentos longitudinais que examinem retenção, reversibilidade, estabilidade e efeitos em contextos posteriores. A persistência de parâmetros é um requisito técnico possível, mas não equivale automaticamente à continuidade de identidade. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
