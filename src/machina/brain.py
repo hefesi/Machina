@@ -841,7 +841,7 @@ class VirtualBrain:
                 + ", ".join(unknown)
             )
 
-        operation_id = feedback_id or f"{cycle_id}:retrieval-feedback:v1"
+        operation_id = f"{cycle_id}:retrieval-feedback:v1" if feedback_id is None else feedback_id
         if not isinstance(operation_id, str) or not operation_id.strip():
             raise ValueError("feedback_id must be a non-empty string")
         existing = self.store.latest_artifact(cycle_id, "memory.retrieval_feedback_applied")
