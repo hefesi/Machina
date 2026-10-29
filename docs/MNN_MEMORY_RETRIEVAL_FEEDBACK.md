@@ -78,3 +78,30 @@ print(result.precision_at_k, result.recall_at_k, result.reciprocal_rank)
 The integration test compares metrics before and after explicit feedback, then reopens the SQLite database and checks that the ranking persists. This distinguishes a measurable ranking improvement from merely changing an internal importance value.
 
 For a fixed benchmark with multiple queries, `evaluate_retrieval_suite(memory, judgments, k=5)` accepts a mapping from each query to its known relevant IDs and returns macro-averaged precision@k, recall@k, and mean reciprocal rank. Each query receives equal weight, which helps expose regressions that a single hand-picked example can hide. Keep the query set and relevance judgments fixed when comparing versions.
+
+
+## Comparing before/after runs
+
+Use `compare_retrieval_suites(before, after)` to compare two snapshots from the same fixed benchmark. Both snapshots must use the same query set, relevant fragment IDs, and `k`. The result reports macro-metric deltas and classifies each query as improved, regressed, mixed, or unchanged. A query is only called improved or regressed when all three per-query metrics move in the same direction or stay level; metric trade-offs are reported as mixed.
+
+```python
+from machina.mnn_retrieval_evaluation import (
+    compare_retrieval_suites,
+    evaluate_retrieval_suite,
+)
+
+judgments = {
+    "sensor calibration": ["calibration-fragment"],
+    "battery temperature": ["thermal-fragment"],
+}
+
+before = evaluate_retrieval_suite(memory, judgments, k=5)
+# Apply explicit feedback based on an observed outcome.
+after = evaluate_retrieval_suite(memory, judgments, k=5)
+comparison = compare_retrieval_suites(before, after)
+
+print(comparison.mean_reciprocal_rank_delta)
+print(comparison.improved_queries, comparison.regressed_queries)
+```
+
+Capture `before` before changing importance and `after` only after feedback. The example above leaves the feedback call as an application-specific step because the feedback must be grounded in an observed outcome, not invented labels. This comparison is a measurement aid, not a learning algorithm by itself.
