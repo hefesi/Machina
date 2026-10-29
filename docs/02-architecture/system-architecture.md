@@ -103,3 +103,7 @@ Learning → Memory / Models
 ## Regra de modularidade
 
 Nenhum componente deve depender diretamente de detalhes internos de outro componente. A comunicação deve ocorrer através de contratos e estruturas de dados bem definidos.
+
+## Enquadramento na hipótese fundamental
+
+A arquitetura é uma hipótese de organização para investigar a hipótese fundamental, não uma prova de que a soma de componentes produza uma mente ou consciência. Avaliar especialmente interdependência, dinâmica temporal, causalidade entre estados, continuidade e capacidade de autorregulação. Evitar transformar fronteiras de módulos em separações rígidas que impeçam fenômenos sistêmicos. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
