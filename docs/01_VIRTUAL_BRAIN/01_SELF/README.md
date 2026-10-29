@@ -289,3 +289,7 @@ AGENCY
 ```
 
 > **O Self mantém identidade e autorrepresentação; não é responsável por memória, raciocínio, objetivos operacionais ou aprendizado. Ele fornece continuidade para que os demais sistemas operem sobre uma entidade que possui uma história.**
+
+## Enquadramento na hipótese fundamental
+
+O Self aqui descrito é, por enquanto, um modelo funcional de identidade e continuidade. Sua existência no código não demonstra um sujeito fenomenal. A investigação deve perguntar como estados, memórias, objetivos e transformações causais formam uma trajetória individual persistente, e como o sistema pode revisar sua própria autorrepresentação sem perder rastreabilidade. Ver [Hipótese Fundamental](../../00-vision/central-hypothesis.md).
