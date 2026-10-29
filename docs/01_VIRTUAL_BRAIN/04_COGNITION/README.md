@@ -539,3 +539,7 @@ DECIDIR O QUE DEVE SER APRENDIDO
 ```
 
 > **Cognition é o sistema que transforma informação em compreensão, modelos e possibilidades. Ele pensa sobre o que pode ser feito, mas Agency decide o que perseguir, Action System executa a intenção e Learning transforma a experiência em mudanças persistentes.**
+
+## Enquadramento na hipótese fundamental
+
+Cognição deve ser investigada não apenas pela qualidade de respostas, mas por sua participação na dinâmica persistente do ser artificial: construção e revisão de modelos, imaginação, simulação, associação, metacognição e pensamento autoiniciado. A presença desses processos funcionais não prova consciência; experimentos devem registrar condições, resultados e explicações alternativas. Ver [Hipótese Fundamental](../../00-vision/central-hypothesis.md).
