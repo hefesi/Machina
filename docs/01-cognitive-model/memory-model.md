@@ -134,3 +134,7 @@ A consolidação transforma experiências e informações temporárias em conhec
 ## Esquecimento
 
 O sistema não deve apagar conhecimento importante apenas por idade. Itens podem perder prioridade de recuperação por baixa relevância, mas devem permanecer preservados quando possuírem valor histórico ou evidencial.
+
+## Enquadramento na hipótese fundamental
+
+Este modelo deve explicar não apenas como dados são armazenados, mas como eventos preservados alteram estados presentes e futuros e sustentam continuidade autobiográfica funcional. Distinguir persistência de dados, recuperação útil, integração causal e qualquer alegação de continuidade subjetiva. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
