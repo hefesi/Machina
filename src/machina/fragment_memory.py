@@ -74,9 +74,20 @@ class FragmentMemory:
         *,
         decay_per_day: float = 0.04,
         usage_reinforcement: float = 0.08,
+        context_decay_half_life_seconds: float | None = None,
     ) -> None:
         self.decay_per_day = _score(decay_per_day, "decay_per_day")
         self.usage_reinforcement = _score(usage_reinforcement, "usage_reinforcement")
+        if context_decay_half_life_seconds is not None:
+            if (
+                isinstance(context_decay_half_life_seconds, bool)
+                or not isinstance(context_decay_half_life_seconds, (int, float))
+                or not math.isfinite(context_decay_half_life_seconds)
+                or context_decay_half_life_seconds <= 0
+            ):
+                raise ValueError("context_decay_half_life_seconds must be a positive finite number or None")
+            context_decay_half_life_seconds = float(context_decay_half_life_seconds)
+        self.context_decay_half_life_seconds = context_decay_half_life_seconds
         path = str(storage_path)
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -415,9 +426,11 @@ class FragmentMemory:
         context_scores: dict[str, float] = {}
         if context_key is not None:
             context_scores = {
-                str(row["fragment_id"]): float(row["score"])
+                str(row["fragment_id"]): self._effective_context_score(
+                    float(row["score"]), str(row["updated_at"]), as_of=datetime.now(timezone.utc)
+                )
                 for row in self._db.execute(
-                    "SELECT fragment_id, score FROM memory_context_importance WHERE context_key = ?",
+                    "SELECT fragment_id, score, updated_at FROM memory_context_importance WHERE context_key = ?",
                     (context_key,),
                 ).fetchall()
             }
@@ -582,17 +595,67 @@ class FragmentMemory:
             for row in rows
         ]
 
-    def context_importance(self, fragment_id: str, context: str) -> float:
-        """Return a fragment's task-relative score, or neutral 0.5 if unseen."""
+    def context_importance(
+        self,
+        fragment_id: str,
+        context: str,
+        *,
+        as_of: datetime | None = None,
+        half_life_seconds: float | None = None,
+    ) -> float:
+        """Return effective task-relative relevance, decaying toward neutral.
+
+        Decay is opt-in through the constructor or half_life_seconds.
+        as_of is injectable for deterministic tests and simulations. Reads
+        never rewrite the stored score or its feedback audit trail.
+        """
         self._ensure_open()
         if not isinstance(context, str) or not context.strip():
             raise ValueError("context must be a non-empty string")
         self.get(fragment_id, record_access=False)
         row = self._db.execute(
-            "SELECT score FROM memory_context_importance WHERE fragment_id = ? AND context_key = ?",
+            "SELECT score, updated_at FROM memory_context_importance WHERE fragment_id = ? AND context_key = ?",
             (fragment_id, context.strip().casefold()),
         ).fetchone()
-        return float(row["score"]) if row is not None else 0.5
+        if row is None:
+            return 0.5
+        return self._effective_context_score(
+            float(row["score"]), str(row["updated_at"]), as_of=as_of,
+            half_life_seconds=half_life_seconds,
+        )
+
+    def _effective_context_score(
+        self,
+        score: float,
+        updated_at: str,
+        *,
+        as_of: datetime | None = None,
+        half_life_seconds: float | None = None,
+    ) -> float:
+        half_life = (
+            self.context_decay_half_life_seconds
+            if half_life_seconds is None else half_life_seconds
+        )
+        if half_life is None:
+            return score
+        if (
+            isinstance(half_life, bool)
+            or not isinstance(half_life, (int, float))
+            or not math.isfinite(half_life)
+            or half_life <= 0
+        ):
+            raise ValueError("half_life_seconds must be a positive finite number")
+        reference = as_of or datetime.now(timezone.utc)
+        if not isinstance(reference, datetime):
+            raise ValueError("as_of must be a datetime or None")
+        if reference.tzinfo is None or reference.utcoffset() is None:
+            raise ValueError("as_of must be timezone-aware")
+        stored_at = datetime.fromisoformat(updated_at)
+        if stored_at.tzinfo is None or stored_at.utcoffset() is None:
+            stored_at = stored_at.replace(tzinfo=timezone.utc)
+        elapsed = max(0.0, (reference - stored_at).total_seconds())
+        retention = math.pow(0.5, elapsed / float(half_life))
+        return 0.5 + (score - 0.5) * retention
 
     def count(self) -> int:
         self._ensure_open()
