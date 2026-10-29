@@ -181,6 +181,93 @@ class VirtualBrainFragmentMemoryTests(unittest.TestCase):
             brain.store.verify_integrity()
             brain.close()
 
+    def test_association_feedback_is_outcome_linked_and_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            brain = VirtualBrain(
+                root / "brain.sqlite",
+                fragment_memory_path=root / "fragments.sqlite",
+            )
+            left = brain.fragment_memory.add(
+                "alpha sensor calibration record",
+                source_uri="test://alpha-sensor",
+                fragment_id="alpha-sensor",
+            )
+            right = brain.fragment_memory.add(
+                "beta maintenance procedure",
+                source_uri="test://beta-maintenance",
+                fragment_id="beta-maintenance",
+            )
+            brain.fragment_memory.observe_coactivation(
+                [left.id, right.id], operation_id="brain-assoc-observation-1",
+                context="maintenance",
+            )
+            brain.fragment_memory.observe_coactivation(
+                [left.id, right.id], operation_id="brain-assoc-observation-2",
+                context="maintenance",
+            )
+            result = brain.run_cycle(
+                "Recall the alpha sensor calibration and beta maintenance procedure",
+                "Use the alpha sensor and beta maintenance information",
+            )
+            retrieval = next(
+                event.artifact for event in result.events
+                if event.event_type == "memory.retrieved"
+            )
+            retrieved = {
+                item["fragment_id"] for item in retrieval.data["fragment_context"]
+            }
+            self.assertIn(left.id, retrieved)
+            self.assertIn(right.id, retrieved)
+
+            baseline = brain.fragment_memory.association_strength(
+                left.id, right.id, context="maintenance"
+            )
+            event = brain.apply_association_feedback(
+                result.cycle_id,
+                {(left.id, right.id): True},
+                context="maintenance",
+                strength=0.2,
+                feedback_id="brain-assoc-feedback",
+            )
+            self.assertEqual("association_feedback_applied", event.data["status"])
+            self.assertTrue(event.data["scores"][0]["applied"])
+            self.assertGreater(
+                brain.fragment_memory.association_strength(
+                    left.id, right.id, context="maintenance"
+                ),
+                baseline,
+            )
+            action_result = next(
+                item.artifact for item in result.events
+                if item.event_type == "action.result"
+            )
+            evaluation = next(
+                item.artifact for item in result.events
+                if item.event_type == "evaluation.completed"
+            )
+            self.assertEqual(
+                {retrieval.id, action_result.id, evaluation.id},
+                set(event.input_refs),
+            )
+            replay = brain.apply_association_feedback(
+                result.cycle_id,
+                {(right.id, left.id): True},
+                context="MAINTENANCE",
+                strength=0.2,
+                feedback_id="brain-assoc-feedback",
+            )
+            self.assertEqual(event.id, replay.id)
+            self.assertEqual(
+                1,
+                sum(
+                    item.event_type == "memory.association_feedback_applied"
+                    for item in brain.store.events_for_cycle(result.cycle_id)
+                ),
+            )
+            brain.store.verify_integrity()
+            brain.close()
+
     def test_retrieval_feedback_requires_observed_action_outcome(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
