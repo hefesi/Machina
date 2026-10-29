@@ -151,6 +151,27 @@ class FragmentMemory:
                 FOREIGN KEY (fragment_id) REFERENCES memory_fragments(id) ON DELETE CASCADE
             )
         """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_association_evidence (
+                fragment_a TEXT NOT NULL,
+                fragment_b TEXT NOT NULL,
+                observations INTEGER NOT NULL CHECK (observations >= 1),
+                contexts_json TEXT NOT NULL,
+                last_observed_at TEXT NOT NULL,
+                PRIMARY KEY (fragment_a, fragment_b),
+                CHECK (fragment_a < fragment_b),
+                FOREIGN KEY (fragment_a) REFERENCES memory_fragments(id) ON DELETE CASCADE,
+                FOREIGN KEY (fragment_b) REFERENCES memory_fragments(id) ON DELETE CASCADE
+            )
+        """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_association_observations (
+                operation_id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
         self._db.commit()
         self._closed = False
 
@@ -344,14 +365,146 @@ class FragmentMemory:
 
     def link(self, fragment_id: str, related_id: str) -> MemoryFragment:
         """Create a bidirectional association without merging or deleting fragments."""
+        self._link_without_commit(fragment_id, related_id)
+        self._db.commit()
+        return self.get(fragment_id, record_access=False)
+
+    def _link_without_commit(self, fragment_id: str, related_id: str) -> None:
         first = self.get(fragment_id, record_access=False)
         second = self.get(related_id, record_access=False)
         if first.id == second.id:
             raise ValueError("a fragment cannot be linked to itself")
         self._set_related(first, second.id)
         self._set_related(second, first.id)
-        self._db.commit()
-        return self.get(fragment_id, record_access=False)
+
+    def observe_coactivation(
+        self,
+        fragment_ids: list[str] | tuple[str, ...],
+        *,
+        operation_id: str,
+        context: str | None = None,
+        min_observations: int = 2,
+    ) -> dict[str, Any]:
+        """Consolidate recurring co-activation into durable bidirectional links.
+
+        Each operation contributes at most one observation per unordered pair.
+        Links are created only after the pair has co-occurred enough times;
+        fragment contents and provenance are never merged or rewritten.
+        Retrying an operation ID with the same payload is idempotent.
+        """
+        self._ensure_open()
+        if not isinstance(operation_id, str) or not operation_id.strip():
+            raise ValueError("operation_id must be a non-empty string")
+        if isinstance(min_observations, bool) or not isinstance(min_observations, int) or min_observations < 1:
+            raise ValueError("min_observations must be a positive integer")
+        if context is not None and (not isinstance(context, str) or not context.strip()):
+            raise ValueError("context must be a non-empty string when provided")
+        if not isinstance(fragment_ids, (list, tuple)) or len(fragment_ids) < 2:
+            raise ValueError("fragment_ids must contain at least two distinct IDs")
+        if any(not isinstance(item, str) or not item.strip() for item in fragment_ids):
+            raise ValueError("fragment IDs must be non-empty strings")
+        ids = sorted(set(fragment_ids))
+        if len(ids) < 2 or len(ids) != len(fragment_ids):
+            raise ValueError("fragment_ids must contain at least two distinct IDs")
+        context_key = context.strip().casefold() if context is not None else None
+        payload_json = _json({
+            "fragment_ids": ids,
+            "context": context_key,
+            "min_observations": min_observations,
+        })
+        pairs = [(ids[i], ids[j]) for i in range(len(ids)) for j in range(i + 1, len(ids))]
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            prior = self._db.execute(
+                "SELECT payload_json, result_json FROM memory_association_observations WHERE operation_id = ?",
+                (operation_id,),
+            ).fetchone()
+            if prior is not None:
+                if prior["payload_json"] != payload_json:
+                    raise ValueError("operation_id was already used with different coactivation")
+                result = json.loads(prior["result_json"])
+                self._db.commit()
+                result["applied"] = False
+                return result
+
+            for fragment_id in ids:
+                if self._db.execute(
+                    "SELECT 1 FROM memory_fragments WHERE id = ?", (fragment_id,)
+                ).fetchone() is None:
+                    raise KeyError(f"unknown memory fragment: {fragment_id}")
+
+            pair_results: list[dict[str, Any]] = []
+            now = _now()
+            for first, second in pairs:
+                row = self._db.execute(
+                    "SELECT observations, contexts_json FROM memory_association_evidence WHERE fragment_a = ? AND fragment_b = ?",
+                    (first, second),
+                ).fetchone()
+                if row is None:
+                    observations = 1
+                    contexts = [context_key] if context_key is not None else []
+                    self._db.execute(
+                        "INSERT INTO memory_association_evidence "
+                        "(fragment_a, fragment_b, observations, contexts_json, last_observed_at) VALUES (?, ?, ?, ?, ?)",
+                        (first, second, observations, _json(contexts), now),
+                    )
+                else:
+                    observations = int(row["observations"]) + 1
+                    contexts = list(json.loads(row["contexts_json"]))
+                    if context_key is not None and context_key not in contexts:
+                        contexts.append(context_key)
+                        contexts.sort()
+                    self._db.execute(
+                        "UPDATE memory_association_evidence SET observations = ?, contexts_json = ?, last_observed_at = ? "
+                        "WHERE fragment_a = ? AND fragment_b = ?",
+                        (observations, _json(contexts), now, first, second),
+                    )
+                linked = observations >= min_observations
+                if linked:
+                    self._link_without_commit(first, second)
+                pair_results.append({
+                    "fragment_a": first,
+                    "fragment_b": second,
+                    "observations": observations,
+                    "contexts": contexts,
+                    "linked": linked,
+                })
+            result = {"operation_id": operation_id, "pairs": pair_results, "applied": True}
+            self._db.execute(
+                "INSERT INTO memory_association_observations (operation_id, payload_json, result_json, created_at) "
+                "VALUES (?, ?, ?, ?)",
+                (operation_id, payload_json, _json(result), now),
+            )
+            self._db.commit()
+            return result
+        except Exception:
+            self._db.rollback()
+            raise
+
+    def association_evidence(self, fragment_id: str, related_id: str) -> dict[str, Any] | None:
+        """Return accumulated co-activation evidence for a pair, if observed."""
+        self._ensure_open()
+        if not isinstance(fragment_id, str) or not fragment_id.strip():
+            raise ValueError("fragment_id must be a non-empty string")
+        if not isinstance(related_id, str) or not related_id.strip():
+            raise ValueError("related_id must be a non-empty string")
+        if fragment_id == related_id:
+            raise ValueError("a fragment cannot be associated with itself")
+        first, second = sorted((fragment_id, related_id))
+        row = self._db.execute(
+            "SELECT observations, contexts_json, last_observed_at FROM memory_association_evidence "
+            "WHERE fragment_a = ? AND fragment_b = ?",
+            (first, second),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "fragment_a": first,
+            "fragment_b": second,
+            "observations": int(row["observations"]),
+            "contexts": json.loads(row["contexts_json"]),
+            "last_observed_at": str(row["last_observed_at"]),
+        }
 
     def active(self, *, limit: int = 20, query_tags: tuple[str, ...] | list[str] = ()) -> list[MemoryFragment]:
         """Return a bounded active view; archived fragments remain untouched."""
