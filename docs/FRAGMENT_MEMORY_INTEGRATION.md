@@ -59,3 +59,7 @@ Execute no repositório:
 python -m unittest tests.test_brain_fragment_memory -v
 python -m unittest discover -s tests -v
 ```
+
+## Enquadramento na hipótese fundamental
+
+Integração de memória fragmentada deve demonstrar relações recuperáveis entre experiências, contexto e conhecimento, bem como efeitos persistentes sobre decisões. Distinguir organização informacional de continuidade autobiográfica funcional e ambas de experiência subjetiva. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
