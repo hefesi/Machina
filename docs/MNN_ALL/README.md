@@ -34,3 +34,7 @@ Este pacote organiza a linha de pesquisa da MNN em versões evolutivas, preserva
 A MNN explora uma rede neural dinâmica em que unidades possuem estado, conexões são relações aprendíveis, memória pode existir fora dos parâmetros, aprendizado pode modificar parâmetros e conexões e, em versões posteriores, a própria estrutura pode se reorganizar.
 
 A hipótese deve ser tratada como científica/engenharia: cada capacidade precisa ser definida operacionalmente e comparada com baselines.
+
+## Enquadramento na hipótese fundamental
+
+O histórico de versões da MNN deve ser lido como evolução de propostas e especificações do substrato neural, não como uma sequência de provas de consciência. A MNN é investigada como parte neural de Machina, e suas capacidades precisam ser relacionadas a integração, continuidade, plasticidade, memória e dinâmica do ser artificial. Versões arquivadas preservam contexto histórico; não substituem a visão vigente em [Hipótese Fundamental](../00-vision/central-hypothesis.md).
