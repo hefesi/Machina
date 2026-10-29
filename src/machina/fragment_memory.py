@@ -219,6 +219,26 @@ class FragmentMemory:
                 created_at TEXT NOT NULL
             )
         """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_sequence_transitions (
+                previous_fragment_id TEXT NOT NULL,
+                next_fragment_id TEXT NOT NULL,
+                context_key TEXT NOT NULL,
+                observations INTEGER NOT NULL CHECK (observations >= 1),
+                last_observed_at TEXT NOT NULL,
+                PRIMARY KEY (previous_fragment_id, next_fragment_id, context_key),
+                FOREIGN KEY (previous_fragment_id) REFERENCES memory_fragments(id) ON DELETE CASCADE,
+                FOREIGN KEY (next_fragment_id) REFERENCES memory_fragments(id) ON DELETE CASCADE
+            )
+        """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_sequence_batches (
+                operation_id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
         self._db.commit()
         self._closed = False
 
@@ -536,6 +556,109 @@ class FragmentMemory:
         except Exception:
             self._db.rollback()
             raise
+
+    def observe_sequence(
+        self,
+        fragment_ids: list[str] | tuple[str, ...],
+        *,
+        operation_id: str,
+        context: str,
+    ) -> dict[str, Any]:
+        """Record ordered adjacent transitions between explicitly sequenced fragments.
+
+        Unlike co-activation, order matters: A→B is distinct from B→A. The
+        caller must provide a meaningful sequence; recall ranking is not treated
+        as temporal order automatically. Each operation ID is idempotent.
+        """
+        self._ensure_open()
+        if not isinstance(operation_id, str) or not operation_id.strip():
+            raise ValueError("operation_id must be a non-empty string")
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("context must be a non-empty string")
+        if not isinstance(fragment_ids, (list, tuple)) or len(fragment_ids) < 2:
+            raise ValueError("fragment_ids must contain at least two IDs in sequence")
+        if any(not isinstance(item, str) or not item.strip() for item in fragment_ids):
+            raise ValueError("fragment IDs must be non-empty strings")
+        ids = list(fragment_ids)
+        for fragment_id in ids:
+            self.get(fragment_id, record_access=False)
+        context_key = context.strip().casefold()
+        payload_json = _json({"fragment_ids": ids, "context": context_key})
+        transitions = list(zip(ids, ids[1:]))
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            prior = self._db.execute(
+                "SELECT payload_json, result_json FROM memory_sequence_batches WHERE operation_id = ?",
+                (operation_id,),
+            ).fetchone()
+            if prior is not None:
+                if prior["payload_json"] != payload_json:
+                    raise ValueError("operation_id was already used with a different sequence payload")
+                result = json.loads(prior["result_json"])
+                self._db.commit()
+                result["applied"] = False
+                return result
+            now = _now().isoformat()
+            for previous_id, next_id in transitions:
+                self._db.execute(
+                    """INSERT INTO memory_sequence_transitions
+                    (previous_fragment_id, next_fragment_id, context_key, observations, last_observed_at)
+                    VALUES (?, ?, ?, 1, ?)
+                    ON CONFLICT(previous_fragment_id, next_fragment_id, context_key)
+                    DO UPDATE SET observations = observations + 1, last_observed_at = excluded.last_observed_at""",
+                    (previous_id, next_id, context_key, now),
+                )
+            result = {
+                "operation_id": operation_id,
+                "context": context_key,
+                "transitions": [
+                    {"previous_fragment_id": previous_id, "next_fragment_id": next_id}
+                    for previous_id, next_id in transitions
+                ],
+                "applied": True,
+            }
+            self._db.execute(
+                "INSERT INTO memory_sequence_batches(operation_id, payload_json, result_json, created_at) VALUES (?, ?, ?, ?)",
+                (operation_id, payload_json, _json({k: v for k, v in result.items() if k != "applied"}), now),
+            )
+            self._db.commit()
+            return result
+        except Exception:
+            self._db.rollback()
+            raise
+
+    def sequence_evidence(
+        self, previous_fragment_id: str, next_fragment_id: str, *, context: str
+    ) -> dict[str, Any] | None:
+        """Return directional transition evidence for one context."""
+        self._ensure_open()
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("context must be a non-empty string")
+        row = self._db.execute(
+            """SELECT observations, last_observed_at FROM memory_sequence_transitions
+            WHERE previous_fragment_id = ? AND next_fragment_id = ? AND context_key = ?""",
+            (previous_fragment_id, next_fragment_id, context.strip().casefold()),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "previous_fragment_id": previous_fragment_id,
+            "next_fragment_id": next_fragment_id,
+            "context": context.strip().casefold(),
+            "observations": int(row["observations"]),
+            "last_observed_at": str(row["last_observed_at"]),
+        }
+
+    def sequence_strength(
+        self, previous_fragment_id: str, next_fragment_id: str, *, context: str
+    ) -> float:
+        """Return a saturating directional transition strength in [0, 1]."""
+        evidence = self.sequence_evidence(
+            previous_fragment_id, next_fragment_id, context=context
+        )
+        if evidence is None:
+            return 0.0
+        return 1.0 - math.exp(-float(evidence["observations"]) / 2.0)
 
     def association_evidence(self, fragment_id: str, related_id: str) -> dict[str, Any] | None:
         """Return accumulated co-activation evidence for a pair, if observed."""
