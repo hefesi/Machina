@@ -10,19 +10,21 @@ atividade original.
 ## API
 
 - `MNNExperienceCycle(network, modulator=None, learning_rate=0.1,
-  max_pending_steps=None)` cria o ciclo. O limite opcional impede que uma única
-  experiência acumule passos sem limite; ao atingi-lo, `step` falha antes de
-  alterar estados, pesos ou traços.
+  max_pending_steps=None, growth_policy=None, growth_min_reward=0.0)` cria o
+  ciclo. O limite opcional impede que uma única experiência acumule passos sem
+  limite; ao atingi-lo, `step` falha antes de alterar estados, pesos ou traços.
 - `step(inputs)` avança a MNN e acumula traços de elegibilidade usando recompensa
   neutra, sem reforçar ou punir pesos.
 - `resolve(reward)` aplica o erro de previsão aos traços acumulados, retorna as
-  mudanças de peso e os snapshots, e então limpa os traços.
+  mudanças de peso e os snapshots, e então limpa os traços. Se houver
+  `growth_policy` e `reward >= growth_min_reward`, também cresce conexões
+  limitadas e retorna `grown_connections`.
 - `abort()` descarta uma experiência pendente sem aplicar resultado. Os pesos e
   a baseline de recompensa são preservados; apenas os traços de elegibilidade
   daquela experiência são removidos. É a operação explícita para resultados que
   nunca chegarão.
-- `snapshot()` / `from_snapshot(...)` preservam rede, modulador e uma experiência
-  em andamento para retomada após reinício.
+- `snapshot()` / `from_snapshot(...)` preservam rede, modulador, política de
+  crescimento e uma experiência em andamento para retomada após reinício.
 - `MNNExperienceCheckpointStore(path)` grava o snapshot completo com substituição
   atômica (`save(cycle)`) e o restaura com validação (`load()`). Assim, uma
   recompensa atrasada pode chegar depois de um reinício e ainda ser aplicada
@@ -53,10 +55,14 @@ ciclo no adaptador cognitivo. Nesse modo:
 - o mesmo estado fechado é restaurado depois de `mnn.plasticity_applied`, sem
   aplicar a recompensa duas vezes;
 - `abort_pending_experience()` descarta uma experiência órfã no adaptador sem
-  alterar pesos nem baseline.
+  alterar pesos nem baseline;
+- `growth_policy` e `growth_min_reward` podem ser configurados no adaptador;
+  nesse caso, um desfecho que atinja o limite pode criar conexões e o resultado
+  persistido inclui `grown_connections`.
 
 O padrão continua sendo `delayed_reward=False`, que preserva a plasticidade
-Hebbiana imediata existente.
+Hebbiana imediata existente. A política de crescimento exige
+`delayed_reward=True`.
 
 ## Validação
 
@@ -67,6 +73,8 @@ python -m benchmarks.mnn_delayed_reward
 python -m unittest tests.test_mnn_delayed_reward -v
 python -m benchmarks.mnn_experience_learning
 python -m unittest tests.test_mnn_experience_learning -v
+python -m benchmarks.mnn_rewarded_structural_growth
+python -m unittest tests.test_mnn_rewarded_structural_growth -v
 python -m unittest discover -s tests -v
 ```
 
@@ -97,7 +105,8 @@ generalização ampla, raciocínio semântico, consciência ou inteligência ger
 ## Limites
 
 O ciclo não escolhe ações, não constrói um modelo de mundo e não prova
-inteligência. A baseline e os traços são variáveis computacionais abstratas.
-Próximos experimentos devem incluir recompensa negativa, atraso variável,
-interferência entre experiências, retenção após reinício e comparação com uma
-linha de base sem elegibilidade.
+inteligência. A baseline, os traços e o crescimento estrutural são variáveis
+computacionais abstratas. Próximos experimentos devem incluir recompensa
+negativa, atraso variável, interferência entre experiências, retenção após
+reinício, crescimento sob recompensa ruidosa e comparação com uma linha de base
+sem elegibilidade.

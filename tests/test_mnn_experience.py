@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from machina import MNNExperienceCycle
+from machina import ActivityGrowthPolicy, MNNExperienceCycle
 from machina.mnn import Connection, MNN, Unit
 from machina.mnn_reward import RewardModulator
 
@@ -17,6 +17,83 @@ class MNNExperienceCycleTests(unittest.TestCase):
         network.add_unit(Unit("outcome", bias=1.0, activation="identity"))
         network.add_connection(Connection("action-outcome", "action", "outcome", 0.5))
         return MNNExperienceCycle(network, learning_rate=0.1)
+
+    def make_growth_cycle(
+        self,
+        *,
+        growth_min_reward: float = 0.0,
+    ) -> MNNExperienceCycle:
+        network = MNN(weight_limit=2.0)
+        network.add_unit(Unit("cue", activation="identity"))
+        network.add_unit(Unit("response", activation="identity"))
+        policy = ActivityGrowthPolicy(
+            max_new_connections=1,
+            initial_weight=0.75,
+            min_activity=0.1,
+            allowed_sources={"cue"},
+            allowed_targets={"response"},
+        )
+        return MNNExperienceCycle(
+            network,
+            learning_rate=0.1,
+            growth_policy=policy,
+            growth_min_reward=growth_min_reward,
+        )
+
+    def test_positive_outcome_can_grow_connections(self):
+        cycle = self.make_growth_cycle()
+        cycle.step({"cue": 1.0, "response": 1.0})
+
+        result = cycle.resolve(1.0)
+
+        self.assertEqual(len(result["grown_connections"]), 1)
+        grown = result["grown_connections"][0]
+        self.assertEqual(grown["source"], "cue")
+        self.assertEqual(grown["target"], "response")
+        self.assertEqual(grown["weight"], 0.75)
+        self.assertIn(grown["id"], cycle.network.connections)
+        self.assertEqual(
+            [edge["id"] for edge in result["network_snapshot"]["connections"]],
+            [grown["id"]],
+        )
+
+    def test_negative_outcome_does_not_grow_connections(self):
+        cycle = self.make_growth_cycle()
+        cycle.step({"cue": 1.0, "response": 1.0})
+
+        result = cycle.resolve(-1.0)
+
+        self.assertEqual(result["grown_connections"], [])
+        self.assertEqual(cycle.network.connections, {})
+
+    def test_growth_threshold_and_abort_are_respected(self):
+        cycle = self.make_growth_cycle(growth_min_reward=0.5)
+        cycle.step({"cue": 1.0, "response": 1.0})
+        result = cycle.resolve(0.25)
+        self.assertEqual(result["grown_connections"], [])
+
+        cycle.step({"cue": 1.0, "response": 1.0})
+        cycle.abort()
+        self.assertEqual(cycle.network.connections, {})
+
+    def test_growth_policy_survives_snapshot_and_legacy_loads(self):
+        cycle = self.make_growth_cycle()
+        cycle.step({"cue": 1.0, "response": 1.0})
+        snapshot = json.loads(json.dumps(cycle.snapshot()))
+        restored = MNNExperienceCycle.from_snapshot(snapshot)
+
+        self.assertIsNotNone(restored.growth_policy)
+        result = restored.resolve(1.0)
+        self.assertEqual(len(result["grown_connections"]), 1)
+
+        legacy = {
+            key: value
+            for key, value in snapshot.items()
+            if key not in {"growth_policy", "growth_min_reward"}
+        }
+        legacy_restored = MNNExperienceCycle.from_snapshot(legacy)
+        self.assertIsNone(legacy_restored.growth_policy)
+        self.assertEqual(legacy_restored.growth_min_reward, 0.0)
 
     def test_delayed_outcome_updates_prior_eligible_connection(self):
         cycle = self.make_cycle()
@@ -190,6 +267,12 @@ class MNNExperienceCycleTests(unittest.TestCase):
             MNNExperienceCycle("not a network")
         with self.assertRaises(ValueError):
             MNNExperienceCycle(network, modulator="not a modulator")
+        with self.assertRaises(ValueError):
+            MNNExperienceCycle(network, growth_policy="not a policy")
+        for threshold in (True, float("nan"), float("inf"), "high"):
+            with self.subTest(threshold=threshold):
+                with self.assertRaises(ValueError):
+                    MNNExperienceCycle(network, growth_min_reward=threshold)
 
     def test_modulator_snapshot_requires_explicit_fields(self):
         modulator = RewardModulator()

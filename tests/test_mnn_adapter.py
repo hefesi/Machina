@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 
 from machina import (
+    ActivityGrowthPolicy,
     Connection,
     MNN,
     MNNCognitionAdapter,
@@ -126,6 +127,53 @@ class MNNCognitionAdapterTests(unittest.TestCase):
                 self.make_network(),
                 input_features={"text": "text_length"},
                 max_pending_steps=1,
+            )
+
+    def test_positive_outcome_can_grow_and_persist_connections(self):
+        with tempfile.TemporaryDirectory() as directory:
+            network = MNN(weight_limit=2.0)
+            network.add_unit(Unit("cue", activation="identity"))
+            network.add_unit(Unit("response", activation="identity"))
+            policy = ActivityGrowthPolicy(
+                max_new_connections=1,
+                initial_weight=0.75,
+                min_activity=0.001,
+                allowed_sources={"cue"},
+                allowed_targets={"response"},
+            )
+            adapter = MNNCognitionAdapter(
+                network,
+                input_features={
+                    "cue": "text_length",
+                    "response": "goal_length",
+                },
+                delayed_reward=True,
+                growth_policy=policy,
+            )
+            brain = VirtualBrain(Path(directory) / "brain.sqlite", cognition=adapter)
+            result = brain.run_cycle("A successful observation.", "Record it")
+
+            plasticity = next(
+                event.artifact
+                for event in result.events
+                if event.event_type == "mnn.plasticity_applied"
+            )
+            change = plasticity.data["change"]
+            self.assertEqual(len(change["grown_connections"]), 1)
+            grown = change["grown_connections"][0]
+            self.assertEqual(grown["source"], "cue")
+            self.assertEqual(grown["target"], "response")
+            self.assertIn(grown["id"], adapter.network.connections)
+            self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+            brain.store.verify_integrity()
+            brain.close()
+
+    def test_growth_policy_requires_delayed_reward(self):
+        with self.assertRaisesRegex(ValueError, "requires delayed_reward"):
+            MNNCognitionAdapter(
+                self.make_network(),
+                input_features={"text": "text_length"},
+                growth_policy=ActivityGrowthPolicy(),
             )
 
     def test_adapter_can_abort_an_orphaned_delayed_experience(self):

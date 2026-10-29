@@ -38,16 +38,30 @@ grown = policy.grow(network)
 - `initial_weight` é positivo e limitado pelo `weight_limit` da rede.
 - Cada item retornado é um `GrownConnection` com a conexão criada e a pontuação.
 
-A política é invocada explicitamente pelo chamador. Ela não escolhe objetivos,
-não decide quando aprender e ainda não é acionada automaticamente pelo ciclo de
-experiência.
+A política também pode ser acoplada ao ciclo de experiência:
 
-## Benchmark
+```python
+cycle = MNNExperienceCycle(
+    network,
+    growth_policy=policy,
+    growth_min_reward=0.0,
+)
+```
+
+Nesse caso, `resolve(reward)` só invoca a política quando
+`reward >= growth_min_reward`. O resultado inclui `grown_connections`, e o
+snapshot do ciclo persiste a configuração da política. `abort()` nunca cresce
+conexões. A política ainda não escolhe objetivos nem decide sozinha quando
+aprender; o limite de recompensa e o momento da resolução são explícitos.
+
+## Benchmarks
 
 ```bash
 python -m benchmarks.mnn_structural_growth
+python -m benchmarks.mnn_rewarded_structural_growth
 python -m unittest tests.test_mnn_structure \
-  tests.test_mnn_structural_growth_benchmark -v
+  tests.test_mnn_structural_growth_benchmark \
+  tests.test_mnn_rewarded_structural_growth -v
 ```
 
 Protocolo:
@@ -59,19 +73,25 @@ Protocolo:
 5. a resposta deve ser produzida pela nova aresta, antes e depois de salvar e
    recarregar o checkpoint.
 
+O benchmark `mnn_rewarded_structural_growth` repete a associação dentro do ciclo
+de recompensa atrasada: a experiência pendente é salva, recarregada, resolvida
+com recompensa `+1` e só então cresce. Um controle com recompensa `-1` não pode
+criar a aresta.
+
 Critérios de aprovação:
 
 - resposta inicial: `0.0`;
+- controle com recompensa negativa: `0.0` e nenhuma conexão criada;
 - resposta após o crescimento: `0.75`;
 - resposta após reinício: `0.75`;
 - exatamente uma conexão criada, com origem `cue`, destino `response`;
-- pesos preservados após o checkpoint.
+- pesos e topologia preservados após o checkpoint.
 
 ## Limitações
 
 Este experimento demonstra apenas uma associação estrutural pequena com teacher
-forcing. Ele não demonstra descoberta autônoma de topologia, seleção de objetivos,
-generalização entre tarefas, compreensão semântica, consciência ou inteligência
-geral. O próximo passo é acoplar a política a um sinal de recompensa e validar
-que o crescimento melhora uma tarefa mantida fora do treino sem violar limites de
-recursos.
+forcing e recompensa explícita. Ele não demonstra descoberta autônoma de
+topologia, seleção de objetivos, generalização entre tarefas, compreensão
+semântica, consciência ou inteligência geral. O próximo passo é validar se o
+crescimento melhora uma tarefa mantida fora do treino e se a política evita
+crescimento inútil sob recompensa ruidosa ou sinais contraditórios.

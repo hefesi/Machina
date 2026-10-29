@@ -201,6 +201,66 @@ class ActivityGrowthPolicy:
             grown.append(GrownConnection(connection=edge, score=score))
         return grown
 
+    def snapshot(self) -> dict:
+        """Return the policy configuration in a JSON-compatible form."""
+        return {
+            "schema_version": 1,
+            "max_new_connections": self.max_new_connections,
+            "initial_weight": self.initial_weight,
+            "min_activity": self.min_activity,
+            "max_connections": self.max_connections,
+            "max_out_degree": self.max_out_degree,
+            "max_in_degree": self.max_in_degree,
+            "allowed_sources": (
+                None
+                if self.allowed_sources is None
+                else sorted(self.allowed_sources)
+            ),
+            "allowed_targets": (
+                None
+                if self.allowed_targets is None
+                else sorted(self.allowed_targets)
+            ),
+        }
+
+    @classmethod
+    def from_snapshot(cls, data: Mapping) -> "ActivityGrowthPolicy":
+        if not isinstance(data, Mapping):
+            raise ValueError("growth-policy snapshot must be a mapping")
+        if data.get("schema_version") != 1:
+            raise ValueError("unsupported growth-policy snapshot schema")
+        required = {
+            "schema_version",
+            "max_new_connections",
+            "initial_weight",
+            "min_activity",
+            "max_connections",
+            "max_out_degree",
+            "max_in_degree",
+            "allowed_sources",
+            "allowed_targets",
+        }
+        missing = required - set(data)
+        if missing:
+            raise ValueError(
+                f"growth-policy snapshot is missing fields: {', '.join(sorted(missing))}"
+            )
+        unknown = set(data) - required
+        if unknown:
+            raise ValueError(
+                f"growth-policy snapshot has unknown fields: {', '.join(sorted(unknown))}"
+            )
+        return cls(
+            max_new_connections=data["max_new_connections"],
+            initial_weight=data["initial_weight"],
+            min_activity=data["min_activity"],
+            max_connections=data["max_connections"],
+            max_out_degree=data["max_out_degree"],
+            max_in_degree=data["max_in_degree"],
+            allowed_sources=data["allowed_sources"],
+            allowed_targets=data["allowed_targets"],
+        )
+
     def _activity(
         self,
         network: MNN,

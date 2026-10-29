@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from machina import ActivityGrowthPolicy
@@ -125,6 +126,32 @@ class ActivityGrowthPolicyTests(unittest.TestCase):
             with self.subTest(label=label):
                 with self.assertRaises(ValueError):
                     ActivityGrowthPolicy(**kwargs)
+
+    def test_policy_snapshot_round_trip_and_validation(self):
+        policy = ActivityGrowthPolicy(
+            max_new_connections=2,
+            initial_weight=0.4,
+            min_activity=0.2,
+            max_connections=10,
+            max_out_degree=3,
+            max_in_degree=2,
+            allowed_sources={"b", "a"},
+            allowed_targets={"c"},
+        )
+        snapshot = policy.snapshot()
+        restored = ActivityGrowthPolicy.from_snapshot(
+            json.loads(json.dumps(snapshot))
+        )
+        self.assertEqual(restored.snapshot(), snapshot)
+
+        with self.assertRaisesRegex(ValueError, "must be a mapping"):
+            ActivityGrowthPolicy.from_snapshot([])
+        with self.assertRaisesRegex(ValueError, "unsupported"):
+            ActivityGrowthPolicy.from_snapshot({**snapshot, "schema_version": 2})
+        with self.assertRaisesRegex(ValueError, "missing fields"):
+            ActivityGrowthPolicy.from_snapshot({"schema_version": 1})
+        with self.assertRaisesRegex(ValueError, "unknown fields"):
+            ActivityGrowthPolicy.from_snapshot({**snapshot, "extra": 1})
 
     def test_grown_topology_survives_snapshot_round_trip(self):
         network = self.make_network(units=("a", "b"))

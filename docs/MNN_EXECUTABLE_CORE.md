@@ -50,7 +50,10 @@ accumulates eligibility traces with a neutral reward; the persisted
 `experience_snapshot` is resolved only when the outcome arrives. A cycle
 interrupted between cognition and plasticity can therefore resume after a
 process restart and still credit the connections that were active before the
-interruption.
+interruption. An optional `growth_policy` plus `growth_min_reward` can create a
+bounded structural edge after a sufficiently positive outcome; the policy and
+the grown topology are persisted in the experience snapshot. A failed outcome
+does not grow connections.
 
 The proposed snapshot and weight deltas are written as an
 `mnn.plasticity_applied` journal event before the live adapter restores that

@@ -14,6 +14,7 @@ from .components import CognitionEngine, DeterministicCognition, _text
 from .contracts import Artifact
 from .mnn import MNN
 from .mnn_experience import MNNExperienceCycle
+from .mnn_structure import ActivityGrowthPolicy
 
 
 _SUPPORTED_FEATURES = {
@@ -38,6 +39,8 @@ class MNNCognitionAdapter:
         learning_rate: float = 0.01,
         delayed_reward: bool = False,
         max_pending_steps: int | None = None,
+        growth_policy: ActivityGrowthPolicy | None = None,
+        growth_min_reward: float = 0.0,
     ) -> None:
         if not input_features:
             raise ValueError("input_features must map at least one unit to a feature")
@@ -51,6 +54,8 @@ class MNNCognitionAdapter:
             raise ValueError("delayed_reward must be boolean")
         if max_pending_steps is not None and not delayed_reward:
             raise ValueError("max_pending_steps requires delayed_reward=True")
+        if growth_policy is not None and not delayed_reward:
+            raise ValueError("growth_policy requires delayed_reward=True")
         self.network = network
         self.input_features = dict(input_features)
         self.base_engine = base_engine or DeterministicCognition()
@@ -63,12 +68,18 @@ class MNNCognitionAdapter:
                 network,
                 learning_rate=self.learning_rate,
                 max_pending_steps=max_pending_steps,
+                growth_policy=growth_policy,
+                growth_min_reward=growth_min_reward,
             )
             if delayed_reward
             else None
         )
         self.max_pending_steps = (
             self.cycle.max_pending_steps if self.cycle is not None else None
+        )
+        self.growth_policy = self.cycle.growth_policy if self.cycle is not None else None
+        self.growth_min_reward = (
+            self.cycle.growth_min_reward if self.cycle is not None else 0.0
         )
 
     def propose_evaluated_outcome(
@@ -94,6 +105,7 @@ class MNNCognitionAdapter:
                 "reward": reward,
                 "validation_status": validation.data["status"],
                 "weight_deltas": resolution["weight_changes"],
+                "grown_connections": resolution["grown_connections"],
                 "snapshot": candidate.network.snapshot(),
                 "experience_snapshot": candidate.snapshot(),
                 "pending_steps": resolution["pending_steps"],
@@ -151,6 +163,11 @@ class MNNCognitionAdapter:
                         )
                     cycle.max_pending_steps = effective_limit
                 self.max_pending_steps = cycle.max_pending_steps
+                if cycle.growth_policy is None and self.growth_policy is not None:
+                    cycle.growth_policy = self.growth_policy
+                    cycle.growth_min_reward = self.growth_min_reward
+                self.growth_policy = cycle.growth_policy
+                self.growth_min_reward = cycle.growth_min_reward
             self.network = cycle.network
             self.cycle = cycle if self.delayed_reward else None
             return
@@ -162,6 +179,8 @@ class MNNCognitionAdapter:
                 restored,
                 learning_rate=self.learning_rate,
                 max_pending_steps=self.max_pending_steps,
+                growth_policy=self.growth_policy,
+                growth_min_reward=self.growth_min_reward,
             )
 
     def restore_from_outcome(self, change: Mapping[str, object]) -> None:

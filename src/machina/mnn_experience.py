@@ -19,6 +19,19 @@ from typing import Mapping
 
 from .mnn import MNN
 from .mnn_reward import RewardModulator
+from .mnn_structure import ActivityGrowthPolicy
+
+
+def _finite_number(value: float, name: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{name} must be finite") from error
+    if not math.isfinite(number):
+        raise ValueError(f"{name} must be finite")
+    return number
 
 
 def _pending_limit(value: int | None) -> int | None:
@@ -39,17 +52,27 @@ class MNNExperienceCycle:
         modulator: RewardModulator | None = None,
         learning_rate: float = 0.1,
         max_pending_steps: int | None = None,
+        growth_policy: ActivityGrowthPolicy | None = None,
+        growth_min_reward: float = 0.0,
     ) -> None:
         if not isinstance(network, MNN):
             raise ValueError("network must be an MNN instance")
         if modulator is not None and not isinstance(modulator, RewardModulator):
             raise ValueError("modulator must be a RewardModulator instance")
+        if growth_policy is not None and not isinstance(
+            growth_policy, ActivityGrowthPolicy
+        ):
+            raise ValueError("growth_policy must be an ActivityGrowthPolicy instance")
         if isinstance(learning_rate, bool) or not isinstance(learning_rate, (int, float)):
             raise ValueError("learning_rate must be finite and non-negative")
         self.learning_rate = float(learning_rate)
         if not math.isfinite(self.learning_rate) or self.learning_rate < 0:
             raise ValueError("learning_rate must be finite and non-negative")
         self.max_pending_steps = _pending_limit(max_pending_steps)
+        self.growth_policy = growth_policy
+        self.growth_min_reward = _finite_number(
+            growth_min_reward, "growth_min_reward"
+        )
         self.network = network
         self.modulator = modulator or RewardModulator()
         self.pending_steps = 0
@@ -84,10 +107,27 @@ class MNNExperienceCycle:
             reward=reward,
             learning_rate=self.learning_rate,
         )
+        reward_value = float(reward)
+        grown_connections = []
+        if (
+            self.growth_policy is not None
+            and reward_value >= self.growth_min_reward
+        ):
+            grown_connections = [
+                {
+                    "id": item.connection.id,
+                    "source": item.connection.source,
+                    "target": item.connection.target,
+                    "weight": item.connection.weight,
+                    "score": item.score,
+                }
+                for item in self.growth_policy.grow(self.network)
+            ]
         result = {
-            "reward": float(reward),
+            "reward": reward_value,
             "pending_steps": self.pending_steps,
             "weight_changes": changes,
+            "grown_connections": grown_connections,
             "network_snapshot": self.network.snapshot(),
             "modulator_snapshot": self.modulator.snapshot(),
         }
@@ -120,6 +160,12 @@ class MNNExperienceCycle:
             "schema_version": 1,
             "learning_rate": self.learning_rate,
             "max_pending_steps": self.max_pending_steps,
+            "growth_policy": (
+                None
+                if self.growth_policy is None
+                else self.growth_policy.snapshot()
+            ),
+            "growth_min_reward": self.growth_min_reward,
             "pending_steps": self.pending_steps,
             "network": self.network.snapshot(),
             "modulator": self.modulator.snapshot(),
@@ -137,7 +183,11 @@ class MNNExperienceCycle:
             raise ValueError(
                 f"experience-cycle snapshot is missing fields: {', '.join(sorted(missing))}"
             )
-        allowed = required | {"max_pending_steps"}
+        allowed = required | {
+            "max_pending_steps",
+            "growth_policy",
+            "growth_min_reward",
+        }
         unknown = set(data) - allowed
         if unknown:
             raise ValueError(
@@ -167,11 +217,20 @@ class MNNExperienceCycle:
         max_pending_steps = _pending_limit(data.get("max_pending_steps"))
         if max_pending_steps is not None and pending_steps > max_pending_steps:
             raise ValueError("pending_steps cannot exceed max_pending_steps")
+        growth_data = data.get("growth_policy")
+        if growth_data is None:
+            growth_policy = None
+        elif not isinstance(growth_data, Mapping):
+            raise ValueError("growth_policy snapshot must be a mapping")
+        else:
+            growth_policy = ActivityGrowthPolicy.from_snapshot(growth_data)
         cycle = cls(
             network,
             modulator=modulator,
             learning_rate=data["learning_rate"],
             max_pending_steps=max_pending_steps,
+            growth_policy=growth_policy,
+            growth_min_reward=data.get("growth_min_reward", 0.0),
         )
         cycle.pending_steps = pending_steps
         return cycle
