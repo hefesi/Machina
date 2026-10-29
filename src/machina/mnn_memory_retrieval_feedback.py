@@ -46,6 +46,7 @@ class MNNMemoryRetrievalFeedback:
         outcomes: Mapping[str, bool],
         *,
         strength: float | None = None,
+        feedback_id: str | None = None,
     ) -> tuple[tuple[MemoryFragment, MemoryFeedbackResult], ...]:
         """Apply explicit per-fragment usefulness labels after validating all IDs.
 
@@ -62,6 +63,36 @@ class MNNMemoryRetrievalFeedback:
                 raise ValueError("fragment IDs must be non-empty strings")
             if not isinstance(useful, bool):
                 raise ValueError("every usefulness label must be boolean")
+        if feedback_id is not None:
+            if not isinstance(feedback_id, str) or not feedback_id.strip():
+                raise ValueError("feedback_id must be a non-empty string")
+            amount = self.default_strength if strength is None else strength
+            if isinstance(amount, bool) or not isinstance(amount, (int, float)):
+                raise ValueError("strength must be a finite number in [0, 1]")
+            amount = float(amount)
+            if not math.isfinite(amount) or not 0.0 <= amount <= 1.0:
+                raise ValueError("strength must be a finite number in [0, 1]")
+            deltas = {
+                fragment_id: amount if useful else -amount
+                for fragment_id, useful in normalized
+            }
+            fragments, audit, _ = self.memory.apply_importance_feedback_batch(
+                deltas, operation_id=feedback_id
+            )
+            return tuple(
+                (
+                    fragments[fragment_id],
+                    MemoryFeedbackResult(
+                        fragment_id=fragment_id,
+                        useful=useful,
+                        strength=amount,
+                        importance_before=audit[fragment_id]["before"],
+                        importance_after=audit[fragment_id]["after"],
+                    ),
+                )
+                for fragment_id, useful in normalized
+            )
+
         # Validate the entire batch before mutating any fragment.
         for fragment_id, _ in normalized:
             self.memory.get(fragment_id, record_access=False)
@@ -70,10 +101,12 @@ class MNNMemoryRetrievalFeedback:
             for fragment_id, useful in normalized
         )
 
-    def apply(self, fragment_id: str, *, useful: bool, strength: float | None = None) -> tuple[MemoryFragment, MemoryFeedbackResult]:
+    def apply(self, fragment_id: str, *, useful: bool, strength: float | None = None, feedback_id: str | None = None) -> tuple[MemoryFragment, MemoryFeedbackResult]:
         """Persist one explicit usefulness signal and return the updated fragment."""
         if not isinstance(useful, bool):
             raise ValueError("useful must be boolean")
+        if feedback_id is not None:
+            return self.apply_many({fragment_id: useful}, strength=strength, feedback_id=feedback_id)[0]
         amount = self.default_strength if strength is None else strength
         if isinstance(amount, bool) or not isinstance(amount, (int, float)):
             raise ValueError("strength must be a finite number in [0, 1]")
