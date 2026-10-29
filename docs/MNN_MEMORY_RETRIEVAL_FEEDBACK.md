@@ -24,6 +24,30 @@ with FragmentMemory("data/machina-memory.sqlite3") as memory:
     print(event.importance_before, event.importance_after)
 ```
 
+## VirtualBrain integration
+
+When `VirtualBrain` is configured with `fragment_memory_path`, a caller can
+submit explicit feedback for fragments actually returned by a cycle's
+`memory.retrieved` event:
+
+```python
+cycle = brain.run_cycle("Recall the sensor calibration", "Use calibration")
+feedback_event = brain.apply_retrieval_feedback(
+    cycle.cycle_id,
+    {"fragment-id-returned-by-this-cycle": True},
+    strength=0.1,
+)
+```
+
+The method records a `memory.retrieval_feedback_applied` artifact in the
+append-only event journal. It uses a stable per-cycle operation ID by default,
+so retrying after a partial failure between the fragment database and event
+journal does not apply the importance delta twice. A caller may provide an
+explicit `feedback_id`. Only one feedback batch is accepted per cycle, and
+only IDs in that cycle's retrieved fragment context can be rated. Because the
+fragment archive and event journal are separate SQLite databases, this is a
+retry-safe two-write protocol, not a single cross-database atomic transaction.
+
 ## Important distinction
 
 Usefulness is task-relative. A memory can be unhelpful for one query and still be true or important in another context. Callers should send feedback only when a retrieval outcome has been observed; do not treat lack of retrieval or low lexical overlap as proof that a memory should be forgotten. Pinned records remain pinned, and this component never deletes archived fragments.
