@@ -98,6 +98,20 @@ class MNNMemoryRetrievalFeedbackTests(unittest.TestCase):
         self.assertAlmostEqual(0.7, second[0][1].importance_after)
         self.assertAlmostEqual(0.7, self.memory.get("decision", record_access=False).importance)
 
+    def test_feedback_idempotency_survives_database_reopen(self) -> None:
+        self.feedback.apply_many(
+            {"decision": True}, strength=0.2, feedback_id="durable-cycle-123"
+        )
+        self.memory.close()
+        self.memory = FragmentMemory(self.path)
+        self.feedback = MNNMemoryRetrievalFeedback(self.memory)
+        retried = self.feedback.apply_many(
+            {"decision": True}, strength=0.2, feedback_id="durable-cycle-123"
+        )
+        self.assertAlmostEqual(0.7, retried[0][0].importance)
+        self.assertAlmostEqual(0.5, retried[0][1].importance_before)
+        self.assertAlmostEqual(0.7, retried[0][1].importance_after)
+
     def test_feedback_id_cannot_be_reused_with_different_payload(self) -> None:
         self.feedback.apply_many(
             {"decision": True}, strength=0.2, feedback_id="cycle-123"
@@ -116,6 +130,10 @@ class MNNMemoryRetrievalFeedbackTests(unittest.TestCase):
                 feedback_id="cycle-missing",
             )
         self.assertAlmostEqual(0.5, self.memory.get("decision", record_access=False).importance)
+
+    def test_empty_batch_is_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            self.feedback.apply_many({})
 
     def test_invalid_feedback_is_rejected(self) -> None:
         for kwargs in (
