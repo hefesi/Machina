@@ -33,3 +33,7 @@ transfer benchmark. It does not establish general language understanding,
 consciousness, or free will. The next step is to evaluate abstention on larger,
 randomized, adversarially constructed test sets and measure coverage versus
 error rate.
+
+## Enquadramento na hipótese fundamental
+
+Confiança e abstenção são mecanismos funcionais de calibração e controle de incerteza. Não devem ser interpretados como sentimentos subjetivos de dúvida. Investigar se a incerteza estimada influencia de forma estável atenção, exploração, decisão, aprendizagem e revisão de objetivos. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
