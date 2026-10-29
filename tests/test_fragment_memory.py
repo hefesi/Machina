@@ -182,6 +182,12 @@ class FragmentMemoryTests(unittest.TestCase):
         baseline = self.memory.association_strength(
             "sensor", "procedure", context="maintenance"
         )
+        self.memory.observe_coactivation(
+            ["sensor", "procedure"], operation_id="assoc-research-observation", context="research"
+        )
+        research_baseline = self.memory.association_strength(
+            "sensor", "procedure", context="research"
+        )
         scores, applied = self.memory.apply_association_feedback_batch(
             {("sensor", "procedure"): True},
             context="maintenance", operation_id="assoc-feedback-positive", strength=0.3,
@@ -192,6 +198,7 @@ class FragmentMemoryTests(unittest.TestCase):
             "sensor", "procedure", context="maintenance"
         )
         self.assertGreater(reinforced, baseline)
+        self.assertLessEqual(reinforced, 1.0)
         replay, replay_applied = self.memory.apply_association_feedback_batch(
             {("procedure", "sensor"): True},
             context="MAINTENANCE", operation_id="assoc-feedback-positive", strength=0.3,
@@ -199,7 +206,7 @@ class FragmentMemoryTests(unittest.TestCase):
         self.assertFalse(replay_applied)
         self.assertEqual(scores, replay)
         self.assertAlmostEqual(
-            baseline,
+            research_baseline,
             self.memory.association_strength("sensor", "procedure", context="research"),
         )
 
