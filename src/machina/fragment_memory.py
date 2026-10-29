@@ -240,12 +240,18 @@ class FragmentMemory:
             now = _now()
             for fragment_id, delta in normalized.items():
                 row = self._db.execute(
-                    "SELECT importance FROM memory_fragments WHERE id = ?", (fragment_id,)
+                    "SELECT importance, pinned FROM memory_fragments WHERE id = ?", (fragment_id,)
                 ).fetchone()
                 if row is None:
                     raise KeyError(fragment_id)
                 before = float(row["importance"])
-                after = min(1.0, max(0.0, before + delta))
+                # Explicitly pinned memories are protected from negative
+                # usefulness feedback; the archive and active priority remain
+                # available even when a particular retrieval was unhelpful.
+                if bool(row["pinned"]) and delta < 0:
+                    after = before
+                else:
+                    after = min(1.0, max(0.0, before + delta))
                 before_after[fragment_id] = {"before": before, "after": after}
             for fragment_id, values in before_after.items():
                 self._db.execute(
