@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from machina.fragment_memory import FragmentMemory
-from machina.mnn_memory_retrieval_evaluation import evaluate_retrieval
+from machina.mnn_retrieval_evaluation import evaluate_retrieval
 
 
 class RetrievalEvaluationTests(unittest.TestCase):
