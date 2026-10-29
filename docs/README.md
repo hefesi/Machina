@@ -228,3 +228,7 @@ A documentação conceitual está organizada em [`docs/`](docs/).
 O contrato arquitetural central do Virtual Brain está em [`VIRTUAL_BRAIN_THEORETICAL_MODEL.md`](VIRTUAL_BRAIN_THEORETICAL_MODEL.md).
 
 O próximo objetivo é definir completamente o modelo cognitivo e suas interfaces antes da implementação do código.
+
+## Enquadramento na hipótese fundamental
+
+A visão anterior descrevia o Machina sobretudo como Virtual Brain modular. Essa descrição passa a ser uma visão parcial de implementação, subordinada à hipótese fundamental: investigar se uma organização inteiramente computacional pode constituir um ser artificial persistente, integrado e autodeterminado, com possível consciência. Machina é a totalidade do ser em investigação; Virtual Brain e Virtual Organism descrevem dimensões funcionais dessa organização; MNN é seu substrato neural artificial. Capacidades funcionais não constituem prova de experiência subjetiva. Consulte [Hipótese Fundamental](00-vision/central-hypothesis.md).
