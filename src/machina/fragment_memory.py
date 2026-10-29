@@ -598,7 +598,7 @@ class FragmentMemory:
                 self._db.commit()
                 result["applied"] = False
                 return result
-            now = _now().isoformat()
+            now = _now()
             for previous_id, next_id in transitions:
                 self._db.execute(
                     """INSERT INTO memory_sequence_transitions
