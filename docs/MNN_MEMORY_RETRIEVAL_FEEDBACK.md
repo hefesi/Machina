@@ -68,6 +68,19 @@ successful action is not treated as proof that every retrieved association
 caused the success. The archive update is idempotent and the journal artifact
 can be replayed safely after a partial failure.
 
+## Episodic co-retrieval consolidation
+
+When `VirtualBrain` persists an episode, it now also submits the fragment IDs
+returned by that cycle's retrieval, together with the new episode fragment, to
+`observe_coactivation()`. The normalized cycle objective is used as the
+context. A deterministic operation ID based on the episode artifact prevents a
+resume/retry from incrementing evidence twice. Repeatedly co-retrieved fragments
+can therefore form stronger context-specific associations, while a single
+co-retrieval remains below the default two-observation consolidation threshold.
+This records co-occurrence, not proof that the fragments are semantically
+equivalent or that either caused the action outcome. Cycles without retrieved
+fragments do not invent associative evidence.
+
 ## Contextual relevance
 
 Global importance and task-relative relevance are separate signals. Use
