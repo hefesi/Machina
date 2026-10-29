@@ -57,6 +57,17 @@ per-fragment usefulness labels. Because the fragment archive and event journal
 are separate SQLite databases, this is a retry-safe two-write protocol, not a
 single cross-database atomic transaction.
 
+The same outcome boundary supports explicit association feedback through
+`VirtualBrain.apply_association_feedback(cycle_id, {("fragment-a", "fragment-b"): True}, context="maintenance", strength=0.1)`.
+Both endpoints must appear in that cycle's persisted retrieval, and the
+association must already have co-activation evidence. The method requires a
+persisted action result and evaluation, updates only contextual association
+utility, and appends a `memory.association_feedback_applied` artifact linked to
+retrieval/action/evaluation. Feedback labels remain caller-supplied: a
+successful action is not treated as proof that every retrieved association
+caused the success. The archive update is idempotent and the journal artifact
+can be replayed safely after a partial failure.
+
 ## Contextual relevance
 
 Global importance and task-relative relevance are separate signals. Use
