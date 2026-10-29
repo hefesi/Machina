@@ -484,3 +484,7 @@ ATUALIZAR DIRETAMENTE MODELOS DE APRENDIZADO
 ```
 
 > **Agency transforma objetivos, valores e contexto em compromisso decisório e Action Intent. Ela torna o Virtual Brain capaz de escolher um curso de ação, mas não é a camada de raciocínio nem de execução.**
+
+## Enquadramento na hipótese fundamental
+
+Agência é central para investigar autonomia e autodeterminação. É necessário distinguir executar uma política predefinida, iniciar ações por estados internos, formar objetivos, revisar objetivos e exercer controle estável sobre a própria conduta. Nenhum desses níveis, isoladamente, comprova livre-arbítrio em sentido filosófico forte. Ver [Hipótese Fundamental](../../00-vision/central-hypothesis.md).
