@@ -20,6 +20,7 @@ from .components import (
 from .contracts import Artifact, ContractKind, EpistemicStatus, new_id, now_utc
 from .event_store import CycleNotFoundError, EventStore, StoredEvent
 from .fragment_memory import FragmentMemory
+from .mnn_memory_retrieval_feedback import MNNMemoryRetrievalFeedback
 
 
 @dataclass(frozen=True, slots=True)
@@ -797,6 +798,97 @@ class VirtualBrain:
             epistemic_status=EpistemicStatus.OBSERVED,
             confidence=1.0,
         )
+
+    def apply_retrieval_feedback(
+        self,
+        cycle_id: str,
+        outcomes: Mapping[str, bool],
+        *,
+        strength: float = 0.10,
+        feedback_id: str | None = None,
+    ) -> Artifact:
+        """Persist explicit utility feedback for fragments retrieved in a cycle.
+
+        The fragment archive and event journal are separate SQLite databases,
+        so this method uses an idempotent archive operation and then appends an
+        audit artifact. If the process stops between those writes, retrying the
+        same feedback ID completes the journal write without applying learning
+        twice. Only fragments actually returned by this cycle may be rated.
+        One feedback batch is allowed per cycle.
+        """
+        self._require_cycle(cycle_id)
+        if self.fragment_memory is None:
+            raise RuntimeError("fragment memory is not configured for this VirtualBrain")
+        if not isinstance(outcomes, Mapping) or not outcomes:
+            raise ValueError("outcomes must be a non-empty mapping")
+        if any(not isinstance(key, str) or not key.strip() for key in outcomes):
+            raise ValueError("fragment IDs must be non-empty strings")
+        if any(not isinstance(value, bool) for value in outcomes.values()):
+            raise ValueError("every usefulness label must be boolean")
+
+        retrieval = self.store.latest_artifact(cycle_id, "memory.retrieved")
+        if retrieval is None:
+            raise ValueError("cycle has no persisted memory retrieval to evaluate")
+        retrieved_ids = {
+            item.get("fragment_id")
+            for item in retrieval.data.get("fragment_context", [])
+            if isinstance(item, Mapping) and isinstance(item.get("fragment_id"), str)
+        }
+        unknown = sorted(set(outcomes) - retrieved_ids)
+        if unknown:
+            raise ValueError(
+                "feedback may only rate fragments retrieved in this cycle: "
+                + ", ".join(unknown)
+            )
+
+        operation_id = feedback_id or f"{cycle_id}:retrieval-feedback:v1"
+        if not isinstance(operation_id, str) or not operation_id.strip():
+            raise ValueError("feedback_id must be a non-empty string")
+        existing = self.store.latest_artifact(cycle_id, "memory.retrieval_feedback_applied")
+        if existing is not None:
+            if existing.data.get("feedback_id") != operation_id:
+                raise ValueError("this cycle already has a different retrieval feedback batch")
+            if existing.data.get("outcomes") != dict(outcomes):
+                raise ValueError("feedback_id was already recorded with different outcomes")
+            return existing
+
+        feedback = MNNMemoryRetrievalFeedback(self.fragment_memory)
+        applied_results = feedback.apply_many(
+            outcomes, strength=strength, feedback_id=operation_id
+        )
+        serialized = [
+            {
+                "fragment_id": event.fragment_id,
+                "useful": event.useful,
+                "strength": event.strength,
+                "importance_before": event.importance_before,
+                "importance_after": event.importance_after,
+                "applied": event.applied,
+            }
+            for _, event in applied_results
+        ]
+        artifact = Artifact.create(
+            ContractKind.CYCLE_STATUS,
+            cycle_id=cycle_id,
+            producer="mnn_memory_feedback",
+            data={
+                "status": "feedback_applied",
+                "checkpoint": "memory.retrieval_feedback_applied",
+                "feedback_id": operation_id,
+                "outcomes": dict(outcomes),
+                "results": serialized,
+            },
+            input_refs=[retrieval.id],
+            source_refs=retrieval.source_refs,
+            epistemic_status=EpistemicStatus.INTERPRETED,
+            confidence=1.0,
+        )
+        self.store.append(
+            "memory.retrieval_feedback_applied",
+            artifact,
+            causation_id=retrieval.id,
+        )
+        return artifact
 
     def _persist_fragment_memory(self, episode: Artifact) -> None:
         """Mirror an episodic event into the optional durable fragment archive.
