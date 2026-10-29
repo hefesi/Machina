@@ -133,6 +133,55 @@ class RetrievalEvaluationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     compare_retrieval_suites(before, incompatible_k)
 
+    def test_negative_feedback_reorders_distractor_without_rewriting_memory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with FragmentMemory(Path(directory) / "memory.sqlite3") as memory:
+                relevant = memory.add(
+                    "alpha beta task memory",
+                    source_uri="test://relevant",
+                    importance=0.2,
+                    confidence=0.83,
+                    tags=["calibration"],
+                    metadata={"evidence": "observed"},
+                    fragment_id="relevant",
+                )
+                distractor = memory.add(
+                    "alpha beta task memory",
+                    source_uri="test://distractor",
+                    importance=0.8,
+                    confidence=0.61,
+                    tags=["archive"],
+                    metadata={"evidence": "historical"},
+                    fragment_id="distractor",
+                )
+                before = evaluate_retrieval(memory, "alpha beta task", ["relevant"], k=2)
+                self.assertEqual(("distractor", "relevant"), before.retrieved_ids)
+
+                from machina.mnn_memory_retrieval_feedback import MNNMemoryRetrievalFeedback
+                MNNMemoryRetrievalFeedback(memory).apply(
+                    "distractor",
+                    useful=False,
+                    strength=0.8,
+                    feedback_id="negative-feedback-1",
+                )
+                after = evaluate_retrieval(memory, "alpha beta task", ["relevant"], k=2)
+                self.assertEqual(("relevant", "distractor"), after.retrieved_ids)
+                self.assertGreater(after.reciprocal_rank, before.reciprocal_rank)
+
+                saved_relevant = memory.get("relevant", record_access=False)
+                saved_distractor = memory.get("distractor", record_access=False)
+                self.assertEqual(relevant.content, saved_relevant.content)
+                self.assertEqual(relevant.source_uri, saved_relevant.source_uri)
+                self.assertEqual(relevant.confidence, saved_relevant.confidence)
+                self.assertEqual(relevant.tags, saved_relevant.tags)
+                self.assertEqual(dict(relevant.metadata), dict(saved_relevant.metadata))
+                self.assertEqual(distractor.content, saved_distractor.content)
+                self.assertEqual(distractor.source_uri, saved_distractor.source_uri)
+                self.assertEqual(distractor.confidence, saved_distractor.confidence)
+                self.assertEqual(distractor.tags, saved_distractor.tags)
+                self.assertEqual(dict(distractor.metadata), dict(saved_distractor.metadata))
+                self.assertAlmostEqual(0.8, saved_distractor.importance)
+
     def test_feedback_experiment_measures_learning_and_rejects_unretrieved_fragment(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             with FragmentMemory(Path(directory) / "memory.sqlite3") as memory:
