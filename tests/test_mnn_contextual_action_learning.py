@@ -56,6 +56,58 @@ class MNNContextualActionLearnerTests(unittest.TestCase):
         self.assertEqual(learner.recommend("quiet room")["status"], "abstain")
         self.assertEqual(learner.snapshot()["values"]["busy room"]["left"], -1.0)
 
+    def test_generalizes_to_related_context_with_weighted_lexical_evidence(self):
+        learner = MNNContextualActionLearner(
+            ["left", "right"], min_samples_per_action=2, min_context_similarity=0.6
+        )
+        self.train_context(learner, "quiet workload", "left")
+        self.train_context(learner, "busy workload", "right")
+
+        result = learner.recommend("quiet workload today")
+
+        self.assertEqual(result["status"], "recommended")
+        self.assertEqual(result["action"], "left")
+        self.assertEqual(result["contributing_contexts"], [
+            {"context": "quiet workload", "similarity": 2 / 3}
+        ])
+        self.assertGreaterEqual(result["effective_sample_counts"]["left"], 2)
+
+    def test_unrelated_contexts_do_not_transfer_evidence(self):
+        learner = MNNContextualActionLearner(
+            ["left", "right"], min_samples_per_action=1, min_context_similarity=0.5
+        )
+        self.train_context(learner, "quiet workload", "left")
+        result = learner.recommend("stormy evening")
+
+        self.assertEqual(result["status"], "abstain")
+        self.assertEqual(result["reason"], "insufficient_similar_context_evidence")
+        self.assertEqual(result["contributing_contexts"], [])
+
+    def test_conflicting_similar_contexts_can_force_abstention(self):
+        learner = MNNContextualActionLearner(
+            ["left", "right"], min_samples_per_action=1,
+            min_reward_margin=0.2, min_context_similarity=0.5
+        )
+        self.train_context(learner, "quiet workload", "left")
+        self.train_context(learner, "quiet workload today", "right")
+
+        result = learner.recommend("quiet workload now")
+
+        self.assertEqual(result["status"], "abstain")
+        self.assertEqual(result["reason"], "contextual_values_too_close")
+
+    def test_schema_one_snapshot_restores_exact_match_only_compatibility(self):
+        learner = MNNContextualActionLearner(["left", "right"])
+        self.train_context(learner, "quiet workload", "left")
+        legacy = learner.snapshot()
+        legacy["schema_version"] = 1
+        legacy.pop("min_context_similarity")
+        restored = MNNContextualActionLearner.from_snapshot(legacy)
+
+        self.assertEqual(restored.min_context_similarity, 1.0)
+        self.assertEqual(restored.recommend("quiet workload today")["status"], "abstain")
+        self.assertEqual(restored.recommend("workload quiet")["action"], "left")
+
     def test_validates_inputs(self):
         with self.assertRaises(ValueError):
             MNNContextualActionLearner(["left", "left"])
