@@ -46,6 +46,52 @@ class MNNExperienceCycleTests(unittest.TestCase):
         cycle.resolve(-1.0)
         self.assertLess(cycle.network.connections["action-outcome"].weight, initial)
 
+    def test_max_pending_steps_blocks_extra_steps_without_mutating_state(self):
+        network = self.make_cycle().network
+        cycle = MNNExperienceCycle(network, learning_rate=0.1, max_pending_steps=2)
+        cycle.step({"action": 1.0})
+        cycle.step({"action": 0.0})
+        snapshot = cycle.snapshot()
+        weight = network.connections["action-outcome"].weight
+
+        with self.assertRaisesRegex(RuntimeError, "max pending steps"):
+            cycle.step({"action": 1.0})
+
+        self.assertEqual(cycle.pending_steps, 2)
+        self.assertEqual(cycle.snapshot(), snapshot)
+        self.assertEqual(network.connections["action-outcome"].weight, weight)
+        self.assertGreater(cycle.resolve(1.0)["weight_changes"]["action-outcome"], 0.0)
+
+    def test_invalid_max_pending_steps_are_rejected(self):
+        network = self.make_cycle().network
+        for limit in (0, -1, True, 1.5, "2"):
+            with self.subTest(limit=limit):
+                with self.assertRaises(ValueError):
+                    MNNExperienceCycle(network, max_pending_steps=limit)
+
+    def test_max_pending_steps_survives_snapshot_and_legacy_loads(self):
+        cycle = MNNExperienceCycle(
+            self.make_cycle().network, learning_rate=0.1, max_pending_steps=3
+        )
+        cycle.step({"action": 1.0})
+        snapshot = json.loads(json.dumps(cycle.snapshot()))
+        restored = MNNExperienceCycle.from_snapshot(snapshot)
+        self.assertEqual(restored.max_pending_steps, 3)
+        self.assertEqual(restored.pending_steps, 1)
+
+        legacy = {
+            key: value
+            for key, value in snapshot.items()
+            if key != "max_pending_steps"
+        }
+        legacy_restored = MNNExperienceCycle.from_snapshot(legacy)
+        self.assertIsNone(legacy_restored.max_pending_steps)
+        self.assertEqual(legacy_restored.pending_steps, 1)
+
+        snapshot["pending_steps"] = 4
+        with self.assertRaisesRegex(ValueError, "cannot exceed max_pending_steps"):
+            MNNExperienceCycle.from_snapshot(snapshot)
+
     def test_abort_discards_pending_traces_without_changing_weights(self):
         cycle = self.make_cycle()
         initial_weight = cycle.network.connections["action-outcome"].weight

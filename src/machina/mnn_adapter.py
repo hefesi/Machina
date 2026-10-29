@@ -37,6 +37,7 @@ class MNNCognitionAdapter:
         base_engine: CognitionEngine | None = None,
         learning_rate: float = 0.01,
         delayed_reward: bool = False,
+        max_pending_steps: int | None = None,
     ) -> None:
         if not input_features:
             raise ValueError("input_features must map at least one unit to a feature")
@@ -48,6 +49,8 @@ class MNNCognitionAdapter:
             raise ValueError(f"unknown MNN input units: {sorted(unknown_units)}")
         if not isinstance(delayed_reward, bool):
             raise ValueError("delayed_reward must be boolean")
+        if max_pending_steps is not None and not delayed_reward:
+            raise ValueError("max_pending_steps requires delayed_reward=True")
         self.network = network
         self.input_features = dict(input_features)
         self.base_engine = base_engine or DeterministicCognition()
@@ -56,9 +59,16 @@ class MNNCognitionAdapter:
             raise ValueError("learning_rate must be finite and non-negative")
         self.delayed_reward = delayed_reward
         self.cycle = (
-            MNNExperienceCycle(network, learning_rate=self.learning_rate)
+            MNNExperienceCycle(
+                network,
+                learning_rate=self.learning_rate,
+                max_pending_steps=max_pending_steps,
+            )
             if delayed_reward
             else None
+        )
+        self.max_pending_steps = (
+            self.cycle.max_pending_steps if self.cycle is not None else None
         )
 
     def propose_evaluated_outcome(
@@ -127,6 +137,20 @@ class MNNCognitionAdapter:
         if self._is_experience_snapshot(snapshot):
             cycle = MNNExperienceCycle.from_snapshot(snapshot)
             self._validate_network(cycle.network)
+            if self.delayed_reward:
+                limits = [
+                    limit
+                    for limit in (self.max_pending_steps, cycle.max_pending_steps)
+                    if limit is not None
+                ]
+                if limits:
+                    effective_limit = min(limits)
+                    if cycle.pending_steps > effective_limit:
+                        raise ValueError(
+                            "pending_steps cannot exceed the configured max_pending_steps"
+                        )
+                    cycle.max_pending_steps = effective_limit
+                self.max_pending_steps = cycle.max_pending_steps
             self.network = cycle.network
             self.cycle = cycle if self.delayed_reward else None
             return
@@ -134,7 +158,11 @@ class MNNCognitionAdapter:
         self._validate_network(restored)
         self.network = restored
         if self.delayed_reward:
-            self.cycle = MNNExperienceCycle(restored, learning_rate=self.learning_rate)
+            self.cycle = MNNExperienceCycle(
+                restored,
+                learning_rate=self.learning_rate,
+                max_pending_steps=self.max_pending_steps,
+            )
 
     def restore_from_outcome(self, change: Mapping[str, object]) -> None:
         """Restore the exact post-outcome state persisted for this cycle."""

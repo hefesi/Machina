@@ -9,7 +9,10 @@ atividade original.
 
 ## API
 
-- `MNNExperienceCycle(network, modulator=None, learning_rate=0.1)` cria o ciclo.
+- `MNNExperienceCycle(network, modulator=None, learning_rate=0.1,
+  max_pending_steps=None)` cria o ciclo. O limite opcional impede que uma única
+  experiência acumule passos sem limite; ao atingi-lo, `step` falha antes de
+  alterar estados, pesos ou traços.
 - `step(inputs)` avança a MNN e acumula traços de elegibilidade usando recompensa
   neutra, sem reforçar ou punir pesos.
 - `resolve(reward)` aplica o erro de previsão aos traços acumulados, retorna as
@@ -26,14 +29,17 @@ atividade original.
   uma única vez às conexões que participaram da experiência original.
 
 Snapshots inválidos, esquema desconhecido, `pending_steps` inválido, recompensa
-não finita e traços ligados a conexões inexistentes são rejeitados. O checkpoint
-também rejeita JSON malformado, conteúdo que não seja objeto e snapshots
-incompletos antes de substituir um arquivo válido.
+não finita e traços ligados a conexões inexistentes são rejeitados. O limite
+`max_pending_steps` é persistido no snapshot; snapshots antigos sem esse campo
+continuam válidos e recebem limite `None`. Um snapshot com
+`pending_steps > max_pending_steps` é rejeitado. O checkpoint também rejeita
+JSON malformado, conteúdo que não seja objeto e snapshots incompletos antes de
+substituir um arquivo válido.
 
 ## Integração com o VirtualBrain
 
-`MNNCognitionAdapter(..., delayed_reward=True)` ativa o ciclo no adaptador
-cognitivo. Nesse modo:
+`MNNCognitionAdapter(..., delayed_reward=True, max_pending_steps=...)` ativa o
+ciclo no adaptador cognitivo. Nesse modo:
 
 - `analyze` usa `MNNExperienceCycle.step`, acumula elegibilidade com recompensa
   neutra e persiste o `experience_snapshot` completo no artefato

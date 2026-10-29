@@ -111,6 +111,23 @@ class MNNCognitionAdapterTests(unittest.TestCase):
             brain.store.verify_integrity()
             brain.close()
 
+    def test_adapter_enforces_max_pending_steps(self):
+        adapter = MNNCognitionAdapter(
+            self.make_network(),
+            input_features={"text": "text_length"},
+            delayed_reward=True,
+            max_pending_steps=1,
+        )
+        adapter.cycle.step({"text": 0.5})
+        with self.assertRaisesRegex(RuntimeError, "max pending steps"):
+            adapter.cycle.step({"text": 0.5})
+        with self.assertRaisesRegex(ValueError, "requires delayed_reward"):
+            MNNCognitionAdapter(
+                self.make_network(),
+                input_features={"text": "text_length"},
+                max_pending_steps=1,
+            )
+
     def test_adapter_can_abort_an_orphaned_delayed_experience(self):
         network = self.make_network()
         adapter = MNNCognitionAdapter(

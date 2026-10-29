@@ -21,6 +21,14 @@ from .mnn import MNN
 from .mnn_reward import RewardModulator
 
 
+def _pending_limit(value: int | None) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError("max_pending_steps must be a positive integer or None")
+    return value
+
+
 class MNNExperienceCycle:
     """Coordinate network steps, eligibility accumulation, and delayed outcomes."""
 
@@ -30,6 +38,7 @@ class MNNExperienceCycle:
         *,
         modulator: RewardModulator | None = None,
         learning_rate: float = 0.1,
+        max_pending_steps: int | None = None,
     ) -> None:
         if not isinstance(network, MNN):
             raise ValueError("network must be an MNN instance")
@@ -40,12 +49,20 @@ class MNNExperienceCycle:
         self.learning_rate = float(learning_rate)
         if not math.isfinite(self.learning_rate) or self.learning_rate < 0:
             raise ValueError("learning_rate must be finite and non-negative")
+        self.max_pending_steps = _pending_limit(max_pending_steps)
         self.network = network
         self.modulator = modulator or RewardModulator()
         self.pending_steps = 0
 
     def step(self, inputs: Mapping[str, float] | None = None) -> dict[str, float]:
         """Advance the network and accumulate eligibility without outcome credit."""
+        if (
+            self.max_pending_steps is not None
+            and self.pending_steps >= self.max_pending_steps
+        ):
+            raise RuntimeError(
+                f"experience exceeded max pending steps ({self.max_pending_steps})"
+            )
         outputs = self.network.step(inputs)
         neutral_reward = self.modulator.baseline
         if neutral_reward is None:
@@ -102,6 +119,7 @@ class MNNExperienceCycle:
         return {
             "schema_version": 1,
             "learning_rate": self.learning_rate,
+            "max_pending_steps": self.max_pending_steps,
             "pending_steps": self.pending_steps,
             "network": self.network.snapshot(),
             "modulator": self.modulator.snapshot(),
@@ -119,7 +137,8 @@ class MNNExperienceCycle:
             raise ValueError(
                 f"experience-cycle snapshot is missing fields: {', '.join(sorted(missing))}"
             )
-        unknown = set(data) - required
+        allowed = required | {"max_pending_steps"}
+        unknown = set(data) - allowed
         if unknown:
             raise ValueError(
                 f"experience-cycle snapshot has unknown fields: {', '.join(sorted(unknown))}"
@@ -145,7 +164,15 @@ class MNNExperienceCycle:
             raise ValueError("pending_steps must be a non-negative integer")
         if pending_steps == 0 and modulator.eligibility:
             raise ValueError("closed experience cannot contain eligibility traces")
-        cycle = cls(network, modulator=modulator, learning_rate=data["learning_rate"])
+        max_pending_steps = _pending_limit(data.get("max_pending_steps"))
+        if max_pending_steps is not None and pending_steps > max_pending_steps:
+            raise ValueError("pending_steps cannot exceed max_pending_steps")
+        cycle = cls(
+            network,
+            modulator=modulator,
+            learning_rate=data["learning_rate"],
+            max_pending_steps=max_pending_steps,
+        )
         cycle.pending_steps = pending_steps
         return cycle
 

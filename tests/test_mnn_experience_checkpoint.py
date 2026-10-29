@@ -62,6 +62,23 @@ class MNNExperienceCheckpointTests(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 reopened.resolve(1.0)
 
+    def test_checkpoint_preserves_pending_step_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            cycle = MNNExperienceCycle(
+                self.make_cycle().network,
+                learning_rate=0.1,
+                max_pending_steps=1,
+            )
+            cycle.step({"action": 1.0})
+            store = MNNExperienceCheckpointStore(Path(directory) / "experience.json")
+            store.save(cycle)
+
+            restored = store.load()
+            self.assertEqual(restored.max_pending_steps, 1)
+            self.assertEqual(restored.pending_steps, 1)
+            with self.assertRaisesRegex(RuntimeError, "max pending steps"):
+                restored.step({"action": 1.0})
+
     def test_invalid_checkpoint_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "broken.json"
