@@ -60,3 +60,7 @@ The benchmark demonstrates repeated tags and an explicitly marked counter-observ
 ## Next work
 
 A useful next step is a revision loop: compare newly observed evidence with existing concept records, mark concepts as current/stale/conflicted, and measure whether using concepts improves downstream task reward over a no-concept baseline. That loop should keep source evidence immutable and make confidence calibration an empirical question.
+
+## Enquadramento na hipótese fundamental
+
+Este documento deve separar conceitos definidos, hipóteses, evidências experimentais e inferências. Um conceito operacional não deve ser tratado como fenômeno comprovado apenas por possuir uma representação no código. Manter a distinção entre estados mensuráveis e experiência subjetiva. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
