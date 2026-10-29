@@ -83,6 +83,97 @@ class VirtualBrainFragmentMemoryTests(unittest.TestCase):
             self.assertTrue(brain.audit_cycle(cycle_id).valid)
             brain.close()
 
+    def test_retrieval_feedback_is_audited_and_idempotent_per_cycle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            brain = VirtualBrain(
+                root / "brain.sqlite",
+                fragment_memory_path=root / "fragments.sqlite",
+            )
+            fragment = brain.fragment_memory.add(
+                "Blue sensor temperature calibration record",
+                source_uri="test://sensor-calibration",
+                importance=0.4,
+                confidence=0.9,
+                fragment_id="sensor-calibration",
+            )
+            result = brain.run_cycle(
+                "Recall the blue sensor temperature calibration record",
+                "Use the sensor calibration information",
+            )
+            retrieval = next(
+                event.artifact for event in result.events
+                if event.event_type == "memory.retrieved"
+            )
+            retrieved_ids = {
+                item["fragment_id"] for item in retrieval.data["fragment_context"]
+            }
+            self.assertIn(fragment.id, retrieved_ids)
+
+            feedback_event = brain.apply_retrieval_feedback(
+                result.cycle_id,
+                {fragment.id: True},
+                strength=0.2,
+                feedback_id="sensor-cycle-feedback",
+            )
+            self.assertEqual("feedback_applied", feedback_event.data["status"])
+            self.assertEqual("sensor-cycle-feedback", feedback_event.data["feedback_id"])
+            self.assertTrue(feedback_event.data["results"][0]["applied"])
+            self.assertAlmostEqual(
+                0.6,
+                brain.fragment_memory.get(fragment.id, record_access=False).importance,
+            )
+
+            replay = brain.apply_retrieval_feedback(
+                result.cycle_id,
+                {fragment.id: True},
+                strength=0.2,
+                feedback_id="sensor-cycle-feedback",
+            )
+            self.assertEqual(feedback_event.id, replay.id)
+            self.assertEqual(
+                1,
+                sum(
+                    event.event_type == "memory.retrieval_feedback_applied"
+                    for event in brain.store.events_for_cycle(result.cycle_id)
+                ),
+            )
+            self.assertAlmostEqual(
+                0.6,
+                brain.fragment_memory.get(fragment.id, record_access=False).importance,
+            )
+            brain.store.verify_integrity()
+            brain.close()
+
+    def test_retrieval_feedback_rejects_fragments_not_retrieved_in_cycle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            brain = VirtualBrain(
+                root / "brain.sqlite",
+                fragment_memory_path=root / "fragments.sqlite",
+            )
+            brain.fragment_memory.add(
+                "Unrelated archived memory",
+                source_uri="test://unrelated",
+                importance=0.4,
+                fragment_id="unrelated",
+            )
+            result = brain.run_cycle(
+                "A completely different observation about gardening",
+                "Discuss gardening",
+            )
+            with self.assertRaisesRegex(ValueError, "only rate fragments retrieved"):
+                brain.apply_retrieval_feedback(
+                    result.cycle_id,
+                    {"unrelated": True},
+                    feedback_id="invalid-feedback",
+                )
+            self.assertAlmostEqual(
+                0.4,
+                brain.fragment_memory.get("unrelated", record_access=False).importance,
+            )
+            brain.close()
+
     def test_fragment_memory_is_opt_in(self):
         with tempfile.TemporaryDirectory() as directory:
             brain = VirtualBrain(Path(directory) / "brain.sqlite")
