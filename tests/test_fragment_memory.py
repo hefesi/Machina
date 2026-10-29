@@ -132,6 +132,48 @@ class FragmentMemoryTests(unittest.TestCase):
                 strength=0.4,
             )
 
+    def test_context_feedback_history_is_append_only_and_persists(self) -> None:
+        self.memory.add(
+            "sensor calibration",
+            source_uri="local://sensor",
+            fragment_id="sensor",
+        )
+        self.memory.apply_context_feedback_batch(
+            {"sensor": True},
+            context="maintenance",
+            operation_id="maintenance-1",
+            strength=0.2,
+        )
+        self.memory.apply_context_feedback_batch(
+            {"sensor": False},
+            context="maintenance",
+            operation_id="maintenance-2",
+            strength=0.1,
+        )
+        # Replaying an existing operation must not append another audit event.
+        _, applied = self.memory.apply_context_feedback_batch(
+            {"sensor": False},
+            context="maintenance",
+            operation_id="maintenance-2",
+            strength=0.1,
+        )
+        self.assertFalse(applied)
+        history = self.memory.context_feedback_history("sensor", "MAINTENANCE")
+        self.assertEqual(2, len(history))
+        self.assertEqual(["maintenance-2", "maintenance-1"], [event["operation_id"] for event in history])
+        self.assertAlmostEqual(0.7, history[0]["after_score"])
+        self.assertAlmostEqual(0.5, history[0]["before_score"])
+        self.assertFalse(history[0]["useful"])
+        self.assertAlmostEqual(0.5, history[1]["before_score"])
+        self.assertAlmostEqual(0.7, history[1]["after_score"])
+
+        self.memory.close()
+        self.memory = FragmentMemory(self.path)
+        persisted = self.memory.context_feedback_history("sensor", "maintenance")
+        self.assertEqual(2, len(persisted))
+        self.assertEqual([event["operation_id"] for event in history], [event["operation_id"] for event in persisted])
+        self.assertAlmostEqual(0.7, self.memory.context_importance("sensor", "maintenance"))
+
     def test_recall_validates_query_and_limit(self) -> None:
         with self.assertRaises(ValueError):
             self.memory.recall("   ")
