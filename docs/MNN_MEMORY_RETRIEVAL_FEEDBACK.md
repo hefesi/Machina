@@ -44,9 +44,18 @@ append-only event journal. It uses a stable per-cycle operation ID by default,
 so retrying after a partial failure between the fragment database and event
 journal does not apply the importance delta twice. A caller may provide an
 explicit `feedback_id`. Only one feedback batch is accepted per cycle, and
-only IDs in that cycle's retrieved fragment context can be rated. Because the
-fragment archive and event journal are separate SQLite databases, this is a
-retry-safe two-write protocol, not a single cross-database atomic transaction.
+only IDs in that cycle's retrieved fragment context can be rated.
+
+Feedback is rejected until the cycle has both a persisted `action.result` and
+an `evaluation.completed` artifact. The feedback artifact links to all three
+records—the retrieval, action result, and evaluation—and snapshots the observed
+action status/result plus evaluation success and prediction error. This gives
+auditors a causal trail from recalled fragments to the outcome used when
+adjusting their task-relative importance. It does **not** automatically infer
+which fragment caused success or failure: callers must still provide explicit
+per-fragment usefulness labels. Because the fragment archive and event journal
+are separate SQLite databases, this is a retry-safe two-write protocol, not a
+single cross-database atomic transaction.
 
 ## Important distinction
 
