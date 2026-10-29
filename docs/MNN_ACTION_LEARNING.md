@@ -36,3 +36,7 @@ não faz planejamento de múltiplas etapas, não aprende sem receber feedback e
 não demonstra inteligência geral. O peso é um valor preditivo simplificado; em
 etapas futuras deve ser comparado com previsão contextual e com o ciclo de
 elegibilidade/recompensa atrasada.
+
+## Enquadramento na hipótese fundamental
+
+Aprender a partir das consequências de ações é relevante para o acoplamento contínuo entre Machina e seu ambiente. O experimento deve distinguir correlação, atribuição causal e adaptação persistente, medindo se os resultados alteram políticas futuras. A capacidade de aprender com ação não implica, isoladamente, experiência consciente. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
