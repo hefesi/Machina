@@ -68,13 +68,17 @@ class RetrievalEvaluationTests(unittest.TestCase):
                     {
                         "solar panel efficiency": ["solar"],
                         "ocean current biology": ["ocean"],
+                        # This query should count as a miss rather than being hidden
+                        # by the two successful queries above.
+                        "quantum computing hardware": ["solar"],
                     },
                     k=1,
                 )
-                self.assertEqual(2, len(result.evaluations))
-                self.assertEqual(1.0, result.precision_at_k)
-                self.assertEqual(1.0, result.recall_at_k)
-                self.assertEqual(1.0, result.mean_reciprocal_rank)
+                self.assertEqual(3, len(result.evaluations))
+                self.assertAlmostEqual(2 / 3, result.precision_at_k)
+                self.assertAlmostEqual(2 / 3, result.recall_at_k)
+                self.assertAlmostEqual(2 / 3, result.mean_reciprocal_rank)
+                self.assertEqual((), result.evaluations[2].retrieved_ids)
 
                 with self.assertRaises(ValueError):
                     evaluate_retrieval_suite(memory, {}, k=1)
