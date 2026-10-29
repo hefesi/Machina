@@ -239,6 +239,27 @@ class FragmentMemory:
                 created_at TEXT NOT NULL
             )
         """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_sequence_context_utility (
+                previous_fragment_id TEXT NOT NULL,
+                next_fragment_id TEXT NOT NULL,
+                context_key TEXT NOT NULL,
+                score REAL NOT NULL CHECK (score BETWEEN 0 AND 1),
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (previous_fragment_id, next_fragment_id, context_key),
+                FOREIGN KEY (previous_fragment_id, next_fragment_id, context_key)
+                    REFERENCES memory_sequence_transitions(previous_fragment_id, next_fragment_id, context_key)
+                    ON DELETE CASCADE
+            )
+        """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_sequence_feedback_batches (
+                operation_id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
         self._db.commit()
         self._closed = False
 
@@ -658,7 +679,104 @@ class FragmentMemory:
         )
         if evidence is None:
             return 0.0
-        return 1.0 - math.exp(-float(evidence["observations"]) / 2.0)
+        strength_value = 1.0 - math.exp(-float(evidence["observations"]) / 2.0)
+        row = self._db.execute(
+            """SELECT score FROM memory_sequence_context_utility
+            WHERE previous_fragment_id = ? AND next_fragment_id = ? AND context_key = ?""",
+            (previous_fragment_id, next_fragment_id, context.strip().casefold()),
+        ).fetchone()
+        if row is not None:
+            strength_value *= 2.0 * float(row["score"])
+        return min(1.0, max(0.0, strength_value))
+
+    def apply_sequence_feedback_batch(
+        self,
+        outcomes: Mapping[tuple[str, str], bool],
+        *,
+        context: str,
+        operation_id: str,
+        strength: float = 0.10,
+    ) -> tuple[dict[tuple[str, str], float], bool]:
+        """Adjust context-specific utility for observed directional transitions."""
+        self._ensure_open()
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("context must be a non-empty string")
+        context_key = context.strip().casefold()
+        if not isinstance(operation_id, str) or not operation_id.strip():
+            raise ValueError("operation_id must be a non-empty string")
+        amount = _score(strength, "strength")
+        if not isinstance(outcomes, Mapping) or not outcomes:
+            raise ValueError("outcomes must be a non-empty mapping")
+        normalized: dict[tuple[str, str], bool] = {}
+        for transition, useful in outcomes.items():
+            if not isinstance(transition, tuple) or len(transition) != 2:
+                raise ValueError("each transition key must be an ordered pair of fragment IDs")
+            previous_id, next_id = transition
+            if not isinstance(previous_id, str) or not previous_id.strip() or not isinstance(next_id, str) or not next_id.strip():
+                raise ValueError("transition fragment IDs must be non-empty strings")
+            if previous_id == next_id:
+                raise ValueError("a fragment cannot transition to itself")
+            if not isinstance(useful, bool):
+                raise ValueError("every usefulness label must be boolean")
+            normalized[(previous_id, next_id)] = useful
+        payload_json = _json({
+            "context": context_key,
+            "outcomes": [
+                {"transition": list(key), "useful": useful}
+                for key, useful in sorted(normalized.items())
+            ],
+            "strength": amount,
+        })
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            prior = self._db.execute(
+                "SELECT payload_json, result_json FROM memory_sequence_feedback_batches WHERE operation_id = ?",
+                (operation_id,),
+            ).fetchone()
+            if prior is not None:
+                if prior["payload_json"] != payload_json:
+                    raise ValueError("operation_id was already used with different sequence feedback")
+                saved = json.loads(prior["result_json"])
+                self._db.commit()
+                return {(x["transition"][0], x["transition"][1]): float(x["score"]) for x in saved}, False
+            results: list[dict[str, Any]] = []
+            now = _now()
+            for transition, useful in sorted(normalized.items()):
+                previous_id, next_id = transition
+                evidence = self._db.execute(
+                    """SELECT 1 FROM memory_sequence_transitions
+                    WHERE previous_fragment_id = ? AND next_fragment_id = ? AND context_key = ?""",
+                    (previous_id, next_id, context_key),
+                ).fetchone()
+                if evidence is None:
+                    raise KeyError(f"unknown sequence transition: {previous_id} -> {next_id} in {context_key}")
+                row = self._db.execute(
+                    """SELECT score FROM memory_sequence_context_utility
+                    WHERE previous_fragment_id = ? AND next_fragment_id = ? AND context_key = ?""",
+                    (previous_id, next_id, context_key),
+                ).fetchone()
+                before = float(row["score"]) if row is not None else 0.5
+                after = min(1.0, max(0.0, before + (amount if useful else -amount)))
+                results.append({"transition": [previous_id, next_id], "useful": useful, "score": after})
+            for item in results:
+                previous_id, next_id = item["transition"]
+                self._db.execute(
+                    """INSERT INTO memory_sequence_context_utility
+                    (previous_fragment_id, next_fragment_id, context_key, score, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(previous_fragment_id, next_fragment_id, context_key)
+                    DO UPDATE SET score = excluded.score, updated_at = excluded.updated_at""",
+                    (previous_id, next_id, context_key, item["score"], now),
+                )
+            self._db.execute(
+                "INSERT INTO memory_sequence_feedback_batches(operation_id, payload_json, result_json, created_at) VALUES (?, ?, ?, ?)",
+                (operation_id, payload_json, _json(results), now),
+            )
+            self._db.commit()
+            return {(x["transition"][0], x["transition"][1]): float(x["score"]) for x in results}, True
+        except Exception:
+            self._db.rollback()
+            raise
 
     def association_evidence(self, fragment_id: str, related_id: str) -> dict[str, Any] | None:
         """Return accumulated co-activation evidence for a pair, if observed."""
