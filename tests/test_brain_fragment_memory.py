@@ -62,6 +62,51 @@ class VirtualBrainFragmentMemoryTests(unittest.TestCase):
             restarted.store.verify_integrity()
             restarted.close()
 
+    def test_repeated_cycles_consolidate_co_retrieved_fragments_by_objective(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            brain = VirtualBrain(
+                root / "brain.sqlite",
+                fragment_memory_path=root / "fragments.sqlite",
+            )
+            first = brain.fragment_memory.add(
+                "blue sensor calibration maintenance reference",
+                source_uri="test://sensor-calibration",
+                fragment_id="sensor-reference",
+            )
+            second = brain.fragment_memory.add(
+                "blue sensor calibration diagnostic procedure",
+                source_uri="test://sensor-diagnostics",
+                fragment_id="sensor-diagnostics",
+            )
+            objective = "Blue sensor calibration maintenance"
+            for observation in (
+                "The blue sensor calibration was checked.",
+                "The blue sensor calibration was checked again.",
+            ):
+                result = brain.run_cycle(observation, objective)
+                retrieval = next(
+                    event.artifact for event in result.events
+                    if event.event_type == "memory.retrieved"
+                )
+                retrieved_ids = {
+                    item["fragment_id"] for item in retrieval.data["fragment_context"]
+                }
+                self.assertIn(first.id, retrieved_ids)
+                self.assertIn(second.id, retrieved_ids)
+
+            evidence = brain.fragment_memory.association_evidence(first.id, second.id)
+            self.assertIsNotNone(evidence)
+            self.assertEqual(2, evidence["observations"])
+            self.assertIn(objective.casefold(), evidence["contexts"])
+            strength = brain.fragment_memory.association_strength(
+                first.id, second.id, context=objective
+            )
+            self.assertGreater(strength, 0.0)
+            self.assertLessEqual(strength, 1.0)
+            brain.store.verify_integrity()
+            brain.close()
+
     def test_resume_does_not_duplicate_episode_fragment(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
