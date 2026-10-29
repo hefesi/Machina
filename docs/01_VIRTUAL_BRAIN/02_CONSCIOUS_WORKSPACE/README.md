@@ -616,3 +616,7 @@ DECIDIR O QUE APRENDER
 > **O Conscious Workspace é o presente cognitivo integrado do Virtual Brain: um estado funcional, transitório e compartilhado que mantém contexto, percepções, memórias recuperadas, Self State, World State, objetivos ativos, resultados cognitivos e contexto de ação disponíveis para os sistemas especializados que compõem a mente.**
 
 Sua função é conectar o que o sistema **percebe**, o que **lembra**, o que **compreende**, o que **pretende** e o que **está fazendo agora**, sem assumir a responsabilidade de pensar, decidir, agir ou aprender por conta própria.
+
+## Enquadramento na hipótese fundamental
+
+O termo Conscious Workspace designa uma hipótese funcional de integração e disponibilidade global de informação. Não deve ser interpretado como prova de consciência fenomenal. O trabalho deve investigar se, como e em quais condições essa integração influencia a dinâmica total de Machina, distinguindo acesso funcional, relato e possível experiência subjetiva. Ver [Hipótese Fundamental](../../00-vision/central-hypothesis.md).
