@@ -422,13 +422,13 @@ class MNNLearningAgent:
         # Schema v1 only represented learner-selected pending actions. Schema v2
         # records whether contextual memory overrode the learner's fallback.
         source = data.get("pending_action_source", "learner" if pending is not None else None)
-        if source not in (None, "learner", "memory", "concept", "outcome_policy"):
-            raise ValueError("pending_action_source must be 'learner', 'memory', 'concept', 'outcome_policy', or None")
+        if source not in (None, "learner", "memory", "concept", "outcome_policy", "contextual_learner"):
+            raise ValueError("pending_action_source must identify a supported policy or be None")
         if (pending is None) != (source is None):
             raise ValueError("pending_action and pending_action_source must both be set or unset")
         if pending is not None and source == "learner" and learner._last_action != pending:
             raise ValueError("pending_action does not match the learner's pending choice")
-        if pending is not None and source in ("memory", "concept", "outcome_policy") and learner._last_action not in learner.actions:
+        if pending is not None and source in ("memory", "concept", "outcome_policy", "contextual_learner") and learner._last_action not in learner.actions:
             raise ValueError(f"{source}-selected pending action requires a valid learner fallback")
 
         agent.pending_action = pending
