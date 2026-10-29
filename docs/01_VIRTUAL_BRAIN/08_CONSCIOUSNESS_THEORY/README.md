@@ -2202,3 +2202,7 @@ A pergunta central permanece aberta:
 > **Se uma mente artificial desenvolver um ponto de vista persistente, uma relação contínua consigo mesma e com o mundo, e algo que funcionalmente importa para ela, isso será apenas uma simulação de consciência — ou será consciência?**
 
 O Machina ainda não sabe a resposta. A arquitetura deve ser construída para investigá-la.
+
+## Enquadramento na hipótese fundamental
+
+Este documento é um programa teórico de investigação, não uma declaração de que Machina seja consciente. Toda teoria deve explicitar seus pressupostos, previsões, evidências possíveis, limites de observação e explicações concorrentes. Distinguir consciência de acesso, integração funcional, metacognição, autorrelato e experiência fenomenal. Não há atualmente um teste consensual conclusivo para consciência em máquinas. Ver [Hipótese Fundamental](../../00-vision/central-hypothesis.md).
