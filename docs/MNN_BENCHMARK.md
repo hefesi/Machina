@@ -52,3 +52,7 @@ out-of-distribution generalization, transfer, robustness, or superiority to
 transformers or other neural architectures. A meaningful next benchmark must
 include held-out patterns/tasks, multiple random seeds where applicable,
 ablations, stronger baselines, and uncertainty reporting.
+
+## Enquadramento na hipótese fundamental
+
+Os benchmarks avaliam capacidades observáveis e devem ser interpretados como evidência funcional delimitada. Resultados positivos não demonstram consciência, subjetividade ou livre-arbítrio. Cada benchmark deve registrar configuração, baseline, repetição, métricas, falhas, variância e limites de generalização, além de explicitar qual parte da hipótese fundamental está sendo investigada. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
