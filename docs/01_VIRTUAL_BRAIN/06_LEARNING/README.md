@@ -649,3 +649,7 @@ CONCEDER NOVAS AUTORIZAÇÕES
 ```
 
 > **Learning é a ponte entre experiência e transformação. Ele permite que o Virtual Brain preserve sua história, mas não permaneça preso a ela: o sistema aprende, atualiza seus modelos e entra no próximo ciclo como uma entidade modificada.**
+
+## Enquadramento na hipótese fundamental
+
+Aprendizado deve ser avaliado como transformação persistente do sistema por experiência, incluindo efeitos sobre memória, modelos, capacidades, prioridades e identidade funcional. Não basta demonstrar atualização de pesos ou melhoria numa tarefa isolada: é preciso medir retenção, transferência, estabilidade, reversibilidade e efeitos imprevistos. Aprender não demonstra, por si só, consciência. Ver [Hipótese Fundamental](../../00-vision/central-hypothesis.md).
