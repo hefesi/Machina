@@ -252,3 +252,20 @@ An optional `association_decay_half_life_seconds` constructor setting makes old 
 Association evidence is also tracked independently by normalized context. Passing `context="maintenance"` to `association_strength()` evaluates only co-activations observed in that context; an evidence-backed association with no observations in the requested context contributes zero associative strength for that context. When `recall(..., context=...)` is used, related-fragment ranking uses this context-specific strength. Calls without a context continue to use the aggregate evidence. This lets the same pair of fragments be strongly connected in one activity and weakly connected in another without deleting either the relation or its global history.
 
 Outcome-based association learning is available through `apply_association_feedback_batch({("fragment-a", "fragment-b"): True}, context="maintenance", operation_id="...", strength=0.1)`. Positive feedback raises a pair's contextual utility score, while negative feedback lowers it; the neutral score is 0.5. That score scales only the association's influence in the named context, is clamped to valid bounds, and is stored independently from co-activation counts and fragment importance. Batches are transactional and idempotent: retrying the same operation does not apply learning twice, and reusing an operation ID with a different payload is rejected. Feedback requires an existing evidence-backed association and does not fabricate links.
+
+## Direção temporal entre episódios
+
+A API `observe_sequence(fragment_ids, operation_id=..., context=...)` registra
+transições direcionais entre fragmentos cuja ordem foi explicitamente fornecida.
+Diferentemente da coativação não direcional, A→B e B→A são evidências distintas.
+`sequence_evidence()` expõe contagem e data da última observação, e
+`sequence_strength()` retorna uma força saturante entre 0 e 1. A persistência é
+transacional e o ID da operação é idempotente; reutilizar o mesmo ID com outra
+sequência é rejeitado. O contexto é normalizado, e evidências de uma atividade
+não são automaticamente transferidas para outra.
+
+A API não infere ordem temporal a partir da classificação de recuperação. O
+chamador deve fornecer uma sequência sustentada por eventos/episódios ordenados;
+isso evita transformar similaridade textual em uma falsa relação de causa e
+efeito. Esta etapa fornece a base persistente para, futuramente, comparar
+sequências e resultados sem apagar o histórico original.
