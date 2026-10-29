@@ -1,7 +1,8 @@
 """Online action-value estimates keyed by normalized lexical context.
 
-This learner uses exact normalized token sets as context keys. It is deliberately
-transparent and does not claim semantic similarity or causal understanding.
+This learner stores normalized lexical contexts and can optionally transfer
+weighted evidence between similar token sets. Similarity is lexical Jaccard, not
+semantic similarity or causal understanding.
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ class MNNContextualActionLearner:
         learning_rate: float = 0.25,
         min_samples_per_action: int = 2,
         min_reward_margin: float = 0.1,
+        min_context_similarity: float = 0.5,
     ) -> None:
         names = tuple(actions)
         if len(names) < 2 or any(not isinstance(name, str) or not name.strip() for name in names):
@@ -47,10 +49,19 @@ class MNNContextualActionLearner:
         ):
             raise ValueError("min_reward_margin must be finite and non-negative")
 
+        if (
+            isinstance(min_context_similarity, bool)
+            or not isinstance(min_context_similarity, (int, float))
+            or not math.isfinite(min_context_similarity)
+            or not 0 < min_context_similarity <= 1
+        ):
+            raise ValueError("min_context_similarity must be finite and in (0, 1]")
+
         self.actions = names
         self.learning_rate = float(learning_rate)
         self.min_samples_per_action = min_samples_per_action
         self.min_reward_margin = float(min_reward_margin)
+        self.min_context_similarity = float(min_context_similarity)
         self._values: dict[str, dict[str, float]] = {}
         self._counts: dict[str, dict[str, int]] = {}
         self._contexts: dict[str, str] = {}
@@ -101,57 +112,95 @@ class MNNContextualActionLearner:
             "observations": counts[action],
         }
 
+    @staticmethod
+    def _similarity(left_key: str, right_key: str) -> float:
+        left, right = set(left_key.split()), set(right_key.split())
+        if not left or not right:
+            return 0.0
+        return len(left & right) / len(left | right)
+
     def recommend(self, context: str) -> dict:
-        """Recommend an action only when all actions have sufficient evidence."""
+        """Recommend using exact evidence plus cautiously weighted lexical neighbors."""
         key, display_context = self._context_key(context)
-        counts = self._counts.get(key, {name: 0 for name in self.actions})
-        values = self._values.get(key, {name: 0.0 for name in self.actions})
+        values = {action: 0.0 for action in self.actions}
+        evidence = {action: 0.0 for action in self.actions}
+        contributing_contexts = []
+        for observed_key, observed_values in self._values.items():
+            similarity = self._similarity(key, observed_key)
+            if similarity < self.min_context_similarity:
+                continue
+            observed_counts = self._counts[observed_key]
+            contributing_contexts.append({
+                "context": self._contexts[observed_key],
+                "similarity": similarity,
+            })
+            for action in self.actions:
+                weighted_count = similarity * observed_counts[action]
+                values[action] += observed_values[action] * weighted_count
+                evidence[action] += weighted_count
+
+        estimates = {
+            action: values[action] / evidence[action] if evidence[action] else 0.0
+            for action in self.actions
+        }
         insufficient = [
             action for action in self.actions
-            if counts[action] < self.min_samples_per_action
+            if evidence[action] < self.min_samples_per_action
         ]
+        common = {
+            "context": display_context,
+            "estimated_values": estimates,
+            "effective_sample_counts": evidence,
+            "contributing_contexts": contributing_contexts,
+            "min_context_similarity": self.min_context_similarity,
+        }
         if insufficient:
             return {
                 "status": "abstain",
-                "reason": "insufficient_contextual_observations",
-                "context": display_context,
-                "sample_counts": dict(counts),
+                "reason": "insufficient_similar_context_evidence",
+                **common,
                 "missing_actions": insufficient,
             }
-        ranked = sorted(self.actions, key=lambda action: (-values[action], self.actions.index(action)))
+        ranked = sorted(self.actions, key=lambda action: (-estimates[action], self.actions.index(action)))
         best, runner_up = ranked[:2]
-        margin = values[best] - values[runner_up]
+        margin = estimates[best] - estimates[runner_up]
         if margin < self.min_reward_margin:
             return {
                 "status": "abstain",
                 "reason": "contextual_values_too_close",
-                "context": display_context,
-                "estimated_values": dict(values),
-                "sample_counts": dict(counts),
+                **common,
+                "sample_counts": {
+                    action: self._counts.get(key, {}).get(action, 0)
+                    for action in self.actions
+                },
                 "value_margin": margin,
             }
         return {
             "status": "recommended",
-            "reason": "minimum_contextual_evidence_satisfied",
+            "reason": "similar_context_evidence_satisfied",
             "action": best,
-            "context": display_context,
-            "estimated_values": dict(values),
-            "sample_counts": dict(counts),
+            **common,
+            "sample_counts": {
+                action: self._counts.get(key, {}).get(action, 0)
+                for action in self.actions
+            },
             "value_margin": margin,
             "interpretation": (
-                "Online reward estimates for an exact normalized token-set context; "
-                "this is lexical partitioning, not semantic understanding."
+                "Values combine observed rewards from token sets whose Jaccard "
+                "similarity meets the threshold. This is lexical transfer, not "
+                "semantic understanding; review contributing contexts."
             ),
         }
 
     def snapshot(self) -> dict:
         """Return JSON-compatible state for checkpointing."""
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "actions": list(self.actions),
             "learning_rate": self.learning_rate,
             "min_samples_per_action": self.min_samples_per_action,
             "min_reward_margin": self.min_reward_margin,
+            "min_context_similarity": self.min_context_similarity,
             "values": {key: dict(values) for key, values in self._values.items()},
             "counts": {key: dict(counts) for key, counts in self._counts.items()},
             "contexts": dict(self._contexts),
@@ -159,13 +208,14 @@ class MNNContextualActionLearner:
 
     @classmethod
     def from_snapshot(cls, data: Mapping) -> "MNNContextualActionLearner":
-        if not isinstance(data, Mapping) or data.get("schema_version") != 1:
+        if not isinstance(data, Mapping) or data.get("schema_version") not in (1, 2):
             raise ValueError("unsupported contextual action-learner snapshot schema")
         learner = cls(
             data["actions"],
             learning_rate=data["learning_rate"],
             min_samples_per_action=data["min_samples_per_action"],
             min_reward_margin=data["min_reward_margin"],
+            min_context_similarity=data.get("min_context_similarity", 1.0 if data.get("schema_version") == 1 else 0.5),
         )
         values = data["values"]
         counts = data["counts"]
