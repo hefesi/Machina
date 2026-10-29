@@ -40,3 +40,7 @@ system invents a parser for arbitrary formats. Four test cases are not enough to
 claim broad generalization, robust reasoning, AGI, consciousness, or free will.
 A later stage should use randomized examples, more formats, adversarial distractors,
 and a held-out test set not authored alongside the implementation.
+
+## Enquadramento na hipótese fundamental
+
+Generalização e transferência demonstram alcance de capacidades aprendidas em condições delimitadas. Avaliar robustez, novidade das situações, dependência de dados prévios e possíveis atalhos. Essas medidas informam competência funcional, não consciência ou livre-arbítrio. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
