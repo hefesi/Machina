@@ -93,7 +93,11 @@ class MNNMemoryRetrievalFeedbackTests(unittest.TestCase):
             {"decision": True}, strength=0.2, feedback_id="cycle-123"
         )
         self.assertAlmostEqual(0.7, first[0][0].importance)
+        self.assertTrue(first[0][1].applied)
+        self.assertEqual("cycle-123", first[0][1].feedback_id)
         self.assertAlmostEqual(0.7, second[0][0].importance)
+        self.assertFalse(second[0][1].applied)
+        self.assertEqual("cycle-123", second[0][1].feedback_id)
         self.assertAlmostEqual(0.5, second[0][1].importance_before)
         self.assertAlmostEqual(0.7, second[0][1].importance_after)
         self.assertAlmostEqual(0.7, self.memory.get("decision", record_access=False).importance)
@@ -109,6 +113,7 @@ class MNNMemoryRetrievalFeedbackTests(unittest.TestCase):
             {"decision": True}, strength=0.2, feedback_id="durable-cycle-123"
         )
         self.assertAlmostEqual(0.7, retried[0][0].importance)
+        self.assertFalse(retried[0][1].applied)
         self.assertAlmostEqual(0.5, retried[0][1].importance_before)
         self.assertAlmostEqual(0.7, retried[0][1].importance_after)
 
