@@ -98,15 +98,28 @@ class RewardModulator:
 
     @classmethod
     def from_snapshot(cls, data: Mapping) -> "RewardModulator":
+        if not isinstance(data, Mapping):
+            raise ValueError("reward-modulator snapshot must be a mapping")
         if data.get("schema_version") != 1:
             raise ValueError("unsupported reward-modulator snapshot schema")
+        required = {"schema_version", "trace_decay", "baseline_rate", "baseline", "eligibility"}
+        missing = required - set(data)
+        if missing:
+            raise ValueError(
+                f"reward-modulator snapshot is missing fields: {', '.join(sorted(missing))}"
+            )
+        unknown = set(data) - required
+        if unknown:
+            raise ValueError(
+                f"reward-modulator snapshot has unknown fields: {', '.join(sorted(unknown))}"
+            )
         modulator = cls(
             trace_decay=data["trace_decay"],
             baseline_rate=data["baseline_rate"],
         )
-        baseline = data.get("baseline")
+        baseline = data["baseline"]
         modulator.baseline = None if baseline is None else _finite(baseline, "baseline")
-        traces = data.get("eligibility", {})
+        traces = data["eligibility"]
         if not isinstance(traces, Mapping):
             raise ValueError("eligibility must be a mapping")
         modulator.eligibility = {

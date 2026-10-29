@@ -1,0 +1,44 @@
+# MNN — Ciclo de experiência e recompensa atrasada
+
+## Objetivo
+
+Unificar atividade neural, acúmulo de elegibilidade e consequência atrasada em um
+componente serializável. A rede não altera pesos antes de conhecer o resultado;
+quando o resultado chega, ele é atribuído às conexões que participaram da
+atividade original.
+
+## API
+
+- `MNNExperienceCycle(network, modulator=None, learning_rate=0.1)` cria o ciclo.
+- `step(inputs)` avança a MNN e acumula traços de elegibilidade usando recompensa
+  neutra, sem reforçar ou punir pesos.
+- `resolve(reward)` aplica o erro de previsão aos traços acumulados, retorna as
+  mudanças de peso e os snapshots, e então limpa os traços.
+- `snapshot()` / `from_snapshot(...)` preservam rede, modulador e uma experiência
+  em andamento para retomada após reinício.
+
+Snapshots inválidos, esquema desconhecido, `pending_steps` inválido, recompensa
+não finita e traços ligados a conexões inexistentes são rejeitados.
+
+## Validação
+
+```bash
+python -m unittest tests.test_mnn_experience -v
+python -m benchmarks.mnn_delayed_reward
+python -m unittest tests.test_mnn_delayed_reward -v
+python -m unittest discover -s tests -v
+```
+
+O benchmark compara uma regra Hebbiana imediata com a regra de elegibilidade:
+com atraso, a coatividade no instante da recompensa é zero, mas o traço anterior
+ainda permite uma atualização. Aumentar o atraso deve reduzir a contribuição do
+traço. Esse resultado valida o mecanismo em um caso controlado, não aprendizado
+geral, equivalência biológica ou consciência.
+
+## Limites
+
+O ciclo não escolhe ações, não constrói um modelo de mundo e não prova
+inteligência. A baseline e os traços são variáveis computacionais abstratas.
+Próximos experimentos devem incluir recompensa negativa, atraso variável,
+interferência entre experiências, retenção após reinício e comparação com uma
+linha de base sem elegibilidade.

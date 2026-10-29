@@ -44,6 +44,14 @@ class MNNCheckpointTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unsupported MNN snapshot schema"):
                 MNNCheckpointStore(path).load()
 
+            path.write_text("[]", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "must contain a JSON object"):
+                MNNCheckpointStore(path).load()
+
+            path.write_text(json.dumps({"schema_version": 1}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "missing fields"):
+                MNNCheckpointStore(path).load()
+
     def test_invalid_training_parameters_are_rejected(self):
         with self.assertRaises(ValueError):
             run_benchmark(training_rounds=0)

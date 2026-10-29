@@ -21,8 +21,10 @@ The active-view score is:
 `score = importance × exp(-decay_per_day × age_days) + usage_bonus + context_bonus`
 
 The usage bonus is bounded and increases with access count. A matching tag adds
-a context bonus. Pinned fragments receive a minimum score of 0.95. Scores are
-bounded to [0, 1] and ties are resolved deterministically.
+a context bonus. Pinned fragments receive the maximum priority of 1.0. Scores
+are bounded to [0, 1] and ties are resolved deterministically. Read operations
+and `recall` use the same configured decay and usage policy as `active`, so a
+returned `priority` value is not computed with a hidden default.
 
 This is a tunable engineering baseline, not a model of human memory. In
 particular, repeated access is not proof that a fact is true, and low priority

@@ -3,8 +3,10 @@ __pycache__/
 .pytest_cache/
 .coverage
 *.sqlite
+*.sqlite3
 *.sqlite-shm
 *.sqlite-wal
+.machina-data/
 dist/
 build/
 *.egg-info/

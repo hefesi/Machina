@@ -12,7 +12,12 @@ from typing import Mapping
 
 
 def _finite(value: float, name: str) -> float:
-    value = float(value)
+    if isinstance(value, bool):
+        raise ValueError(f"{name} must be finite")
+    try:
+        value = float(value)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{name} must be finite") from error
     if not math.isfinite(value):
         raise ValueError(f"{name} must be finite")
     return value
@@ -27,7 +32,7 @@ class Unit:
     activation: str = "tanh"
 
     def __post_init__(self) -> None:
-        if not self.id:
+        if not isinstance(self.id, str) or not self.id:
             raise ValueError("unit id cannot be empty")
         self.bias = _finite(self.bias, "bias")
         self.state = _finite(self.state, "state")
@@ -58,9 +63,11 @@ class Connection:
     enabled: bool = True
 
     def __post_init__(self) -> None:
-        if not self.id or not self.source or not self.target:
+        if not all(isinstance(value, str) and value for value in (self.id, self.source, self.target)):
             raise ValueError("connection id, source, and target are required")
         self.weight = _finite(self.weight, "weight")
+        if not isinstance(self.enabled, bool):
+            raise ValueError("connection enabled must be boolean")
 
 
 class MNN:
@@ -221,14 +228,49 @@ class MNN:
 
     @classmethod
     def from_snapshot(cls, data: Mapping) -> "MNN":
+        if not isinstance(data, Mapping):
+            raise ValueError("MNN snapshot must be a mapping")
         if data.get("schema_version") != 1:
             raise ValueError("unsupported MNN snapshot schema")
-        network = cls(weight_limit=data["weight_limit"])
-        for item in data["units"]:
-            network.add_unit(Unit(**item))
-        for item in data["connections"]:
-            network.add_connection(Connection(**item))
-        network.timestep = int(data["timestep"])
-        if network.timestep < 0:
-            raise ValueError("timestep cannot be negative")
+        required = {"schema_version", "timestep", "weight_limit", "units", "connections"}
+        missing = required - set(data)
+        if missing:
+            raise ValueError(f"MNN snapshot is missing fields: {', '.join(sorted(missing))}")
+        unknown = set(data) - required
+        if unknown:
+            raise ValueError(f"MNN snapshot has unknown fields: {', '.join(sorted(unknown))}")
+
+        weight_limit = data["weight_limit"]
+        if isinstance(weight_limit, bool) or not isinstance(weight_limit, (int, float)):
+            raise ValueError("weight_limit must be a finite number")
+        network = cls(weight_limit=weight_limit)
+
+        units = data["units"]
+        if not isinstance(units, (list, tuple)):
+            raise ValueError("snapshot units must be a list")
+        for index, item in enumerate(units):
+            if not isinstance(item, Mapping):
+                raise ValueError(f"snapshot unit {index} must be a mapping")
+            try:
+                unit = Unit(**dict(item))
+            except TypeError as error:
+                raise ValueError(f"invalid snapshot unit {index}: {error}") from error
+            network.add_unit(unit)
+
+        connections = data["connections"]
+        if not isinstance(connections, (list, tuple)):
+            raise ValueError("snapshot connections must be a list")
+        for index, item in enumerate(connections):
+            if not isinstance(item, Mapping):
+                raise ValueError(f"snapshot connection {index} must be a mapping")
+            try:
+                connection = Connection(**dict(item))
+            except TypeError as error:
+                raise ValueError(f"invalid snapshot connection {index}: {error}") from error
+            network.add_connection(connection)
+
+        timestep = data["timestep"]
+        if isinstance(timestep, bool) or not isinstance(timestep, int) or timestep < 0:
+            raise ValueError("timestep must be a non-negative integer")
+        network.timestep = timestep
         return network

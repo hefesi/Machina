@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from machina.fragment_memory import FragmentMemory
@@ -63,6 +64,37 @@ class FragmentMemoryTests(unittest.TestCase):
         self.assertEqual(("effect",), self.memory.get("cause", record_access=False).related_ids)
         self.assertEqual(("cause",), self.memory.get("effect", record_access=False).related_ids)
         self.assertEqual(2, self.memory.count())
+
+    def test_configured_priority_policy_applies_to_reads_and_active_view(self) -> None:
+        self.memory.close()
+        self.memory = FragmentMemory(
+            self.path, decay_per_day=0.0, usage_reinforcement=0.0
+        )
+        self.memory.add(
+            "Stable importance", source_uri="local://stable",
+            importance=0.8, fragment_id="stable",
+        )
+        old = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        self.memory._db.execute(
+            "UPDATE memory_fragments SET last_accessed_at = ? WHERE id = ?",
+            (old, "stable"),
+        )
+        self.memory._db.commit()
+
+        fetched = self.memory.get("stable", record_access=False)
+        active = self.memory.active(limit=1)[0]
+        self.assertAlmostEqual(0.8, fetched.priority)
+        self.assertAlmostEqual(fetched.priority, active.priority)
+
+    def test_pinned_priority_matches_active_view(self) -> None:
+        self.memory.add(
+            "Pinned fact", source_uri="local://pinned",
+            importance=0.1, pinned=True, fragment_id="pinned",
+        )
+        fetched = self.memory.get("pinned", record_access=False)
+        active = self.memory.active(limit=1)[0]
+        self.assertEqual(1.0, fetched.priority)
+        self.assertEqual(fetched.priority, active.priority)
 
     def test_recall_finds_lexical_matches_by_query(self) -> None:
         self.memory.add("Circuito fechado permite corrente elétrica", source_uri="local://electricity", tags=["física"], fragment_id="electricity")

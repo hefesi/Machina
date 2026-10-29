@@ -43,6 +43,36 @@ class MNNCoreTests(unittest.TestCase):
         restored = MNN.from_snapshot(net.snapshot())
         self.assertEqual(restored.snapshot(), net.snapshot())
 
+    def test_snapshot_rejects_malformed_fields(self):
+        valid = self.make_network().snapshot()
+        cases = {
+            "not a mapping": [],
+            "missing weight limit": {key: value for key, value in valid.items() if key != "weight_limit"},
+            "boolean weight limit": {**valid, "weight_limit": True},
+            "unknown top-level field": {**valid, "extra": 1},
+            "fractional timestep": {**valid, "timestep": 1.5},
+            "boolean timestep": {**valid, "timestep": True},
+            "units not a list": {**valid, "units": "input"},
+            "unit is not a mapping": {**valid, "units": ["input"]},
+            "unit has unknown field": {
+                **valid,
+                "units": [{"id": "a", "bias": 0.0, "state": 0.0, "activation": "tanh", "extra": 1}],
+                "connections": [],
+            },
+            "connection enabled is not boolean": {
+                **valid,
+                "connections": [{
+                    "id": "e", "source": "input", "target": "output",
+                    "weight": 1.0, "enabled": "yes",
+                }],
+            },
+            "non-finite unit bias": {**valid, "units": [{"id": "a", "bias": float("nan")}]},
+        }
+        for label, snapshot in cases.items():
+            with self.subTest(label=label):
+                with self.assertRaises(ValueError):
+                    MNN.from_snapshot(snapshot)
+
     def test_rejects_missing_endpoints_duplicate_ids_and_nonfinite_values(self):
         net = MNN()
         net.add_unit(Unit("a"))

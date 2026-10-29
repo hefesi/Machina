@@ -228,13 +228,7 @@ class FragmentMemory:
         now = datetime.now(timezone.utc)
         for row in rows:
             fragment = self._from_row(row)
-            age_days = max(0.0, (now - datetime.fromisoformat(fragment.last_accessed_at)).total_seconds() / 86400)
-            decay = math.exp(-self.decay_per_day * age_days)
-            usage = min(1.0, math.log1p(fragment.access_count) / 5.0) * self.usage_reinforcement
-            tag_bonus = 0.2 if requested and requested.intersection(tag.casefold() for tag in fragment.tags) else 0.0
-            score = min(1.0, fragment.importance * decay + usage + tag_bonus)
-            if fragment.pinned:
-                score = 1.0
+            score = self._priority(fragment, now, requested_tags=requested)
             ranked.append((score, fragment))
         ranked.sort(key=lambda pair: (-pair[0], -pair[1].importance, pair[1].id))
         return [self._with_priority(fragment, score) for score, fragment in ranked[:limit]]
@@ -318,24 +312,44 @@ class FragmentMemory:
             (_json(related), fragment.id),
         )
 
-    @staticmethod
-    def _from_row(row: sqlite3.Row) -> MemoryFragment:
+    def _priority(
+        self,
+        fragment: MemoryFragment,
+        now: datetime,
+        *,
+        requested_tags: set[str] | None = None,
+    ) -> float:
+        """Compute the active-view score with the instance's configured policy.
+
+        Reading a fragment, recalling it, or ranking an active view therefore
+        reports the same priority for the same instant and tag context.
+        """
+        last_accessed = datetime.fromisoformat(fragment.last_accessed_at)
+        age_days = max(0.0, (now - last_accessed).total_seconds() / 86400)
+        decay = math.exp(-self.decay_per_day * age_days)
+        usage = min(1.0, math.log1p(fragment.access_count) / 5.0) * self.usage_reinforcement
+        requested = requested_tags or set()
+        tag_bonus = 0.2 if requested and requested.intersection(
+            tag.casefold() for tag in fragment.tags
+        ) else 0.0
+        score = min(1.0, fragment.importance * decay + usage + tag_bonus)
+        return 1.0 if fragment.pinned else score
+
+    def _from_row(self, row: sqlite3.Row) -> MemoryFragment:
         created = datetime.fromisoformat(str(row["created_at"]))
         last = datetime.fromisoformat(str(row["last_accessed_at"]))
-        age_days = max(0.0, (datetime.now(timezone.utc) - last).total_seconds() / 86400)
-        # A default display score; active() computes with the configured policy.
-        priority = float(row["importance"]) * math.exp(-0.04 * age_days)
-        if bool(row["pinned"]):
-            priority = 1.0
-        return MemoryFragment(
+        fragment = MemoryFragment(
             id=str(row["id"]), content=str(row["content"]), kind=str(row["kind"]),
             source_uri=str(row["source_uri"]), importance=float(row["importance"]),
-            confidence=float(row["confidence"]), priority=min(1.0, priority),
+            confidence=float(row["confidence"]), priority=0.0,
             access_count=int(row["access_count"]), created_at=created.isoformat(),
             last_accessed_at=last.isoformat(), pinned=bool(row["pinned"]),
             tags=tuple(json.loads(row["tags_json"])),
             related_ids=tuple(json.loads(row["related_ids_json"])),
             metadata=json.loads(row["metadata_json"]),
+        )
+        return self._with_priority(
+            fragment, self._priority(fragment, datetime.now(timezone.utc))
         )
 
     @staticmethod
