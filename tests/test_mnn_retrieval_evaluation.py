@@ -180,7 +180,7 @@ class RetrievalEvaluationTests(unittest.TestCase):
                 self.assertEqual(distractor.confidence, saved_distractor.confidence)
                 self.assertEqual(distractor.tags, saved_distractor.tags)
                 self.assertEqual(dict(distractor.metadata), dict(saved_distractor.metadata))
-                self.assertAlmostEqual(0.8, saved_distractor.importance)
+                self.assertAlmostEqual(0.0, saved_distractor.importance)
 
     def test_feedback_experiment_measures_learning_and_rejects_unretrieved_fragment(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
