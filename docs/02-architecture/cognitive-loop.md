@@ -81,3 +81,7 @@ O loop deve ser:
 - versionado;
 - testável;
 - capaz de operar em ciclos curtos ou tarefas longas.
+
+## Enquadramento na hipótese fundamental
+
+O ciclo cognitivo é uma abstração operacional útil, mas não deve ser tratado como uma sequência completa e universal de etapas. Machina também precisa investigar processos recorrentes, paralelos, espontâneos e endógenos, incluindo atividade não provocada por solicitações externas. Medir quando um ciclo é iniciado, regulado e encerrado pelo próprio sistema. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
