@@ -119,6 +119,28 @@ class VirtualBrainFragmentMemoryTests(unittest.TestCase):
             self.assertEqual("feedback_applied", feedback_event.data["status"])
             self.assertEqual("sensor-cycle-feedback", feedback_event.data["feedback_id"])
             self.assertTrue(feedback_event.data["results"][0]["applied"])
+            action_result = next(
+                event.artifact for event in result.events
+                if event.event_type == "action.result"
+            )
+            evaluation = next(
+                event.artifact for event in result.events
+                if event.event_type == "evaluation.completed"
+            )
+            self.assertEqual(
+                action_result.id,
+                feedback_event.data["outcome_evidence"]["action_result_ref"],
+            )
+            self.assertEqual(
+                evaluation.id,
+                feedback_event.data["outcome_evidence"]["evaluation_ref"],
+            )
+            self.assertEqual(
+                {retrieval.id, action_result.id, evaluation.id},
+                set(feedback_event.input_refs),
+            )
+            self.assertIn("action_status", feedback_event.data["outcome_evidence"])
+            self.assertIn("evaluation_success", feedback_event.data["outcome_evidence"])
             self.assertAlmostEqual(
                 0.6,
                 brain.fragment_memory.get(fragment.id, record_access=False).importance,
@@ -157,6 +179,39 @@ class VirtualBrainFragmentMemoryTests(unittest.TestCase):
                 brain.fragment_memory.get(fragment.id, record_access=False).importance,
             )
             brain.store.verify_integrity()
+            brain.close()
+
+    def test_retrieval_feedback_requires_observed_action_outcome(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            brain = VirtualBrain(
+                root / "brain.sqlite",
+                fragment_memory_path=root / "fragments.sqlite",
+            )
+            fragment = brain.fragment_memory.add(
+                "Blue sensor calibration evidence",
+                source_uri="test://sensor-calibration",
+                importance=0.4,
+                fragment_id="calibration-evidence",
+            )
+            cycle_id = brain.start_cycle(
+                "Recall blue sensor calibration evidence",
+                "Use the calibration evidence",
+            )
+            paused = brain.advance(cycle_id, stop_after="memory.retrieved")
+            self.assertIsNone(paused)
+            with self.assertRaisesRegex(
+                ValueError, "requires a persisted action result and evaluation"
+            ):
+                brain.apply_retrieval_feedback(
+                    cycle_id,
+                    {fragment.id: True},
+                    feedback_id="premature-feedback",
+                )
+            self.assertAlmostEqual(
+                0.4,
+                brain.fragment_memory.get(fragment.id, record_access=False).importance,
+            )
             brain.close()
 
     def test_retrieval_feedback_rejects_fragments_not_retrieved_in_cycle(self):
