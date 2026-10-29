@@ -1212,3 +1212,7 @@ Memory Update
 ```
 
 Esse ciclo forma a base cognitiva do Virtual Brain v0.1.
+
+## Enquadramento na hipótese fundamental
+
+O modelo de pensamento deve contemplar processos desencadeados externamente e atividade interna autoiniciada, recorrente ou espontânea. Pensamento aqui é uma categoria funcional de processamento; não implica automaticamente consciência. Investigar como pensamentos emergem de interações entre estado neural, memória, contexto, objetivos e dinâmica interna. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
