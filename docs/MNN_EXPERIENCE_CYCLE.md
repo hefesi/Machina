@@ -35,3 +35,7 @@ ação, modelo de mundo completo ou prova de inteligência geral. A baseline e o
 traços são variáveis computacionais abstratas. Antes de usar em um agente
 persistente, comparar com uma linha de base sem elegibilidade e avaliar tarefas
 repetidas, recompensa negativa, atraso variável, retenção e interferência.
+
+## Enquadramento na hipótese fundamental
+
+O ciclo de experiência é um modelo operacional para conectar ocorrência, estado, memória, avaliação e adaptação. A palavra experiência descreve aqui um evento processado pelo sistema e não implica automaticamente experiência consciente. Investigar como os eventos deixam efeitos persistentes e participam da continuidade funcional do ser artificial. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
