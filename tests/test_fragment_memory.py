@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import math
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -94,6 +95,46 @@ class FragmentMemoryTests(unittest.TestCase):
         self.assertEqual(2, evidence["observations"])
         self.assertEqual(["maintenance"], evidence["contexts"])
         self.assertEqual(2, self.memory.count())
+
+    def test_association_strength_grows_with_evidence_and_decays_over_time(self) -> None:
+        self.memory.add("sensor calibration", source_uri="local://sensor", fragment_id="sensor")
+        self.memory.add("maintenance procedure", source_uri="local://procedure", fragment_id="procedure")
+        self.memory.observe_coactivation(
+            ["sensor", "procedure"], operation_id="episode-1", context="maintenance"
+        )
+        first_strength = self.memory.association_strength("sensor", "procedure")
+        self.assertAlmostEqual(1.0 - math.exp(-0.5), first_strength)
+
+        self.memory.observe_coactivation(
+            ["sensor", "procedure"], operation_id="episode-2", context="maintenance"
+        )
+        stronger = self.memory.association_strength("procedure", "sensor")
+        self.assertGreater(stronger, first_strength)
+        row = self.memory._db.execute(
+            "SELECT last_observed_at FROM memory_association_evidence WHERE fragment_a = ? AND fragment_b = ?",
+            ("procedure", "sensor"),
+        ).fetchone()
+        observed_at = datetime.fromisoformat(row["last_observed_at"])
+        decayed = self.memory.association_strength(
+            "sensor", "procedure",
+            as_of=observed_at + timedelta(seconds=60),
+            half_life_seconds=60,
+        )
+        self.assertAlmostEqual(stronger * 0.5, decayed)
+        self.assertEqual(2, self.memory.association_evidence("sensor", "procedure")["observations"])
+        self.assertGreater(self.memory.association_strength(
+            "sensor", "procedure",
+            as_of=observed_at + timedelta(seconds=6000),
+            half_life_seconds=60,
+        ), 0.0)
+
+    def test_manual_association_keeps_legacy_strength_and_decay_config_validates(self) -> None:
+        with self.assertRaises(ValueError):
+            FragmentMemory(self.path, association_decay_half_life_seconds=0)
+        self.memory.add("alpha", source_uri="local://alpha", fragment_id="alpha")
+        self.memory.add("beta", source_uri="local://beta", fragment_id="beta")
+        self.memory.link("alpha", "beta")
+        self.assertEqual(1.0, self.memory.association_strength("alpha", "beta"))
 
     def test_coactivation_is_idempotent_and_rejects_operation_reuse(self) -> None:
         self.memory.add("alpha memory", source_uri="local://alpha", fragment_id="alpha")
