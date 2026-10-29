@@ -50,3 +50,7 @@ if report and report["status"] == "detected":
 ```
 
 This integration is deliberately advisory. A detected shift or insufficient history sets `request_experience`; the detector does not select an action, override the learner, or execute a trial. Drift review is opt-in and validates its context before the learner's decision counter advances.
+
+## Enquadramento na hipótese fundamental
+
+Deriva de recompensa deve ser monitorada para identificar mudanças indesejadas nos critérios que modulam comportamento. Registrar estabilidade temporal, efeitos de longo prazo, conflitos entre objetivos e possibilidade de revisão. Valores computacionais não equivalem a desejos ou sentimentos subjetivos. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
