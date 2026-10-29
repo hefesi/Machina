@@ -51,3 +51,7 @@ The caller is responsible for applying a safe fallback when the advisor abstains
 When concept guidance abstains, the agent uses the learner's fallback and sets `request_experience=True` so the surrounding environment can collect another outcome. The flag is a request only: no action is executed and no reward is fabricated by the agent.
 
 `benchmarks/mnn_concept_guidance_loop.py` compares this integration with the context-free learner in a small synthetic environment. Since the action mapping and environment rewards are specified in advance, this is an integration smoke benchmark, not evidence that the MNN independently discovered action semantics or will generalize to real tasks.
+
+## Enquadramento na hipótese fundamental
+
+Representações conceituais e orientação por conceitos devem ser avaliadas por estabilidade, flexibilidade, transferência e capacidade de revisão. O uso de conceitos não implica compreensão consciente; definir operacionalmente o que o sistema representa e como essa representação altera sua dinâmica e decisões. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
