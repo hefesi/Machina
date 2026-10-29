@@ -51,3 +51,7 @@ The held-out entities and values are new, but the formats and task types are not
 It supports a modest claim of task-specific strategy selection and retention, not
 general language understanding, broad transfer, consciousness, or free will.
 A larger and more varied benchmark is required before stronger claims.
+
+## Enquadramento na hipótese fundamental
+
+A aquisição de habilidades deve ser avaliada por desempenho reproduzível, transferência e retenção ao longo do tempo. Uma habilidade útil é evidência de competência funcional delimitada; não demonstra, por si, identidade subjetiva, consciência ou autodeterminação. Relacionar o resultado à dinâmica persistente de Machina. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
