@@ -709,3 +709,7 @@ DIFERENTES AMBIENTES
     =
 UM SISTEMA ARTIFICIAL CAPAZ DE EXPANDIR SUAS FORMAS DE AGIR
 ```
+
+## Enquadramento na hipótese fundamental
+
+O Virtual Organism representa a interface de Machina com condições e eventos externos, incluindo percepção e ação. Sua importância para a hipótese central está no acoplamento contínuo entre estados internos e consequências no ambiente. A noção de organismo é uma analogia funcional de pesquisa, não uma afirmação de vida biológica ou experiência subjetiva. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
