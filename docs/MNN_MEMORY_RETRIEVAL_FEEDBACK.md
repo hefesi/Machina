@@ -219,3 +219,8 @@ evidence = memory.association_evidence("sensor-calibration", "maintenance-proced
 The observation ledger is persistent and idempotent. Replaying the same operation and payload does not increase evidence; reusing its ID for different input is rejected. `association_evidence()` exposes the count, contexts and last observation timestamp for inspection. Once the threshold is reached, links participate in the existing one-hop associative recall.
 
 This is deliberately conservative: co-occurrence is evidence of a repeated relationship, not proof of causation or semantic equivalence. Fragment content, provenance, confidence, global importance and pinning are unchanged, and fragments are never merged or deleted. Use stable operation IDs tied to real episodes to avoid counting retries as new experiences.
+
+
+Association influence now reflects the amount of accumulated evidence: repeated co-activation increases strength with diminishing returns. In associative recall, evidence-backed links scale the related-fragment contribution, while manually created links without a co-activation ledger retain their previous behavior. This prevents a single observed co-occurrence from automatically carrying the same influence as a repeatedly observed relation.
+
+An optional `association_decay_half_life_seconds` constructor setting makes old evidence contribute less over time. For simulations, `association_strength(fragment_id, related_id, as_of=..., half_life_seconds=...)` exposes the effective value. Decay changes ranking influence only: it never removes the link, decreases the historical observation count, or deletes evidence. The default is disabled for temporal decay to preserve predictable behavior.
