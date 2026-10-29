@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from machina.fragment_memory import FragmentMemory
-from machina.mnn_retrieval_evaluation import evaluate_retrieval
+from machina.mnn_retrieval_evaluation import evaluate_retrieval, evaluate_retrieval_suite
 
 
 class RetrievalEvaluationTests(unittest.TestCase):
@@ -49,6 +49,35 @@ class RetrievalEvaluationTests(unittest.TestCase):
                 )
                 self.assertEqual(after.retrieved_ids, after_restart.retrieved_ids)
                 self.assertEqual(after.reciprocal_rank, after_restart.reciprocal_rank)
+
+    def test_query_suite_reports_macro_averages(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with FragmentMemory(Path(directory) / "memory.sqlite3") as memory:
+                memory.add(
+                    "solar panel output efficiency",
+                    source_uri="test://solar",
+                    fragment_id="solar",
+                )
+                memory.add(
+                    "ocean current marine biology",
+                    source_uri="test://ocean",
+                    fragment_id="ocean",
+                )
+                result = evaluate_retrieval_suite(
+                    memory,
+                    {
+                        "solar panel efficiency": ["solar"],
+                        "ocean current biology": ["ocean"],
+                    },
+                    k=1,
+                )
+                self.assertEqual(2, len(result.evaluations))
+                self.assertEqual(1.0, result.precision_at_k)
+                self.assertEqual(1.0, result.recall_at_k)
+                self.assertEqual(1.0, result.mean_reciprocal_rank)
+
+                with self.assertRaises(ValueError):
+                    evaluate_retrieval_suite(memory, {}, k=1)
 
     def test_evaluation_rejects_invalid_judgments(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
