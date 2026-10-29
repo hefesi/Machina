@@ -199,3 +199,23 @@ print(result.comparison.improved_queries, result.comparison.regressed_queries)
 ```
 
 A feedback target outside the query's retrieved results is rejected before mutation. Reusing a feedback ID remains idempotent; rerunning an experiment after the first application can therefore correctly report no additional change.
+
+
+## Association consolidation from recurring co-activation
+
+The fragment archive can now accumulate evidence that two or more fragments repeatedly appear in the same observed episode. Call `observe_coactivation()` with the fragment IDs and a unique operation ID for that episode. Each unordered pair receives at most one observation per operation; by default, a bidirectional association is created after the pair co-occurs twice. The threshold is configurable with `min_observations`.
+
+```python
+result = memory.observe_coactivation(
+    ["sensor-calibration", "maintenance-procedure"],
+    context="maintenance",
+    operation_id="episode-2026-0042",
+    min_observations=2,
+)
+print(result["pairs"])
+evidence = memory.association_evidence("sensor-calibration", "maintenance-procedure")
+```
+
+The observation ledger is persistent and idempotent. Replaying the same operation and payload does not increase evidence; reusing its ID for different input is rejected. `association_evidence()` exposes the count, contexts and last observation timestamp for inspection. Once the threshold is reached, links participate in the existing one-hop associative recall.
+
+This is deliberately conservative: co-occurrence is evidence of a repeated relationship, not proof of causation or semantic equivalence. Fragment content, provenance, confidence, global importance and pinning are unchanged, and fragments are never merged or deleted. Use stable operation IDs tied to real episodes to avoid counting retries as new experiences.
