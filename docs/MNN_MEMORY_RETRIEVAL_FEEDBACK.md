@@ -57,9 +57,39 @@ per-fragment usefulness labels. Because the fragment archive and event journal
 are separate SQLite databases, this is a retry-safe two-write protocol, not a
 single cross-database atomic transaction.
 
-## Important distinction
+## Contextual relevance
 
-Usefulness is task-relative. A memory can be unhelpful for one query and still be true or important in another context. Callers should send feedback only when a retrieval outcome has been observed; do not treat lack of retrieval or low lexical overlap as proof that a memory should be forgotten. Pinned records remain pinned and stay protected in the active view, even if their task-relative importance changes. This component never deletes archived fragments.
+Global importance and task-relative relevance are separate signals. Use
+`FragmentMemory.apply_context_feedback_batch()` to rate fragments within an
+explicit context such as `"maintenance"` or `"research"`. Each unseen
+(fragment, context) pair starts at neutral `0.5`; scores stay in `[0, 1]`.
+The operation ID is idempotent, and reusing it with a different context or
+label set is rejected.
+
+Pass the same context to `recall(query, context="maintenance")` to apply the
+context score as a bounded ranking adjustment. Context changes do not modify
+global importance, content, confidence, provenance, tags, associations, or
+pinning. A different context retains its own independent score. The adjustment
+is deliberately limited so contextual preference cannot overwhelm lexical
+evidence.
+
+```python
+scores, applied = memory.apply_context_feedback_batch(
+    {"calibration-fragment": True, "outdated-fragment": False},
+    context="sensor-maintenance",
+    operation_id="maintenance-cycle-42",
+    strength=0.2,
+)
+results = memory.recall(
+    "sensor calibration", context="sensor-maintenance", limit=5
+)
+```
+
+Usefulness is task-relative. A memory can be unhelpful for one query and still
+be true or important in another context. Do not treat lack of retrieval or low
+lexical overlap as proof that a memory should be forgotten. Pinned records
+remain pinned and protected in the active view even if their task-relative
+importance changes. This component never deletes archived fragments.
 
 ## Validation
 
