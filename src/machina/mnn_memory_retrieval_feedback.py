@@ -58,6 +58,8 @@ class MNNMemoryRetrievalFeedback:
         if not isinstance(outcomes, Mapping):
             raise ValueError("outcomes must map fragment IDs to boolean usefulness labels")
         normalized = list(outcomes.items())
+        if not normalized:
+            raise ValueError("outcomes must not be empty")
         for fragment_id, useful in normalized:
             if not isinstance(fragment_id, str) or not fragment_id.strip():
                 raise ValueError("fragment IDs must be non-empty strings")
