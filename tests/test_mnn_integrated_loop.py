@@ -12,19 +12,28 @@ from machina.mnn_integrated_loop import MNNIntegratedExperienceLoop
 
 
 class MNNIntegratedExperienceLoopTests(unittest.TestCase):
-    def make_loop(self, memory):
+    def make_loop(self, memory, *, with_context=False):
         network = MNN(weight_limit=2.0)
         network.add_unit(Unit("cue_left", activation="identity"))
         network.add_unit(Unit("cue_right", activation="identity"))
+        if with_context:
+            network.add_unit(Unit("ctx_quiet", activation="identity"))
+            network.add_unit(Unit("ctx_busy", activation="identity"))
         network.add_unit(Unit("outcome", bias=1.0, activation="identity"))
         network.add_connection(Connection("left-outcome", "cue_left", "outcome", 0.2))
         network.add_connection(Connection("right-outcome", "cue_right", "outcome", 0.2))
+        if with_context:
+            network.add_connection(Connection("quiet-outcome", "ctx_quiet", "outcome", 0.2))
+            network.add_connection(Connection("busy-outcome", "ctx_busy", "outcome", 0.2))
         agent = MNNLearningAgent(
             MNNActionLearner(["left", "right"], learning_rate=0.5), memory
         )
         cycle = MNNExperienceCycle(network, learning_rate=0.1)
         return MNNIntegratedExperienceLoop(
-            agent, cycle, action_inputs={"left": "cue_left", "right": "cue_right"}
+            agent,
+            cycle,
+            action_inputs={"left": "cue_left", "right": "cue_right"},
+            context_inputs={"quiet": "ctx_quiet", "busy": "ctx_busy"} if with_context else {},
         )
 
     def test_decision_reward_updates_action_values_neural_weights_and_memory(self):
@@ -57,9 +66,7 @@ class MNNIntegratedExperienceLoopTests(unittest.TestCase):
                 loop = self.make_loop(memory)
                 loop.decide(context="pending episode")
                 checkpoint = json.loads(json.dumps(loop.snapshot()))
-                restored = MNNIntegratedExperienceLoop.from_snapshot(
-                    checkpoint, memory=memory
-                )
+                restored = MNNIntegratedExperienceLoop.from_snapshot(checkpoint, memory=memory)
                 self.assertEqual(restored.agent.pending_action, "left")
                 self.assertEqual(restored.experience_cycle.pending_steps, 1)
                 result = restored.resolve(1.0, context="pending episode")
@@ -76,7 +83,6 @@ class MNNIntegratedExperienceLoopTests(unittest.TestCase):
                 loop.decide()
             with self.assertRaises(ValueError):
                 loop.resolve(float("nan"))
-            # Invalid reward does not consume the pending experience.
             self.assertEqual(loop.experience_cycle.pending_steps, 1)
             loop.resolve(0.0)
 
@@ -93,6 +99,48 @@ class MNNIntegratedExperienceLoopTests(unittest.TestCase):
                 MNNIntegratedExperienceLoop(
                     loop.agent, loop.experience_cycle,
                     action_inputs={"left": "cue_left", "right": "cue_left"},
+                )
+
+    def test_context_cues_enter_the_same_neural_step_and_receive_credit(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(
+            Path(directory) / "memory.sqlite3"
+        ) as memory:
+            loop = self.make_loop(memory, with_context=True)
+            initial = loop.experience_cycle.network.connections["quiet-outcome"].weight
+            decision = loop.decide(context="quiet room")
+            self.assertEqual(decision["context_cues"], ["quiet"])
+            self.assertIn("room", decision["unmapped_context_tokens"])
+            self.assertEqual(decision["neural_outputs"]["ctx_quiet"], 1.0)
+            self.assertEqual(decision["neural_outputs"]["ctx_busy"], 0.0)
+            result = loop.resolve(1.0, context="quiet room")
+            self.assertGreater(result["neural_plasticity"]["quiet-outcome"], 0.0)
+            self.assertGreater(
+                loop.experience_cycle.network.connections["quiet-outcome"].weight,
+                initial,
+            )
+
+    def test_context_encoding_is_case_insensitive_and_checkpointed(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(
+            Path(directory) / "memory.sqlite3"
+        ) as memory:
+            loop = self.make_loop(memory, with_context=True)
+            self.assertEqual(loop.encode_context("QUIET morning")["ctx_quiet"], 1.0)
+            checkpoint = json.loads(json.dumps(loop.snapshot()))
+            restored = MNNIntegratedExperienceLoop.from_snapshot(checkpoint, memory=memory)
+            self.assertEqual(restored.context_inputs, {"quiet": "ctx_quiet", "busy": "ctx_busy"})
+            self.assertEqual(restored.encode_context("busy evening")["ctx_busy"], 1.0)
+
+    def test_rejects_duplicate_context_tokens_after_normalization(self):
+        with tempfile.TemporaryDirectory() as directory, FragmentMemory(
+            Path(directory) / "memory.sqlite3"
+        ) as memory:
+            loop = self.make_loop(memory, with_context=True)
+            with self.assertRaises(ValueError):
+                MNNIntegratedExperienceLoop(
+                    loop.agent,
+                    loop.experience_cycle,
+                    action_inputs={"left": "cue_left", "right": "cue_right"},
+                    context_inputs={"Quiet": "ctx_quiet", "quiet": "ctx_busy"},
                 )
 
 
