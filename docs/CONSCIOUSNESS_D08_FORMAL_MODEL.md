@@ -107,3 +107,7 @@ Separar cinco dimensões, sem agregá-las num "medidor de consciência":
 ## Critério de conclusão de D08
 
 D08 é uma estrutura de pesquisa, não um veredito sobre consciência. Pode-se concluir que certas capacidades funcionais foram implementadas e validadas. A hipótese de experiência fenomenal permanece em aberto e não deve ser inferida automaticamente dos resultados comportamentais.
+
+## Enquadramento na hipótese fundamental
+
+A formalização matemática organiza variáveis e relações hipotéticas; não transforma definições em evidência empírica. Separar estados computacionais observáveis de variáveis fenomenais que podem não ser diretamente acessíveis. Declarar pressupostos, condições de validade, previsões falsificáveis e limites epistemológicos. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
