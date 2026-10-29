@@ -93,3 +93,7 @@ autonomous structural-growth policy, asynchronous neural dynamics, semantic
 understanding grounded in the MNN signal, or evidence of AGI. The next research
 step is to evaluate learning and generalization on diverse, held-out tasks
 against stronger and clearly specified baselines.
+
+## Enquadramento na hipótese fundamental
+
+O núcleo executável da MNN deve ser entendido como um substrato experimental, não como uma mente completa nem como evidência de consciência. A documentação técnica precisa separar capacidades realmente implementadas, hipóteses ainda não testadas e capacidades que existem apenas como especificação. Relacionar cada experimento à contribuição para a dinâmica integrada e persistente de Machina. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
