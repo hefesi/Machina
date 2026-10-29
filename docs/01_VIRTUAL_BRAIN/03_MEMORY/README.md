@@ -363,3 +363,7 @@ AGENCY
 ```
 
 > **Memory preserva a história informacional do Virtual Brain. Ela não é o lugar onde o sistema pensa; é o sistema que permite que o pensamento tenha passado.**
+
+## Enquadramento na hipótese fundamental
+
+Memória é mais que armazenamento: sua relevância para a hipótese do Machina está em como experiências preservadas modificam o estado presente, a identidade, as expectativas, as motivações e as decisões futuras. A implementação deve distinguir persistência técnica, integração autobiográfica e efeitos causais demonstráveis. Memória isolada não prova continuidade subjetiva. Ver [Hipótese Fundamental](../../00-vision/central-hypothesis.md).
