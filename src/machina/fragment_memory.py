@@ -75,6 +75,7 @@ class FragmentMemory:
         decay_per_day: float = 0.04,
         usage_reinforcement: float = 0.08,
         context_decay_half_life_seconds: float | None = None,
+        association_decay_half_life_seconds: float | None = None,
     ) -> None:
         self.decay_per_day = _score(decay_per_day, "decay_per_day")
         self.usage_reinforcement = _score(usage_reinforcement, "usage_reinforcement")
@@ -88,6 +89,16 @@ class FragmentMemory:
                 raise ValueError("context_decay_half_life_seconds must be a positive finite number or None")
             context_decay_half_life_seconds = float(context_decay_half_life_seconds)
         self.context_decay_half_life_seconds = context_decay_half_life_seconds
+        if association_decay_half_life_seconds is not None:
+            if (
+                isinstance(association_decay_half_life_seconds, bool)
+                or not isinstance(association_decay_half_life_seconds, (int, float))
+                or not math.isfinite(association_decay_half_life_seconds)
+                or association_decay_half_life_seconds <= 0
+            ):
+                raise ValueError("association_decay_half_life_seconds must be a positive finite number or None")
+            association_decay_half_life_seconds = float(association_decay_half_life_seconds)
+        self.association_decay_half_life_seconds = association_decay_half_life_seconds
         path = str(storage_path)
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
@@ -506,6 +517,60 @@ class FragmentMemory:
             "last_observed_at": str(row["last_observed_at"]),
         }
 
+    def association_strength(
+        self,
+        fragment_id: str,
+        related_id: str,
+        *,
+        as_of: datetime | None = None,
+        half_life_seconds: float | None = None,
+    ) -> float:
+        """Return evidence-weighted association influence in [0, 1].
+
+        Evidence strength saturates with repeated co-activation, while optional
+        temporal decay reduces its influence without deleting the association
+        or its audit evidence. Manually created legacy links without evidence
+        return 1.0 to preserve their previous behavior.
+        """
+        self._ensure_open()
+        if not isinstance(fragment_id, str) or not fragment_id.strip():
+            raise ValueError("fragment_id must be a non-empty string")
+        if not isinstance(related_id, str) or not related_id.strip():
+            raise ValueError("related_id must be a non-empty string")
+        if fragment_id == related_id:
+            raise ValueError("a fragment cannot be associated with itself")
+        half_life = (
+            self.association_decay_half_life_seconds
+            if half_life_seconds is None else half_life_seconds
+        )
+        if half_life is not None and (
+            isinstance(half_life, bool)
+            or not isinstance(half_life, (int, float))
+            or not math.isfinite(half_life)
+            or half_life <= 0
+        ):
+            raise ValueError("half_life_seconds must be a positive finite number")
+        first, second = sorted((fragment_id, related_id))
+        row = self._db.execute(
+            "SELECT observations, last_observed_at FROM memory_association_evidence "
+            "WHERE fragment_a = ? AND fragment_b = ?",
+            (first, second),
+        ).fetchone()
+        if row is None:
+            return 1.0
+        observations = int(row["observations"])
+        strength = 1.0 - math.exp(-observations / 2.0)
+        if half_life is None:
+            return strength
+        reference = as_of or datetime.now(timezone.utc)
+        if not isinstance(reference, datetime) or reference.tzinfo is None or reference.utcoffset() is None:
+            raise ValueError("as_of must be a timezone-aware datetime or None")
+        observed_at = datetime.fromisoformat(str(row["last_observed_at"]))
+        if observed_at.tzinfo is None or observed_at.utcoffset() is None:
+            observed_at = observed_at.replace(tzinfo=timezone.utc)
+        elapsed = max(0.0, (reference - observed_at).total_seconds())
+        return strength * math.pow(0.5, elapsed / float(half_life))
+
     def active(self, *, limit: int = 20, query_tags: tuple[str, ...] | list[str] = ()) -> list[MemoryFragment]:
         """Return a bounded active view; archived fragments remain untouched."""
         self._ensure_open()
@@ -612,7 +677,18 @@ class FragmentMemory:
             }
             for related_id in related_ids:
                 fragment = fragments[related_id]
-                score = 0.20 + 0.10 * fragment.importance + 0.05 * fragment.confidence
+                # Evidence-backed links contribute in proportion to their
+                # accumulated support. Legacy/manual links without evidence retain
+                # their previous ranking behavior.
+                strengths = [
+                    self.association_strength(
+                        source_id, related_id, as_of=datetime.now(timezone.utc)
+                    )
+                    for source_id in direct_matches
+                    if related_id in fragments[source_id].related_ids
+                ]
+                association_strength = max(strengths, default=1.0)
+                score = (0.20 + 0.10 * fragment.importance + 0.05 * fragment.confidence) * association_strength
                 if context_key is not None:
                     score += 0.15 * (context_scores.get(fragment.id, 0.5) - 0.5)
                 ranked.append((score, related_id))
