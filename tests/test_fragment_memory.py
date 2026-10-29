@@ -57,6 +57,78 @@ class FragmentMemoryTests(unittest.TestCase):
         self.assertEqual(0.9, result.confidence)
         self.assertTrue(result.pinned)
 
+    def test_recurring_coactivation_consolidates_association_after_threshold(self) -> None:
+        self.memory.add("sensor calibration", source_uri="local://sensor", fragment_id="sensor")
+        self.memory.add("maintenance procedure", source_uri="local://procedure", fragment_id="procedure")
+
+        first = self.memory.observe_coactivation(
+            ["sensor", "procedure"],
+            context="Maintenance",
+            operation_id="cycle-1",
+            min_observations=2,
+        )
+        self.assertTrue(first["applied"])
+        self.assertEqual(1, first["pairs"][0]["observations"])
+        self.assertFalse(first["pairs"][0]["linked"])
+        self.assertEqual((), self.memory.get("sensor", record_access=False).related_ids)
+
+        replay = self.memory.observe_coactivation(
+            ["procedure", "sensor"],
+            context="maintenance",
+            operation_id="cycle-1",
+            min_observations=2,
+        )
+        self.assertFalse(replay["applied"])
+        self.assertEqual(1, replay["pairs"][0]["observations"])
+
+        second = self.memory.observe_coactivation(
+            ["sensor", "procedure"],
+            context="maintenance",
+            operation_id="cycle-2",
+            min_observations=2,
+        )
+        self.assertTrue(second["pairs"][0]["linked"])
+        self.assertEqual(("procedure",), self.memory.get("sensor", record_access=False).related_ids)
+        self.assertEqual(("sensor",), self.memory.get("procedure", record_access=False).related_ids)
+        evidence = self.memory.association_evidence("procedure", "sensor")
+        self.assertEqual(2, evidence["observations"])
+        self.assertEqual(["maintenance"], evidence["contexts"])
+        self.assertEqual(2, self.memory.count())
+
+    def test_coactivation_is_idempotent_and_rejects_operation_reuse(self) -> None:
+        self.memory.add("alpha memory", source_uri="local://alpha", fragment_id="alpha")
+        self.memory.add("beta memory", source_uri="local://beta", fragment_id="beta")
+        self.memory.observe_coactivation(
+            ["alpha", "beta"], operation_id="same-cycle", context="research"
+        )
+        with self.assertRaisesRegex(ValueError, "different coactivation"):
+            self.memory.observe_coactivation(
+                ["alpha", "beta"], operation_id="same-cycle", context="maintenance"
+            )
+        with self.assertRaises(ValueError):
+            self.memory.observe_coactivation(
+                ["alpha", "alpha"], operation_id="duplicate-ids"
+            )
+        with self.assertRaises(KeyError):
+            self.memory.observe_coactivation(
+                ["alpha", "missing"], operation_id="missing-fragment"
+            )
+        evidence = self.memory.association_evidence("alpha", "beta")
+        self.assertEqual(1, evidence["observations"])
+
+    def test_coactivation_evidence_persists_after_reopen(self) -> None:
+        self.memory.add("sensor calibration", source_uri="local://sensor", fragment_id="sensor")
+        self.memory.add("temperature check", source_uri="local://temperature", fragment_id="temperature")
+        self.memory.observe_coactivation(
+            ["sensor", "temperature"], context="maintenance", operation_id="cycle-persist"
+        )
+        self.memory.close()
+        self.memory = FragmentMemory(self.path)
+        evidence = self.memory.association_evidence("temperature", "sensor")
+        self.assertEqual(1, evidence["observations"])
+        self.assertEqual(["maintenance"], evidence["contexts"])
+        self.assertEqual((), self.memory.get("sensor", record_access=False).related_ids)
+
     def test_associations_are_bidirectional_and_do_not_merge(self) -> None:
         self.memory.add("Cause", source_uri="local://cause", fragment_id="cause")
         self.memory.add("Effect", source_uri="local://effect", fragment_id="effect")
