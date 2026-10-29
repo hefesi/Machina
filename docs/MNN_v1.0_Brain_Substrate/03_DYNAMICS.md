@@ -26,3 +26,7 @@ Cada experimento deve medir:
 - custo computacional.
 
 Não se assume que uma dinâmica específica é correta. `F_U` e `F_M` são objetos de pesquisa.
+
+## Enquadramento na hipótese fundamental
+
+A dinâmica temporal é central para investigar como padrões de atividade se formam, persistem, competem e se transformam. Diferenciar atividade simulada local de processos integrados que influenciam memória, Self, agência e interação com o ambiente. Não inferir consciência apenas de recorrência ou complexidade. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
