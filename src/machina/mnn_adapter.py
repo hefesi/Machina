@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from .components import CognitionEngine, DeterministicCognition, _text
 from .contracts import Artifact
 from .mnn import MNN
+from .mnn_experience import MNNExperienceCycle
 
 
 _SUPPORTED_FEATURES = {
@@ -35,6 +36,7 @@ class MNNCognitionAdapter:
         input_features: Mapping[str, str],
         base_engine: CognitionEngine | None = None,
         learning_rate: float = 0.01,
+        delayed_reward: bool = False,
     ) -> None:
         if not input_features:
             raise ValueError("input_features must map at least one unit to a feature")
@@ -44,12 +46,20 @@ class MNNCognitionAdapter:
         unknown_units = set(input_features) - network.units.keys()
         if unknown_units:
             raise ValueError(f"unknown MNN input units: {sorted(unknown_units)}")
+        if not isinstance(delayed_reward, bool):
+            raise ValueError("delayed_reward must be boolean")
         self.network = network
         self.input_features = dict(input_features)
         self.base_engine = base_engine or DeterministicCognition()
         self.learning_rate = float(learning_rate)
         if self.learning_rate < 0 or not math.isfinite(self.learning_rate):
             raise ValueError("learning_rate must be finite and non-negative")
+        self.delayed_reward = delayed_reward
+        self.cycle = (
+            MNNExperienceCycle(network, learning_rate=self.learning_rate)
+            if delayed_reward
+            else None
+        )
 
     def propose_evaluated_outcome(
         self, *, evaluation: Artifact, validation: Artifact
@@ -62,6 +72,25 @@ class MNNCognitionAdapter:
         """
         succeeded = bool(evaluation.data["success"])
         reward = 1.0 if succeeded else -1.0
+        if self.cycle is not None:
+            if self.cycle.pending_steps == 0:
+                raise RuntimeError(
+                    "cannot resolve an MNN outcome without a pending experience"
+                )
+            candidate = MNNExperienceCycle.from_snapshot(self.cycle.snapshot())
+            resolution = candidate.resolve(reward)
+            result = {
+                "success": succeeded,
+                "reward": reward,
+                "validation_status": validation.data["status"],
+                "weight_deltas": resolution["weight_changes"],
+                "snapshot": candidate.network.snapshot(),
+                "experience_snapshot": candidate.snapshot(),
+                "pending_steps": resolution["pending_steps"],
+                "credit_assignment": "delayed eligibility",
+            }
+            return result
+
         candidate = MNN.from_snapshot(self.network.snapshot())
         weight_deltas = candidate.apply_hebbian(
             learning_rate=self.learning_rate,
@@ -73,15 +102,46 @@ class MNNCognitionAdapter:
             "validation_status": validation.data["status"],
             "weight_deltas": weight_deltas,
             "snapshot": candidate.snapshot(),
+            "credit_assignment": "immediate hebbian",
         }
 
-    def restore_from_snapshot(self, snapshot: Mapping[str, object]) -> None:
-        """Restore a persisted MNN snapshot before processing the next cycle."""
-        restored = MNN.from_snapshot(snapshot)
-        missing = set(self.input_features) - restored.units.keys()
+    def _validate_network(self, network: MNN) -> None:
+        missing = set(self.input_features) - network.units.keys()
         if missing:
             raise ValueError(f"snapshot is missing configured input units: {sorted(missing)}")
+
+    @staticmethod
+    def _is_experience_snapshot(snapshot: Mapping[str, object]) -> bool:
+        return "network" in snapshot and "modulator" in snapshot
+
+    def restore_from_snapshot(self, snapshot: Mapping[str, object]) -> None:
+        """Restore network state or a full in-flight experience snapshot."""
+        if not isinstance(snapshot, Mapping):
+            raise ValueError("snapshot must be a mapping")
+        if self._is_experience_snapshot(snapshot):
+            cycle = MNNExperienceCycle.from_snapshot(snapshot)
+            self._validate_network(cycle.network)
+            self.network = cycle.network
+            self.cycle = cycle if self.delayed_reward else None
+            return
+        restored = MNN.from_snapshot(snapshot)
+        self._validate_network(restored)
         self.network = restored
+        if self.delayed_reward:
+            self.cycle = MNNExperienceCycle(restored, learning_rate=self.learning_rate)
+
+    def restore_from_outcome(self, change: Mapping[str, object]) -> None:
+        """Restore the exact post-outcome state persisted for this cycle."""
+        if not isinstance(change, Mapping):
+            raise ValueError("outcome change must be a mapping")
+        experience_snapshot = change.get("experience_snapshot")
+        if self.delayed_reward and isinstance(experience_snapshot, Mapping):
+            self.restore_from_snapshot(experience_snapshot)
+            return
+        snapshot = change.get("snapshot")
+        if not isinstance(snapshot, Mapping):
+            raise ValueError("outcome change must include a snapshot")
+        self.restore_from_snapshot(snapshot)
 
     def analyze(
         self,
@@ -114,14 +174,26 @@ class MNNCognitionAdapter:
             unit_id: features[feature]
             for unit_id, feature in self.input_features.items()
         }
-        activations = self.network.step(inputs)
-        understanding = dict(result.get("understanding", {}))
-        understanding["mnn_signal"] = {
+        if self.cycle is not None:
+            activations = self.cycle.step(inputs)
+            experience_snapshot = self.cycle.snapshot()
+            credit_assignment = "delayed eligibility"
+        else:
+            activations = self.network.step(inputs)
+            experience_snapshot = None
+            credit_assignment = "immediate hebbian"
+        signal = {
             "features": inputs,
             "activations": activations,
             "timestep": self.network.timestep,
             "interpretation": "numeric diagnostic signal; not a semantic conclusion",
             "snapshot": self.network.snapshot(),
+            "credit_assignment": credit_assignment,
         }
+        if experience_snapshot is not None:
+            signal["experience_snapshot"] = experience_snapshot
+            signal["pending_steps"] = self.cycle.pending_steps
+        understanding = dict(result.get("understanding", {}))
+        understanding["mnn_signal"] = signal
         result["understanding"] = understanding
         return result

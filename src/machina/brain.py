@@ -313,6 +313,7 @@ class VirtualBrain:
         if self.store.latest_artifact(cycle_id, "cycle.completed"):
             return self._result(cycle_id)
         try:
+            self._restore_cognition_state()
             observation = self._required(cycle_id, "observation.received")
             goal = self._required(cycle_id, "goal.activated")
 
@@ -469,13 +470,16 @@ class VirtualBrain:
                     "mnn.plasticity_applied",
                     lambda: self._mnn_plasticity_update(evaluation, validation),
                 )
-                # Commit only the snapshot that is already durable. If this is
-                # a resumed cycle, _stage returns the existing event and this
+                # Commit only the state that is already durable. If this is a
+                # resumed cycle, _stage returns the existing event and this
                 # restoration does not apply the learning update a second time.
-                restore_snapshot = getattr(self.cognition, "restore_from_snapshot", None)
                 change = plasticity.data.get("change", {})
+                restore_outcome = getattr(self.cognition, "restore_from_outcome", None)
+                restore_snapshot = getattr(self.cognition, "restore_from_snapshot", None)
                 snapshot = change.get("snapshot") if isinstance(change, Mapping) else None
-                if callable(restore_snapshot) and isinstance(snapshot, Mapping):
+                if callable(restore_outcome) and isinstance(change, Mapping):
+                    restore_outcome(change)
+                elif callable(restore_snapshot) and isinstance(snapshot, Mapping):
                     restore_snapshot(snapshot)
                 if self._stop_if_requested(cycle_id, "mnn.plasticity_applied", stop_after):
                     return None
@@ -604,6 +608,38 @@ class VirtualBrain:
             epistemic_status=EpistemicStatus.INTERPRETED,
         )
 
+    def _restore_cognition_state(self) -> None:
+        """Restore the latest persisted neural state before advancing.
+
+        Optional stateful cognition plugins expose ``restore_from_snapshot``.
+        New adapters also persist a full in-flight experience snapshot so a
+        cycle resumed before its delayed reward can still resolve its traces.
+        """
+        restore_snapshot = getattr(self.cognition, "restore_from_snapshot", None)
+        if not callable(restore_snapshot):
+            return
+        prior_results = self.store.artifacts_for_event_types(
+            ("cognition.completed", "mnn.plasticity_applied")
+        )
+        for prior in reversed(prior_results):
+            understanding = prior.data.get("understanding", {})
+            trace = (
+                understanding.get("mnn_signal", {})
+                if isinstance(understanding, Mapping)
+                else {}
+            )
+            snapshot = trace.get("experience_snapshot") if isinstance(trace, Mapping) else None
+            if not isinstance(snapshot, Mapping):
+                snapshot = trace.get("snapshot") if isinstance(trace, Mapping) else None
+            change = prior.data.get("change", {})
+            if not isinstance(snapshot, Mapping) and isinstance(change, Mapping):
+                snapshot = change.get("experience_snapshot")
+            if not isinstance(snapshot, Mapping) and isinstance(change, Mapping):
+                snapshot = change.get("snapshot")
+            if isinstance(snapshot, Mapping):
+                restore_snapshot(snapshot)
+                break
+
     def _cognitive_result(
         self,
         observation: Artifact,
@@ -612,25 +648,6 @@ class VirtualBrain:
         goal: Artifact,
         request: Artifact,
     ) -> Artifact:
-        # Optional stateful cognition plugins may expose a snapshot-restoration
-        # hook. Restore the latest persisted MNN trace before advancing a new
-        # cycle so process restarts do not silently reset neural state.
-        restore_snapshot = getattr(self.cognition, "restore_from_snapshot", None)
-        if callable(restore_snapshot):
-            prior_results = self.store.artifacts_for_event_types(
-                ("cognition.completed", "mnn.plasticity_applied")
-            )
-            for prior in reversed(prior_results):
-                understanding = prior.data.get("understanding", {})
-                trace = understanding.get("mnn_signal", {}) if isinstance(understanding, Mapping) else {}
-                snapshot = trace.get("snapshot") if isinstance(trace, Mapping) else None
-                if not isinstance(snapshot, Mapping):
-                    change = prior.data.get("change", {})
-                    snapshot = change.get("snapshot") if isinstance(change, Mapping) else None
-                if isinstance(snapshot, Mapping):
-                    restore_snapshot(snapshot)
-                    break
-
         return Artifact.create(
             ContractKind.COGNITIVE_RESULT,
             cycle_id=request.cycle_id,

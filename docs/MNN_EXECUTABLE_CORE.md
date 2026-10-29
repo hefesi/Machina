@@ -39,7 +39,15 @@ activations are diagnostic and do not independently select actions.
 
 After an evaluation and validation stage, the adapter can propose a reward
 modulated Hebbian update: success receives reward `+1`, failure receives
-reward `-1`. The proposed snapshot and weight deltas are written as an
+reward `-1`. By default this update is immediate. With
+`MNNCognitionAdapter(..., delayed_reward=True)`, each analyzed cycle instead
+accumulates eligibility traces with a neutral reward; the persisted
+`experience_snapshot` is resolved only when the outcome arrives. A cycle
+interrupted between cognition and plasticity can therefore resume after a
+process restart and still credit the connections that were active before the
+interruption.
+
+The proposed snapshot and weight deltas are written as an
 `mnn.plasticity_applied` journal event before the live adapter restores that
 snapshot. This journal-first ordering supports recovery and prevents the same
 reward from being applied twice when a cycle resumes. The neural weight update

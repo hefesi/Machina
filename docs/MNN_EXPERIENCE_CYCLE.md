@@ -26,6 +26,26 @@ não finita e traços ligados a conexões inexistentes são rejeitados. O checkp
 também rejeita JSON malformado, conteúdo que não seja objeto e snapshots
 incompletos antes de substituir um arquivo válido.
 
+## Integração com o VirtualBrain
+
+`MNNCognitionAdapter(..., delayed_reward=True)` ativa o ciclo no adaptador
+cognitivo. Nesse modo:
+
+- `analyze` usa `MNNExperienceCycle.step`, acumula elegibilidade com recompensa
+  neutra e persiste o `experience_snapshot` completo no artefato
+  `cognition.completed`;
+- `propose_evaluated_outcome` resolve a recompensa somente depois da avaliação,
+  aplica o erro de previsão aos traços persistidos e devolve tanto o snapshot da
+  rede quanto o snapshot do ciclo já fechado;
+- o `VirtualBrain` restaura o snapshot do ciclo antes de retomar uma execução,
+  inclusive quando a pausa ocorreu depois de `cognition.completed` e antes de
+  `mnn.plasticity_applied`;
+- o mesmo estado fechado é restaurado depois de `mnn.plasticity_applied`, sem
+  aplicar a recompensa duas vezes.
+
+O padrão continua sendo `delayed_reward=False`, que preserva a plasticidade
+Hebbiana imediata existente.
+
 ## Validação
 
 ```bash

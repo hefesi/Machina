@@ -63,6 +63,99 @@ class MNNCognitionAdapterTests(unittest.TestCase):
             MNNCognitionAdapter(network, input_features={"missing": "text_length"})
         with self.assertRaises(ValueError):
             MNNCognitionAdapter(network, input_features={"text": "semantic_understanding"})
+        with self.assertRaises(ValueError):
+            MNNCognitionAdapter(
+                network,
+                input_features={"text": "text_length"},
+                delayed_reward="yes",
+            )
+
+    def test_delayed_reward_uses_persisted_eligibility_trace(self):
+        with tempfile.TemporaryDirectory() as directory:
+            network = self.make_network()
+            adapter = MNNCognitionAdapter(
+                network,
+                input_features={"text": "text_length"},
+                delayed_reward=True,
+            )
+            brain = VirtualBrain(Path(directory) / "brain.sqlite", cognition=adapter)
+            result = brain.run_cycle("A delayed outcome observation.", "Record it.")
+
+            cognitive = next(
+                event.artifact
+                for event in result.events
+                if event.event_type == "cognition.completed"
+            )
+            trace = cognitive.data["understanding"]["mnn_signal"]
+            self.assertEqual(trace["credit_assignment"], "delayed eligibility")
+            self.assertEqual(trace["pending_steps"], 1)
+            self.assertEqual(trace["experience_snapshot"]["pending_steps"], 1)
+
+            plasticity = next(
+                event.artifact
+                for event in result.events
+                if event.event_type == "mnn.plasticity_applied"
+            )
+            change = plasticity.data["change"]
+            self.assertEqual(change["credit_assignment"], "delayed eligibility")
+            self.assertEqual(change["pending_steps"], 1)
+            self.assertEqual(change["experience_snapshot"]["pending_steps"], 0)
+            self.assertGreater(change["weight_deltas"]["text-to-signal"], 0.0)
+            self.assertGreater(
+                change["snapshot"]["connections"][0]["weight"],
+                trace["snapshot"]["connections"][0]["weight"],
+            )
+            self.assertEqual(adapter.cycle.pending_steps, 0)
+            self.assertEqual(adapter.cycle.modulator.eligibility, {})
+            self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+            brain.store.verify_integrity()
+            brain.close()
+
+    def test_resume_before_delayed_reward_restores_pending_eligibility(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "brain.sqlite"
+            first_adapter = MNNCognitionAdapter(
+                self.make_network(),
+                input_features={"text": "text_length"},
+                delayed_reward=True,
+            )
+            first_brain = VirtualBrain(path, cognition=first_adapter)
+            cycle_id = first_brain.start_cycle(
+                "Interrupted before the delayed reward.", "Test resume"
+            )
+            paused = first_brain.advance(cycle_id, stop_after="cognition.completed")
+            self.assertIsNone(paused)
+            initial_weight = first_adapter.network.connections["text-to-signal"].weight
+            self.assertEqual(initial_weight, 1.0)
+            self.assertEqual(first_adapter.cycle.pending_steps, 1)
+            first_brain.close()
+
+            restarted_adapter = MNNCognitionAdapter(
+                self.make_network(),
+                input_features={"text": "text_length"},
+                delayed_reward=True,
+            )
+            restarted_brain = VirtualBrain(path, cognition=restarted_adapter)
+            result = restarted_brain.resume(cycle_id)
+
+            self.assertEqual(result.status, "completed")
+            plasticity_events = [
+                event for event in result.events
+                if event.event_type == "mnn.plasticity_applied"
+            ]
+            self.assertEqual(len(plasticity_events), 1)
+            change = plasticity_events[0].artifact.data["change"]
+            self.assertEqual(change["pending_steps"], 1)
+            self.assertEqual(change["experience_snapshot"]["pending_steps"], 0)
+            self.assertGreater(change["weight_deltas"]["text-to-signal"], 0.0)
+            self.assertGreater(
+                restarted_adapter.network.connections["text-to-signal"].weight,
+                initial_weight,
+            )
+            self.assertEqual(restarted_adapter.cycle.pending_steps, 0)
+            self.assertTrue(restarted_brain.audit_cycle(cycle_id).valid)
+            restarted_brain.store.verify_integrity()
+            restarted_brain.close()
 
     def test_mnn_state_restores_from_journal_after_process_restart(self):
         with tempfile.TemporaryDirectory() as directory:
