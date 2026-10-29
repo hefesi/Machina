@@ -92,3 +92,7 @@ A teoria futura deverá definir:
 - como a experiência corporal altera a mente.
 
 Este domínio é essencial para transformar o Virtual Brain de uma mente isolada em uma inteligência capaz de existir e agir continuamente em um ambiente.
+
+## Enquadramento na hipótese fundamental
+
+A interação entre substrato neural, processos cognitivos e ambiente deve ser estudada como circuito recorrente: estados internos orientam percepção e ação, consequências alteram estados, e experiências modificam a dinâmica futura. O acoplamento precisa ser demonstrado experimentalmente; não deve ser presumido apenas por existir uma interface entre módulos. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
