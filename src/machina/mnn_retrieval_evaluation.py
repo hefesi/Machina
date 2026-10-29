@@ -10,6 +10,7 @@ import math
 from collections.abc import Iterable, Mapping
 
 from .fragment_memory import FragmentMemory
+from .mnn_memory_retrieval_feedback import MNNMemoryRetrievalFeedback, MemoryFeedbackResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +51,65 @@ class RetrievalSuiteComparison:
     mixed_queries: tuple[str, ...]
     unchanged_queries: tuple[str, ...]
 
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalFeedbackExperiment:
+    """Auditable before/after evaluation for one explicit feedback batch."""
+
+    feedback_query: str
+    feedback_results: tuple[MemoryFeedbackResult, ...]
+    comparison: RetrievalSuiteComparison
+
+
+def run_retrieval_feedback_experiment(
+    memory: FragmentMemory,
+    *,
+    feedback_query: str,
+    outcomes: Mapping[str, bool],
+    judgments: Mapping[str, Iterable[str]],
+    strength: float | None = None,
+    feedback_id: str,
+    k: int = 5,
+) -> RetrievalFeedbackExperiment:
+    """Measure a feedback batch against a fixed benchmark.
+
+    Only fragments actually retrieved for feedback_query can receive feedback.
+    Labels and benchmark judgments must be supplied explicitly. The baseline
+    is captured before feedback; the post-run is measured after the idempotent
+    batch has been applied. This helper does not invent labels.
+    """
+    if not isinstance(feedback_query, str) or not feedback_query.strip():
+        raise ValueError("feedback_query must be a non-empty string")
+    if not isinstance(outcomes, Mapping) or not outcomes:
+        raise ValueError("outcomes must be a non-empty mapping")
+    if not isinstance(feedback_id, str) or not feedback_id.strip():
+        raise ValueError("feedback_id must be a non-empty string")
+    for fragment_id, useful in outcomes.items():
+        if not isinstance(fragment_id, str) or not fragment_id.strip():
+            raise ValueError("feedback fragment IDs must be non-empty strings")
+        if not isinstance(useful, bool):
+            raise ValueError("every feedback outcome must be boolean")
+
+    retrieved_ids = {item.id for item in memory.recall(feedback_query, limit=max(5, len(outcomes)))}
+    unrelated = set(outcomes) - retrieved_ids
+    if unrelated:
+        raise ValueError(
+            "feedback can only rate fragments retrieved for feedback_query: "
+            + ", ".join(sorted(unrelated))
+        )
+
+    before = evaluate_retrieval_suite(memory, judgments, k=k)
+    feedback_results = MNNMemoryRetrievalFeedback(memory).apply_many(
+        outcomes, strength=strength, feedback_id=feedback_id
+    )
+    after = evaluate_retrieval_suite(memory, judgments, k=k)
+    comparison = compare_retrieval_suites(before, after)
+    return RetrievalFeedbackExperiment(
+        feedback_query=feedback_query.strip(),
+        feedback_results=tuple(event for _, event in feedback_results),
+        comparison=comparison,
+    )
 
 def evaluate_retrieval(
     memory: FragmentMemory,
