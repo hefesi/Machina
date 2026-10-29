@@ -25,6 +25,16 @@ class RetrievalEvaluation:
     reciprocal_rank: float
 
 
+@dataclass(frozen=True, slots=True)
+class RetrievalSuiteEvaluation:
+    """Macro-averaged metrics across a fixed set of labeled queries."""
+
+    evaluations: tuple[RetrievalEvaluation, ...]
+    precision_at_k: float
+    recall_at_k: float
+    mean_reciprocal_rank: float
+
+
 def evaluate_retrieval(
     memory: FragmentMemory,
     query: str,
@@ -74,4 +84,31 @@ def evaluate_retrieval(
         precision_at_k=precision,
         recall_at_k=recall,
         reciprocal_rank=reciprocal_rank,
+    )
+
+
+def evaluate_retrieval_suite(
+    memory: FragmentMemory,
+    judgments: Mapping[str, Iterable[str]],
+    *,
+    k: int = 5,
+) -> RetrievalSuiteEvaluation:
+    """Evaluate a fixed query set and return macro-averaged ranking metrics.
+
+    `judgments` maps each query to its explicitly relevant fragment IDs.
+    Every query contributes equally to the macro average. No feedback is
+    applied and the memory is not modified.
+    """
+    if not isinstance(judgments, Mapping) or not judgments:
+        raise ValueError("judgments must be a non-empty mapping of queries to relevant IDs")
+    evaluations = tuple(
+        evaluate_retrieval(memory, query, relevant_ids, k=k)
+        for query, relevant_ids in judgments.items()
+    )
+    count = len(evaluations)
+    return RetrievalSuiteEvaluation(
+        evaluations=evaluations,
+        precision_at_k=sum(item.precision_at_k for item in evaluations) / count,
+        recall_at_k=sum(item.recall_at_k for item in evaluations) / count,
+        mean_reciprocal_rank=sum(item.reciprocal_rank for item in evaluations) / count,
     )
