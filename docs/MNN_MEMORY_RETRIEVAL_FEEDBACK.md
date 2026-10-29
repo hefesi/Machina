@@ -73,6 +73,13 @@ pinning. A different context retains its own independent score. The adjustment
 is deliberately limited so contextual preference cannot overwhelm lexical
 evidence.
 
+Every accepted update is also recorded in an append-only contextual audit
+trail. Call `context_feedback_history(fragment_id, context, limit=50)` to
+inspect the newest-first sequence, including the operation ID, usefulness
+label, before/after scores and timestamp. Idempotent retries return the original
+result and do not create duplicate history events. This makes score changes
+inspectable across process restarts without treating the score as truth.
+
 ```python
 scores, applied = memory.apply_context_feedback_batch(
     {"calibration-fragment": True, "outdated-fragment": False},
