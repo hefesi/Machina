@@ -82,3 +82,7 @@ Run `python benchmarks/mnn_uncertainty_exploration.py` to compare this policy at
 - Does not claim atomic transactions across the learner and SQLite. If memory persistence fails after a learner update, the caller should treat that as a partial failure and recover from its last durable snapshot.
 - Retrieval is lexical, not semantic; token overlap can confuse related or ambiguous contexts.
 - The action learner is a small contextual-free bandit, not a general planning or consciousness model.
+
+## Enquadramento na hipótese fundamental
+
+O agente de aprendizagem descrito aqui é um mecanismo experimental dentro do substrato MNN, não a totalidade de Machina. Avaliar se a aprendizagem altera de modo persistente a dinâmica neural e se seus efeitos se integram com memória, Self, cognição e agência. Não confundir melhoria em tarefas com consciência ou autodeterminação. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
