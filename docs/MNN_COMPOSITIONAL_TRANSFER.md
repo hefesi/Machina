@@ -39,3 +39,7 @@ poucos exemplos. O resultado indicaria composição limitada dentro de uma taref
 simples, não transferência geral entre tarefas nem raciocínio semântico. Para
 uma avaliação mais forte, será necessário testar tarefas não lineares, múltiplas
 distribuições, controles e conjuntos de avaliação maiores.
+
+## Enquadramento na hipótese fundamental
+
+Transferência composicional é uma medida de recombinação funcional e generalização. Demonstrar que componentes aprendidos podem ser combinados em situações novas, com controles contra memorização. Esse resultado informa capacidades cognitivas do substrato, mas não demonstra experiência subjetiva. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
