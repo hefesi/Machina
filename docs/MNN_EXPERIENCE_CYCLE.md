@@ -53,6 +53,8 @@ python -m unittest tests.test_mnn_experience -v
 python -m unittest tests.test_mnn_experience_checkpoint -v
 python -m benchmarks.mnn_delayed_reward
 python -m unittest tests.test_mnn_delayed_reward -v
+python -m benchmarks.mnn_experience_learning
+python -m unittest tests.test_mnn_experience_learning -v
 python -m unittest discover -s tests -v
 ```
 
@@ -65,6 +67,20 @@ com atraso, a coatividade no instante da recompensa é zero, mas o traço anteri
 ainda permite uma atualização. Aumentar o atraso deve reduzir a contribuição do
 traço. Esse resultado valida o mecanismo em um caso controlado, não aprendizado
 geral, equivalência biológica ou consciência.
+
+## Benchmark de aprendizado e retenção
+
+`python -m benchmarks.mnn_experience_learning` executa uma associação
+determinística de dois contextos. Cada tentativa apresenta um contexto por dois
+passos, recebe recompensa neutra e só depois resolve o resultado; a
+recompensa atrasada atualiza as conexões elegíveis. O experimento mede acurácia
+antes e depois do aprendizado, salva o ciclo em checkpoint e mede a retenção
+após reconstruir o ciclo a partir do arquivo.
+
+O resultado esperado é acurácia `0.5` com pesos fixos, `1.0` após o aprendizado
+e `1.0` após a recarga, com pesos idênticos e `pending_steps == 0`. Isso
+demonstra apenas a mecânica em uma tarefa minúscula; não demonstra
+generalização ampla, raciocínio semântico, consciência ou inteligência geral.
 
 ## Limites
 
