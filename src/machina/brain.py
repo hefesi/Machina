@@ -850,6 +850,8 @@ class VirtualBrain:
                 raise ValueError("this cycle already has a different retrieval feedback batch")
             if existing.data.get("outcomes") != dict(outcomes):
                 raise ValueError("feedback_id was already recorded with different outcomes")
+            if existing.data.get("strength") != strength:
+                raise ValueError("feedback_id was already recorded with different strength")
             return existing
 
         feedback = MNNMemoryRetrievalFeedback(self.fragment_memory)
@@ -875,6 +877,7 @@ class VirtualBrain:
                 "status": "feedback_applied",
                 "checkpoint": "memory.retrieval_feedback_applied",
                 "feedback_id": operation_id,
+                "strength": float(strength),
                 "outcomes": dict(outcomes),
                 "results": serialized,
             },
