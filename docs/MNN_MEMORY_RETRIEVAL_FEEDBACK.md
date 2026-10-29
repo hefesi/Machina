@@ -8,7 +8,7 @@ MNNMemoryRetrievalFeedback provides an explicit feedback loop between a retrieva
 - Negative usefulness feedback lowers importance, but does not claim the content is false.
 - Content, provenance, confidence, associations, and pin state are left unchanged.
 - Importance remains bounded to [0, 1] and is persisted by the existing memory store.
-- The result object records the applied signal and before/after importance for caller-side logging.
+- The result object records the applied signal and before/after importance for caller-side logging, plus `feedback_id` and `applied` to distinguish a new update from an idempotent replay.
 - `apply_many()` accepts explicit per-fragment labels and validates every ID and label before the first update; it does not blindly reward all recalled fragments.
 - Supplying `feedback_id` persists the batch and its before/after values in the same SQLite database as the fragments. Retrying the same ID and payload is idempotent; reusing the ID with different feedback is rejected.
 
