@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 from .fragment_memory import FragmentMemory
 
