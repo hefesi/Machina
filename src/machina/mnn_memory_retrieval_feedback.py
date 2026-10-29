@@ -122,6 +122,10 @@ class MNNMemoryRetrievalFeedback:
 
         before = self.memory.get(fragment_id, record_access=False)
         delta = amount if useful else -amount
+        if before.pinned and delta < 0:
+            # A negative usefulness label is contextual, not permission to
+            # demote an explicitly protected memory.
+            delta = 0.0
         after = self.memory.reinforce(fragment_id, importance_delta=delta)
         event = MemoryFeedbackResult(fragment_id, useful, amount, before.importance, after.importance, feedback_id=None, applied=True)
         return after, event
