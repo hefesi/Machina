@@ -108,6 +108,24 @@ class FragmentMemory:
                 metadata_json TEXT NOT NULL
             )
         """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_context_importance (
+                fragment_id TEXT NOT NULL,
+                context_key TEXT NOT NULL,
+                score REAL NOT NULL CHECK (score BETWEEN 0 AND 1),
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (fragment_id, context_key),
+                FOREIGN KEY (fragment_id) REFERENCES memory_fragments(id) ON DELETE CASCADE
+            )
+        """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_context_feedback_batches (
+                operation_id TEXT PRIMARY KEY,
+                payload_json TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        """)
         self._db.commit()
         self._closed = False
 
@@ -353,12 +371,15 @@ class FragmentMemory:
         *,
         limit: int = 5,
         include_related: bool = True,
+        context: str | None = None,
     ) -> list[MemoryFragment]:
         """Retrieve fragments by lexical overlap and optionally one-hop associations.
 
         This is an explainable lexical baseline, not semantic understanding. A
         related fragment may be returned as context even when its own wording
-        does not overlap the query. Retrieval never deletes or rewrites memory.
+        does not overlap the query. An optional explicit context applies a
+        separate task-relative score without changing global importance.
+        Retrieval never deletes or rewrites memory.
         """
         self._ensure_open()
         if not isinstance(query, str) or not query.strip():
@@ -370,10 +391,22 @@ class FragmentMemory:
         def tokens(text: str) -> set[str]:
             return {token.casefold() for token in re.findall(r"\w+", text, flags=re.UNICODE) if len(token) > 1}
 
+        if context is not None and (not isinstance(context, str) or not context.strip()):
+            raise ValueError("context must be a non-empty string when provided")
+        context_key = context.strip().casefold() if context is not None else None
         query_tokens = tokens(query)
         if not query_tokens:
             return []
         rows = self._db.execute("SELECT * FROM memory_fragments").fetchall()
+        context_scores: dict[str, float] = {}
+        if context_key is not None:
+            context_scores = {
+                str(row["fragment_id"]): float(row["score"])
+                for row in self._db.execute(
+                    "SELECT fragment_id, score FROM memory_context_importance WHERE context_key = ?",
+                    (context_key,),
+                ).fetchall()
+            }
         fragments = {str(row["id"]): self._from_row(row) for row in rows}
         ranked: list[tuple[float, str]] = []
         direct_matches: set[str] = set()
@@ -385,6 +418,10 @@ class FragmentMemory:
                 tag_overlap = bool(query_tokens & tokens(" ".join(fragment.tags)))
                 score = 0.70 * overlap + 0.15 * fragment.importance + 0.10 * fragment.confidence
                 score += 0.05 if tag_overlap else 0.0
+                if context_key is not None:
+                    # Context is a bounded tie-breaker/adjustment, not a replacement
+                    # for lexical evidence or the fragment's global importance.
+                    score += 0.15 * (context_scores.get(fragment.id, 0.5) - 0.5)
                 ranked.append((score, fragment.id))
         if include_related and direct_matches:
             related_ids = {
@@ -396,9 +433,104 @@ class FragmentMemory:
             for related_id in related_ids:
                 fragment = fragments[related_id]
                 score = 0.20 + 0.10 * fragment.importance + 0.05 * fragment.confidence
+                if context_key is not None:
+                    score += 0.15 * (context_scores.get(fragment.id, 0.5) - 0.5)
                 ranked.append((score, related_id))
         ranked.sort(key=lambda item: (-item[0], item[1]))
         return [fragments[fragment_id] for _, fragment_id in ranked[:limit]]
+
+    def apply_context_feedback_batch(
+        self,
+        outcomes: Mapping[str, bool],
+        *,
+        context: str,
+        operation_id: str,
+        strength: float = 0.10,
+    ) -> tuple[dict[str, float], bool]:
+        """Update task-relative retrieval scores without changing global importance.
+
+        Scores start at 0.5 for an unseen (fragment, context) pair and are
+        clamped to [0, 1]. A stable operation ID makes retries idempotent.
+        """
+        self._ensure_open()
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("context must be a non-empty string")
+        context_key = context.strip().casefold()
+        if not isinstance(operation_id, str) or not operation_id.strip():
+            raise ValueError("operation_id must be a non-empty string")
+        amount = _score(strength, "strength")
+        if not isinstance(outcomes, Mapping) or not outcomes:
+            raise ValueError("outcomes must be a non-empty mapping")
+        normalized: dict[str, bool] = {}
+        for fragment_id, useful in outcomes.items():
+            if not isinstance(fragment_id, str) or not fragment_id.strip():
+                raise ValueError("fragment IDs must be non-empty strings")
+            if not isinstance(useful, bool):
+                raise ValueError("every usefulness label must be boolean")
+            normalized[fragment_id] = useful
+        deltas = {
+            fragment_id: amount if useful else -amount
+            for fragment_id, useful in normalized.items()
+        }
+        payload_json = _json({"context": context_key, "deltas": deltas})
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            prior = self._db.execute(
+                "SELECT payload_json, result_json FROM memory_context_feedback_batches WHERE operation_id = ?",
+                (operation_id,),
+            ).fetchone()
+            if prior is not None:
+                if prior["payload_json"] != payload_json:
+                    raise ValueError("operation_id was already used with different context feedback")
+                results = json.loads(prior["result_json"])
+                self._db.commit()
+                return {key: float(value["after"]) for key, value in results.items()}, False
+
+            results: dict[str, dict[str, float]] = {}
+            now = _now()
+            for fragment_id, delta in deltas.items():
+                exists = self._db.execute(
+                    "SELECT 1 FROM memory_fragments WHERE id = ?", (fragment_id,)
+                ).fetchone()
+                if exists is None:
+                    raise KeyError(f"unknown memory fragment: {fragment_id}")
+                row = self._db.execute(
+                    "SELECT score FROM memory_context_importance WHERE fragment_id = ? AND context_key = ?",
+                    (fragment_id, context_key),
+                ).fetchone()
+                before = float(row["score"]) if row is not None else 0.5
+                after = min(1.0, max(0.0, before + delta))
+                results[fragment_id] = {"before": before, "after": after}
+            for fragment_id, values in results.items():
+                self._db.execute(
+                    """INSERT INTO memory_context_importance
+                    (fragment_id, context_key, score, updated_at) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(fragment_id, context_key) DO UPDATE SET
+                    score = excluded.score, updated_at = excluded.updated_at""",
+                    (fragment_id, context_key, values["after"], now),
+                )
+            self._db.execute(
+                """INSERT INTO memory_context_feedback_batches
+                (operation_id, payload_json, result_json, created_at) VALUES (?, ?, ?, ?)""",
+                (operation_id, payload_json, _json(results), now),
+            )
+            self._db.commit()
+            return {key: float(value["after"]) for key, value in results.items()}, True
+        except Exception:
+            self._db.rollback()
+            raise
+
+    def context_importance(self, fragment_id: str, context: str) -> float:
+        """Return a fragment's task-relative score, or neutral 0.5 if unseen."""
+        self._ensure_open()
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("context must be a non-empty string")
+        self.get(fragment_id, record_access=False)
+        row = self._db.execute(
+            "SELECT score FROM memory_context_importance WHERE fragment_id = ? AND context_key = ?",
+            (fragment_id, context.strip().casefold()),
+        ).fetchone()
+        return float(row["score"]) if row is not None else 0.5
 
     def count(self) -> int:
         self._ensure_open()
