@@ -1,0 +1,77 @@
+# MNN — crescimento estrutural limitado
+
+## Objetivo
+
+Adicionar uma política explícita e determinística para escolher onde criar
+novas conexões a partir da co-atividade atual das unidades. Isso complementa as
+operações primitivas `grow_connection` e `prune_connections`, que já existiam,
+sem alegar que a MNN descobre sozinha uma topologia ótima.
+
+## API
+
+```python
+from machina import ActivityGrowthPolicy
+
+policy = ActivityGrowthPolicy(
+    max_new_connections=1,
+    initial_weight=0.75,
+    min_activity=0.1,
+    max_connections=20,
+    max_out_degree=4,
+    max_in_degree=4,
+    allowed_sources={"cue"},
+    allowed_targets={"response"},
+)
+grown = policy.grow(network)
+```
+
+- Candidatos são pares direcionados de unidades com atividade absoluta acima de
+  `min_activity`.
+- A pontuação é `abs(pre_state * post_state)`.
+- A ordem é determinística: maior pontuação, depois ID de origem, depois ID de
+  destino.
+- Auto-conexões, pares já existentes e unidades silenciosas são excluídos.
+- `max_new_connections`, `max_connections`, `max_out_degree` e `max_in_degree`
+  limitam o crescimento total e por unidade.
+- `allowed_sources` e `allowed_targets` restringem a direção do crescimento.
+- Pesos de conexões existentes nunca são alterados.
+- `initial_weight` é positivo e limitado pelo `weight_limit` da rede.
+- Cada item retornado é um `GrownConnection` com a conexão criada e a pontuação.
+
+A política é invocada explicitamente pelo chamador. Ela não escolhe objetivos,
+não decide quando aprender e ainda não é acionada automaticamente pelo ciclo de
+experiência.
+
+## Benchmark
+
+```bash
+python -m benchmarks.mnn_structural_growth
+python -m unittest tests.test_mnn_structure \
+  tests.test_mnn_structural_growth_benchmark -v
+```
+
+Protocolo:
+
+1. a rede começa sem conexões entre `cue` e `response`;
+2. no treino, ambas as unidades são ativadas ao mesmo tempo por teacher forcing;
+3. a política cria uma única aresta `cue -> response`;
+4. na avaliação, apenas `cue` recebe entrada;
+5. a resposta deve ser produzida pela nova aresta, antes e depois de salvar e
+   recarregar o checkpoint.
+
+Critérios de aprovação:
+
+- resposta inicial: `0.0`;
+- resposta após o crescimento: `0.75`;
+- resposta após reinício: `0.75`;
+- exatamente uma conexão criada, com origem `cue`, destino `response`;
+- pesos preservados após o checkpoint.
+
+## Limitações
+
+Este experimento demonstra apenas uma associação estrutural pequena com teacher
+forcing. Ele não demonstra descoberta autônoma de topologia, seleção de objetivos,
+generalização entre tarefas, compreensão semântica, consciência ou inteligência
+geral. O próximo passo é acoplar a política a um sinal de recompensa e validar
+que o crescimento melhora uma tarefa mantida fora do treino sem violar limites de
+recursos.

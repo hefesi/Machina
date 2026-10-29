@@ -22,8 +22,13 @@ research implementation, not evidence of general intelligence.
     connections below a threshold, deterministically breaking ties by ID.
   - `remove_connection(...)` removes one edge; `remove_unit(..., cascade=True)`
     explicitly removes a unit and its incident edges.
+  - `ActivityGrowthPolicy` selects a bounded, deterministic set of directed
+    edges between co-active units, with thresholds for activity, total
+    connections, and in/out degree. It never modifies existing weights.
   - These are explicit, testable topology-editing operations. The network does
-    **not** yet autonomously choose when or where to grow/prune connections.
+    **not** yet autonomously choose goals or decide when to grow/prune; the
+    caller must invoke the policy. See
+    [bounded structural growth](MNN_STRUCTURAL_GROWTH.md).
 - **Snapshots**: `snapshot()` returns JSON-compatible topology and state;
   `from_snapshot()` restores it.
 

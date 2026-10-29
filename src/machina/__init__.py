@@ -17,10 +17,12 @@ from .mnn_adapter import MNNCognitionAdapter
 from .mnn_experience import MNNExperienceCheckpointStore, MNNExperienceCycle
 from .self_model import SelfModel
 from .mnn_reward import RewardModulator
+from .mnn_structure import ActivityGrowthPolicy, GrownConnection
 from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
 
 __all__ = [
+    "ActivityGrowthPolicy",
     "Artifact",
     "ChemicalEvent",
     "ChemicalParameters",
@@ -42,6 +44,7 @@ __all__ = [
     "CycleResult",
     "EventStore",
     "FragmentMemory",
+    "GrownConnection",
     "MemoryFragment",
     "DuplicateKnowledgeError",
     "KnowledgeDocument",
