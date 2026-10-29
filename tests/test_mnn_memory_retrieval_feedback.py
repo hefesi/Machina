@@ -85,6 +85,38 @@ class MNNMemoryRetrievalFeedbackTests(unittest.TestCase):
             self.feedback.apply_many({"decision": True, "bad": 1})
         self.assertAlmostEqual(0.5, self.memory.get("decision", record_access=False).importance)
 
+    def test_feedback_id_is_idempotent_across_retries(self) -> None:
+        first = self.feedback.apply_many(
+            {"decision": True}, strength=0.2, feedback_id="cycle-123"
+        )
+        second = self.feedback.apply_many(
+            {"decision": True}, strength=0.2, feedback_id="cycle-123"
+        )
+        self.assertAlmostEqual(0.7, first[0][0].importance)
+        self.assertAlmostEqual(0.7, second[0][0].importance)
+        self.assertAlmostEqual(0.5, second[0][1].importance_before)
+        self.assertAlmostEqual(0.7, second[0][1].importance_after)
+        self.assertAlmostEqual(0.7, self.memory.get("decision", record_access=False).importance)
+
+    def test_feedback_id_cannot_be_reused_with_different_payload(self) -> None:
+        self.feedback.apply_many(
+            {"decision": True}, strength=0.2, feedback_id="cycle-123"
+        )
+        with self.assertRaises(ValueError):
+            self.feedback.apply_many(
+                {"decision": False}, strength=0.2, feedback_id="cycle-123"
+            )
+        self.assertAlmostEqual(0.7, self.memory.get("decision", record_access=False).importance)
+
+    def test_idempotent_batch_with_missing_id_changes_nothing(self) -> None:
+        with self.assertRaises(KeyError):
+            self.feedback.apply_many(
+                {"decision": True, "missing": False},
+                strength=0.2,
+                feedback_id="cycle-missing",
+            )
+        self.assertAlmostEqual(0.5, self.memory.get("decision", record_access=False).importance)
+
     def test_invalid_feedback_is_rejected(self) -> None:
         for kwargs in (
             {"useful": 1},
