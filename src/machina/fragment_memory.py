@@ -126,6 +126,20 @@ class FragmentMemory:
                 created_at TEXT NOT NULL
             )
         """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_context_feedback_events (
+                event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                operation_id TEXT NOT NULL,
+                fragment_id TEXT NOT NULL,
+                context_key TEXT NOT NULL,
+                useful INTEGER NOT NULL CHECK (useful IN (0, 1)),
+                before_score REAL NOT NULL CHECK (before_score BETWEEN 0 AND 1),
+                after_score REAL NOT NULL CHECK (after_score BETWEEN 0 AND 1),
+                created_at TEXT NOT NULL,
+                UNIQUE (operation_id, fragment_id),
+                FOREIGN KEY (fragment_id) REFERENCES memory_fragments(id) ON DELETE CASCADE
+            )
+        """)
         self._db.commit()
         self._closed = False
 
@@ -509,6 +523,15 @@ class FragmentMemory:
                     score = excluded.score, updated_at = excluded.updated_at""",
                     (fragment_id, context_key, values["after"], now),
                 )
+                self._db.execute(
+                    """INSERT INTO memory_context_feedback_events
+                    (operation_id, fragment_id, context_key, useful, before_score, after_score, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        operation_id, fragment_id, context_key,
+                        int(normalized[fragment_id]), values["before"], values["after"], now,
+                    ),
+                )
             self._db.execute(
                 """INSERT INTO memory_context_feedback_batches
                 (operation_id, payload_json, result_json, created_at) VALUES (?, ?, ?, ?)""",
@@ -519,6 +542,45 @@ class FragmentMemory:
         except Exception:
             self._db.rollback()
             raise
+
+    def context_feedback_history(
+        self,
+        fragment_id: str,
+        context: str,
+        *,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return newest-first, append-only feedback events for one context.
+
+        This audit trail explains how the current contextual score evolved;
+        it never rewrites or removes prior events.
+        """
+        self._ensure_open()
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("context must be a non-empty string")
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive integer")
+        self.get(fragment_id, record_access=False)
+        rows = self._db.execute(
+            """SELECT operation_id, fragment_id, context_key, useful,
+                      before_score, after_score, created_at
+               FROM memory_context_feedback_events
+               WHERE fragment_id = ? AND context_key = ?
+               ORDER BY event_id DESC LIMIT ?""",
+            (fragment_id, context.strip().casefold(), limit),
+        ).fetchall()
+        return [
+            {
+                "operation_id": str(row["operation_id"]),
+                "fragment_id": str(row["fragment_id"]),
+                "context": str(row["context_key"]),
+                "useful": bool(row["useful"]),
+                "before_score": float(row["before_score"]),
+                "after_score": float(row["after_score"]),
+                "created_at": str(row["created_at"]),
+            }
+            for row in rows
+        ]
 
     def context_importance(self, fragment_id: str, context: str) -> float:
         """Return a fragment's task-relative score, or neutral 0.5 if unseen."""
