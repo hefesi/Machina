@@ -603,9 +603,9 @@ class FragmentMemoryTests(unittest.TestCase):
         self.assertAlmostEqual(reduced, self.memory.sequence_strength(
             "observe", "decide", context="sensor control"
         ))
-        self.assertGreater(
-            self.memory.sequence_strength("observe", "decide", context="other task"),
+        self.assertEqual(
             0.0,
+            self.memory.sequence_strength("observe", "decide", context="other task"),
         )
         with self.assertRaisesRegex(ValueError, "different sequence feedback"):
             self.memory.apply_sequence_feedback_batch(
