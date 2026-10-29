@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from machina.fragment_memory import FragmentMemory
@@ -173,6 +174,102 @@ class FragmentMemoryTests(unittest.TestCase):
         self.assertEqual(2, len(persisted))
         self.assertEqual([event["operation_id"] for event in history], [event["operation_id"] for event in persisted])
         self.assertAlmostEqual(0.6, self.memory.context_importance("sensor", "maintenance"))
+
+    def test_context_relevance_decays_toward_neutral_without_rewriting_storage(self) -> None:
+        self.memory.add(
+            "sensor calibration",
+            source_uri="local://sensor",
+            fragment_id="sensor",
+        )
+        self.memory.apply_context_feedback_batch(
+            {"sensor": True},
+            context="maintenance",
+            operation_id="decay-positive",
+            strength=0.4,
+        )
+        stored = self.memory._db.execute(
+            "SELECT score, updated_at FROM memory_context_importance WHERE fragment_id = ? AND context_key = ?",
+            ("sensor", "maintenance"),
+        ).fetchone()
+        updated_at = datetime.fromisoformat(stored["updated_at"])
+        future = updated_at + timedelta(seconds=60)
+
+        self.assertAlmostEqual(
+            0.9,
+            self.memory.context_importance(
+                "sensor", "maintenance", as_of=updated_at, half_life_seconds=60
+            ),
+        )
+        self.assertAlmostEqual(
+            0.7,
+            self.memory.context_importance(
+                "sensor", "maintenance", as_of=future, half_life_seconds=60
+            ),
+        )
+        self.assertAlmostEqual(
+            0.5,
+            self.memory.context_importance(
+                "sensor", "maintenance",
+                as_of=updated_at + timedelta(seconds=6000), half_life_seconds=60,
+            ),
+            places=6,
+        )
+        # A read computes an effective score but never changes persisted score/time.
+        after_read = self.memory._db.execute(
+            "SELECT score, updated_at FROM memory_context_importance WHERE fragment_id = ? AND context_key = ?",
+            ("sensor", "maintenance"),
+        ).fetchone()
+        self.assertEqual(float(stored["score"]), float(after_read["score"]))
+        self.assertEqual(str(stored["updated_at"]), str(after_read["updated_at"]))
+        self.assertAlmostEqual(0.9, self.memory.context_importance("sensor", "maintenance"))
+
+    def test_negative_context_relevance_also_decays_toward_neutral(self) -> None:
+        self.memory.add("old sensor data", source_uri="local://sensor", fragment_id="sensor")
+        self.memory.apply_context_feedback_batch(
+            {"sensor": False},
+            context="maintenance",
+            operation_id="decay-negative",
+            strength=0.2,
+        )
+        row = self.memory._db.execute(
+            "SELECT updated_at FROM memory_context_importance WHERE fragment_id = ? AND context_key = ?",
+            ("sensor", "maintenance"),
+        ).fetchone()
+        updated_at = datetime.fromisoformat(row["updated_at"])
+        self.assertAlmostEqual(
+            0.4,
+            self.memory.context_importance(
+                "sensor", "maintenance",
+                as_of=updated_at + timedelta(seconds=60), half_life_seconds=60,
+            ),
+        )
+
+    def test_context_decay_configuration_is_validated_and_used_by_recall(self) -> None:
+        with self.assertRaises(ValueError):
+            FragmentMemory(self.path, context_decay_half_life_seconds=0)
+        self.memory.add("alpha beta task", source_uri="local://one", fragment_id="one")
+        self.memory.apply_context_feedback_batch(
+            {"one": True}, context="maintenance",
+            operation_id="decay-configured", strength=0.4,
+        )
+        self.memory.context_decay_half_life_seconds = 60
+        row = self.memory._db.execute(
+            "SELECT updated_at FROM memory_context_importance WHERE fragment_id = ? AND context_key = ?",
+            ("one", "maintenance"),
+        ).fetchone()
+        updated_at = datetime.fromisoformat(row["updated_at"])
+        # A historical as_of can be supplied to the public score API; recall
+        # uses the configured half-life and a current UTC clock automatically.
+        self.assertAlmostEqual(
+            0.7,
+            self.memory.context_importance(
+                "one", "maintenance",
+                as_of=updated_at + timedelta(seconds=60),
+            ),
+        )
+        self.assertEqual(["one"], [item.id for item in self.memory.recall(
+            "alpha beta task", context="maintenance"
+        )])
 
     def test_recall_validates_query_and_limit(self) -> None:
         with self.assertRaises(ValueError):
