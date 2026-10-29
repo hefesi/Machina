@@ -170,6 +170,65 @@ class FragmentMemoryTests(unittest.TestCase):
         self.assertEqual(["maintenance"], evidence["contexts"])
         self.assertEqual((), self.memory.get("sensor", record_access=False).related_ids)
 
+    def test_association_feedback_learns_utility_per_context_and_is_idempotent(self) -> None:
+        self.memory.add("sensor", source_uri="local://sensor", fragment_id="sensor")
+        self.memory.add("maintenance procedure", source_uri="local://procedure", fragment_id="procedure")
+        self.memory.observe_coactivation(
+            ["sensor", "procedure"], operation_id="assoc-observation-1", context="maintenance"
+        )
+        self.memory.observe_coactivation(
+            ["sensor", "procedure"], operation_id="assoc-observation-2", context="maintenance"
+        )
+        baseline = self.memory.association_strength(
+            "sensor", "procedure", context="maintenance"
+        )
+        scores, applied = self.memory.apply_association_feedback_batch(
+            {("sensor", "procedure"): True},
+            context="maintenance", operation_id="assoc-feedback-positive", strength=0.3,
+        )
+        self.assertTrue(applied)
+        self.assertAlmostEqual(0.8, scores[("procedure", "sensor")])
+        reinforced = self.memory.association_strength(
+            "sensor", "procedure", context="maintenance"
+        )
+        self.assertGreater(reinforced, baseline)
+        replay, replay_applied = self.memory.apply_association_feedback_batch(
+            {("procedure", "sensor"): True},
+            context="MAINTENANCE", operation_id="assoc-feedback-positive", strength=0.3,
+        )
+        self.assertFalse(replay_applied)
+        self.assertEqual(scores, replay)
+        self.assertAlmostEqual(
+            baseline,
+            self.memory.association_strength("sensor", "procedure", context="research"),
+        )
+
+        negative, negative_applied = self.memory.apply_association_feedback_batch(
+            {("sensor", "procedure"): False},
+            context="maintenance", operation_id="assoc-feedback-negative", strength=0.5,
+        )
+        self.assertTrue(negative_applied)
+        self.assertAlmostEqual(0.3, negative[("procedure", "sensor")])
+        self.assertLess(
+            self.memory.association_strength("sensor", "procedure", context="maintenance"),
+            reinforced,
+        )
+        with self.assertRaisesRegex(ValueError, "different association feedback"):
+            self.memory.apply_association_feedback_batch(
+                {("sensor", "procedure"): True},
+                context="maintenance", operation_id="assoc-feedback-positive", strength=0.1,
+            )
+
+    def test_association_feedback_rejects_unknown_pairs_atomically(self) -> None:
+        self.memory.add("sensor", source_uri="local://sensor", fragment_id="sensor")
+        self.memory.add("procedure", source_uri="local://procedure", fragment_id="procedure")
+        with self.assertRaises(KeyError):
+            self.memory.apply_association_feedback_batch(
+                {("sensor", "procedure"): True},
+                context="maintenance", operation_id="feedback-no-association",
+            )
+        self.assertIsNone(self.memory.association_evidence("sensor", "procedure"))
+
     def test_association_evidence_is_scoped_to_context(self) -> None:
         self.memory.add("sensor calibration", source_uri="local://sensor", fragment_id="sensor")
         self.memory.add("maintenance procedure", source_uri="local://procedure", fragment_id="procedure")
