@@ -170,6 +170,60 @@ class FragmentMemoryTests(unittest.TestCase):
         self.assertEqual(["maintenance"], evidence["contexts"])
         self.assertEqual((), self.memory.get("sensor", record_access=False).related_ids)
 
+    def test_association_evidence_is_scoped_to_context(self) -> None:
+        self.memory.add("sensor calibration", source_uri="local://sensor", fragment_id="sensor")
+        self.memory.add("maintenance procedure", source_uri="local://procedure", fragment_id="procedure")
+        self.memory.observe_coactivation(
+            ["sensor", "procedure"], operation_id="maintenance-1", context="maintenance"
+        )
+        self.memory.observe_coactivation(
+            ["sensor", "procedure"], operation_id="maintenance-2", context="maintenance"
+        )
+        self.memory.observe_coactivation(
+            ["sensor", "procedure"], operation_id="research-1", context="research"
+        )
+
+        maintenance = self.memory.association_strength(
+            "sensor", "procedure", context="maintenance"
+        )
+        research = self.memory.association_strength(
+            "sensor", "procedure", context="research"
+        )
+        unrelated = self.memory.association_strength(
+            "sensor", "procedure", context="emergency"
+        )
+        global_strength = self.memory.association_strength("sensor", "procedure")
+        self.assertGreater(maintenance, research)
+        self.assertGreater(research, unrelated)
+        self.assertEqual(0.0, unrelated)
+        self.assertGreater(global_strength, maintenance)
+
+    def test_contextual_recall_does_not_promote_unrelated_association(self) -> None:
+        self.memory.add("sensor calibration", source_uri="local://sensor", fragment_id="sensor")
+        self.memory.add("maintenance procedure torque settings", source_uri="local://maintenance", fragment_id="maintenance")
+        self.memory.add("research procedure torque settings", source_uri="local://research", fragment_id="research")
+        self.memory.observe_coactivation(
+            ["sensor", "maintenance"], operation_id="maintenance-a", context="maintenance"
+        )
+        self.memory.observe_coactivation(
+            ["sensor", "maintenance"], operation_id="maintenance-b", context="maintenance"
+        )
+        self.memory.observe_coactivation(
+            ["sensor", "research"], operation_id="research-a", context="research"
+        )
+        self.memory.observe_coactivation(
+            ["sensor", "research"], operation_id="research-b", context="research"
+        )
+
+        maintenance_ids = [item.id for item in self.memory.recall(
+            "sensor calibration", context="maintenance", limit=3
+        )]
+        research_ids = [item.id for item in self.memory.recall(
+            "sensor calibration", context="research", limit=3
+        )]
+        self.assertEqual("maintenance", maintenance_ids[1])
+        self.assertEqual("research", research_ids[1])
+
     def test_associations_are_bidirectional_and_do_not_merge(self) -> None:
         self.memory.add("Cause", source_uri="local://cause", fragment_id="cause")
         self.memory.add("Effect", source_uri="local://effect", fragment_id="effect")
