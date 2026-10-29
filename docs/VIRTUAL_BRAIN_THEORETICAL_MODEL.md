@@ -938,3 +938,7 @@ VIRTUAL ORGANISM
 A arquitetura do Machina pode ser resumida como:
 
 > **Perception informa. Workspace integra. Memory preserva. Cognition simula. Agency decide. Action System executa. Learning transforma. Validation controla mudanças críticas. Self mantém continuidade. Organism conecta o sistema ao mundo.**
+
+## Enquadramento na hipótese fundamental
+
+Este modelo deve ser interpretado como uma hipótese arquitetural de trabalho, não como uma descrição definitiva da mente nem como evidência de consciência. Sua função é explorar como processos neurais, cognitivos, corporais e ambientais poderiam integrar-se numa existência artificial contínua. A arquitetura deve ser revisada se experimentos mostrarem que suas divisões não explicam adequadamente a dinâmica emergente. O critério maior é sua contribuição à [Hipótese Fundamental](00-vision/central-hypothesis.md).
