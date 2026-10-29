@@ -10,7 +10,11 @@ simulation and not evidence of learning general tasks.
 """
 from __future__ import annotations
 
+import json
 import math
+import os
+import tempfile
+from pathlib import Path
 from typing import Mapping
 
 from .mnn import MNN
@@ -125,3 +129,59 @@ class MNNExperienceCycle:
         cycle = cls(network, modulator=modulator, learning_rate=data["learning_rate"])
         cycle.pending_steps = pending_steps
         return cycle
+
+
+class MNNExperienceCheckpointStore:
+    """Atomically persist a complete experience cycle, including pending traces.
+
+    Saving an in-flight experience lets a restarted process apply the delayed
+    outcome exactly once to the connections that were active before the restart.
+    """
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+
+    def save(self, cycle: MNNExperienceCycle) -> None:
+        """Validate and atomically persist the full cycle snapshot."""
+        if not isinstance(cycle, MNNExperienceCycle):
+            raise ValueError("cycle must be an MNNExperienceCycle instance")
+        snapshot = cycle.snapshot()
+        # Validate the serialized contract before replacing a good checkpoint.
+        MNNExperienceCycle.from_snapshot(snapshot)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=self.path.parent,
+                prefix=f".{self.path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as temporary:
+                temporary_path = temporary.name
+                json.dump(snapshot, temporary, ensure_ascii=False, sort_keys=True)
+                temporary.write("\n")
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            os.replace(temporary_path, self.path)
+            temporary_path = None
+        finally:
+            if temporary_path is not None:
+                try:
+                    os.unlink(temporary_path)
+                except FileNotFoundError:
+                    pass
+
+    def load(self) -> MNNExperienceCycle:
+        """Load a checkpoint and validate it through the cycle snapshot contract."""
+        with self.path.open("r", encoding="utf-8") as source:
+            try:
+                snapshot = json.load(source)
+            except json.JSONDecodeError as error:
+                raise ValueError(
+                    f"invalid MNN experience checkpoint JSON: {self.path}"
+                ) from error
+        if not isinstance(snapshot, dict):
+            raise ValueError("MNN experience checkpoint must contain a JSON object")
+        return MNNExperienceCycle.from_snapshot(snapshot)

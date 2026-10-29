@@ -16,18 +16,29 @@ atividade original.
   mudanças de peso e os snapshots, e então limpa os traços.
 - `snapshot()` / `from_snapshot(...)` preservam rede, modulador e uma experiência
   em andamento para retomada após reinício.
+- `MNNExperienceCheckpointStore(path)` grava o snapshot completo com substituição
+  atômica (`save(cycle)`) e o restaura com validação (`load()`). Assim, uma
+  recompensa atrasada pode chegar depois de um reinício e ainda ser aplicada
+  uma única vez às conexões que participaram da experiência original.
 
 Snapshots inválidos, esquema desconhecido, `pending_steps` inválido, recompensa
-não finita e traços ligados a conexões inexistentes são rejeitados.
+não finita e traços ligados a conexões inexistentes são rejeitados. O checkpoint
+também rejeita JSON malformado, conteúdo que não seja objeto e snapshots
+incompletos antes de substituir um arquivo válido.
 
 ## Validação
 
 ```bash
 python -m unittest tests.test_mnn_experience -v
+python -m unittest tests.test_mnn_experience_checkpoint -v
 python -m benchmarks.mnn_delayed_reward
 python -m unittest tests.test_mnn_delayed_reward -v
 python -m unittest discover -s tests -v
 ```
+
+Os testes de checkpoint cobrem round-trip exato, experiência pendente que
+sobrevive ao reinício, aplicação única da recompensa atrasada e rejeição de
+arquivos inválidos.
 
 O benchmark compara uma regra Hebbiana imediata com a regra de elegibilidade:
 com atraso, a coatividade no instante da recompensa é zero, mas o traço anterior

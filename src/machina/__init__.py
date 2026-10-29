@@ -14,7 +14,7 @@ from .fragment_memory import FragmentMemory, MemoryFragment
 from .goal_store import PersistentGoalStore
 from .mnn import Connection, MNN, Unit
 from .mnn_adapter import MNNCognitionAdapter
-from .mnn_experience import MNNExperienceCycle
+from .mnn_experience import MNNExperienceCheckpointStore, MNNExperienceCycle
 from .self_model import SelfModel
 from .mnn_reward import RewardModulator
 from .planning import HierarchicalPlanner, PersistentPlanStore
@@ -50,6 +50,7 @@ __all__ = [
     "IntegrityError",
     "MNN",
     "MNNCognitionAdapter",
+    "MNNExperienceCheckpointStore",
     "MNNExperienceCycle",
     "SelfModel",
     "RewardModulator",
