@@ -5,7 +5,7 @@
 MNNMemoryRetrievalFeedback provides an explicit feedback loop between a retrieval result and the existing SQLite-backed FragmentMemory.
 
 - Positive usefulness feedback raises a fragment's retrieval importance.
-- Negative usefulness feedback lowers importance, but does not claim the content is false.
+- Negative usefulness feedback lowers importance, but does not claim the content is false. For explicitly pinned fragments, negative feedback leaves importance unchanged to protect critical knowledge.
 - Content, provenance, confidence, associations, and pin state are left unchanged.
 - Importance remains bounded to [0, 1] and is persisted by the existing memory store.
 - The result object records the applied signal and before/after importance for caller-side logging, plus `feedback_id` and `applied` to distinguish a new update from an idempotent replay.
@@ -54,5 +54,5 @@ Usefulness is task-relative. A memory can be unhelpful for one query and still b
 
 ## Validation
 
-Unit tests cover positive/negative feedback, persistence across reopen, bounds, invalid inputs, missing fragment IDs, mixed batch updates, prevalidation, and idempotent retries using `feedback_id`. The feedback ledger and importance updates are committed in one SQLite transaction. Integration tests verify that feedback can change subsequent lexical recall ranking. Run with:
+Unit tests cover positive/negative feedback, persistence across reopen, bounds, invalid inputs, missing fragment IDs, mixed batch updates, prevalidation, and idempotent retries using `feedback_id`. The feedback ledger and importance updates are committed in one SQLite transaction. Integration tests verify that feedback can change subsequent lexical recall ranking, that the ranking survives a database restart, and that pinned memory is protected from negative feedback. Run with:
 python -m unittest tests.test_mnn_memory_retrieval_feedback
