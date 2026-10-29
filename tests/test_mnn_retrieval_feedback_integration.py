@@ -40,7 +40,7 @@ class RetrievalFeedbackIntegrationTests(unittest.TestCase):
                 self.assertAlmostEqual(1.0, restarted.get("target", record_access=False).importance)
                 self.assertEqual(2, restarted.count())
 
-    def test_negative_feedback_does_not_demote_pinned_memory(self) -> None:
+    def test_negative_feedback_adapts_relevance_but_preserves_pinned_status(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "memory.sqlite3"
             with FragmentMemory(path) as memory:
@@ -62,14 +62,15 @@ class RetrievalFeedbackIntegrationTests(unittest.TestCase):
                 result = MNNMemoryRetrievalFeedback(memory).apply(
                     "critical", useful=False, strength=0.5, feedback_id="pinned-negative"
                 )
-                self.assertEqual(0.8, result[0].importance)
+                self.assertEqual(0.3, result[0].importance)
                 self.assertTrue(result[0].pinned)
 
                 # The non-idempotent API must preserve the same protection.
                 direct = MNNMemoryRetrievalFeedback(memory).apply(
                     "critical", useful=False, strength=0.5
                 )
-                self.assertEqual(0.8, direct[0].importance)
+                self.assertEqual(0.0, direct[0].importance)
+                self.assertTrue(direct[0].pinned)
                 self.assertEqual(
                     "critical",
                     memory.active(limit=1)[0].id,
