@@ -23,6 +23,7 @@ class RetrievalEvaluation:
     precision_at_k: float
     recall_at_k: float
     reciprocal_rank: float
+    k: int = 5
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,6 +34,21 @@ class RetrievalSuiteEvaluation:
     precision_at_k: float
     recall_at_k: float
     mean_reciprocal_rank: float
+
+
+@dataclass(frozen=True, slots=True)
+class RetrievalSuiteComparison:
+    """Metric deltas and per-query changes between two fixed evaluations."""
+
+    before: RetrievalSuiteEvaluation
+    after: RetrievalSuiteEvaluation
+    precision_delta: float
+    recall_delta: float
+    mean_reciprocal_rank_delta: float
+    improved_queries: tuple[str, ...]
+    regressed_queries: tuple[str, ...]
+    mixed_queries: tuple[str, ...]
+    unchanged_queries: tuple[str, ...]
 
 
 def evaluate_retrieval(
@@ -84,6 +100,7 @@ def evaluate_retrieval(
         precision_at_k=precision,
         recall_at_k=recall,
         reciprocal_rank=reciprocal_rank,
+        k=k,
     )
 
 
@@ -111,4 +128,58 @@ def evaluate_retrieval_suite(
         precision_at_k=sum(item.precision_at_k for item in evaluations) / count,
         recall_at_k=sum(item.recall_at_k for item in evaluations) / count,
         mean_reciprocal_rank=sum(item.reciprocal_rank for item in evaluations) / count,
+    )
+
+
+def compare_retrieval_suites(
+    before: RetrievalSuiteEvaluation,
+    after: RetrievalSuiteEvaluation,
+) -> RetrievalSuiteComparison:
+    """Compare two evaluations made with identical queries, labels, and k.
+
+    Per-query status is based on precision@k, recall@k, and reciprocal rank:
+    a query is improved/regressed only when all metrics are non-worse and at
+    least one is better/worse. Trade-offs are classified as mixed. This helper
+    only compares saved results; it never mutates memory or applies feedback.
+    """
+    if not isinstance(before, RetrievalSuiteEvaluation) or not isinstance(after, RetrievalSuiteEvaluation):
+        raise ValueError("before and after must be RetrievalSuiteEvaluation values")
+    before_by_query = {item.query: item for item in before.evaluations}
+    after_by_query = {item.query: item for item in after.evaluations}
+    if not before_by_query or set(before_by_query) != set(after_by_query):
+        raise ValueError("before and after must contain the same non-empty query set")
+
+    improved: list[str] = []
+    regressed: list[str] = []
+    mixed: list[str] = []
+    unchanged: list[str] = []
+    epsilon = 1e-12
+    for query, old in before_by_query.items():
+        new = after_by_query[query]
+        if old.relevant_ids != new.relevant_ids:
+            raise ValueError(f"relevance judgments changed for query: {query}")
+        if old.k != new.k:
+            raise ValueError(f"k changed for query: {query}")
+        old_metrics = (old.precision_at_k, old.recall_at_k, old.reciprocal_rank)
+        new_metrics = (new.precision_at_k, new.recall_at_k, new.reciprocal_rank)
+        deltas = tuple(new_value - old_value for old_value, new_value in zip(old_metrics, new_metrics))
+        if all(delta >= -epsilon for delta in deltas) and any(delta > epsilon for delta in deltas):
+            improved.append(query)
+        elif all(delta <= epsilon for delta in deltas) and any(delta < -epsilon for delta in deltas):
+            regressed.append(query)
+        elif all(abs(delta) <= epsilon for delta in deltas):
+            unchanged.append(query)
+        else:
+            mixed.append(query)
+
+    return RetrievalSuiteComparison(
+        before=before,
+        after=after,
+        precision_delta=after.precision_at_k - before.precision_at_k,
+        recall_delta=after.recall_at_k - before.recall_at_k,
+        mean_reciprocal_rank_delta=after.mean_reciprocal_rank - before.mean_reciprocal_rank,
+        improved_queries=tuple(improved),
+        regressed_queries=tuple(regressed),
+        mixed_queries=tuple(mixed),
+        unchanged_queries=tuple(unchanged),
     )
