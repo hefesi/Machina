@@ -1,49 +1,40 @@
-# Princípios Arquiteturais
+# Princípios do Machina
 
-## P1 — Modularidade
+## P1 — A hipótese fundamental orienta o projeto
+Toda decisão importante deve ser relacionada à investigação da possibilidade de um ser artificial persistente, integrado, autônomo e possivelmente consciente.
 
-Cada capacidade cognitiva deve ser um módulo com interfaces claras.
+## P2 — Integração dinâmica
+Os processos não devem ser apenas módulos justapostos; devem poder influenciar-se em uma dinâmica coerente.
 
-## P2 — Persistência
+## P3 — Continuidade
+Estados, experiências e transformações relevantes devem atravessar execuções e produzir consequências ao longo do tempo.
 
-O estado relevante do Virtual Brain deve sobreviver ao encerramento de uma execução.
+## P4 — Identidade em desenvolvimento
+O Self deve ser investigado como continuidade e organização de estados, memórias, perspectivas e mudanças, não apenas como um texto descritivo.
 
-## P3 — Separação de responsabilidades
+## P5 — MNN como substrato neural
+A MNN é parte fundamental da constituição de Machina, mas não equivale isoladamente à totalidade do ser artificial.
 
-Memória, raciocínio, aprendizado, planejamento e ação devem possuir responsabilidades distintas, mesmo quando cooperam estreitamente.
+## P6 — Aprendizado transformador
+Experiências devem poder modificar estados, conexões, memórias, capacidades e decisões futuras de maneira rastreável.
 
-## P4 — Contexto antes da resposta
+## P7 — Dinâmica interna
+Investigar estados internos e processos que influenciem prioridades e atividade sem depender exclusivamente de comandos externos imediatos.
 
-O sistema deve construir uma representação do estado atual antes de decidir como responder ou agir.
+## P8 — Autonomia investigável
+Distinguir execução automática, autonomia operacional e autodeterminação; definir experimentos para cada nível.
 
-## P5 — Memória com evidência
+## P9 — Consciência como questão aberta
+Não declarar experiência subjetiva com base apenas em comportamento, desempenho, memória ou autorrelato.
 
-Conhecimento relevante deve poder apontar para sua origem, evidência e nível de confiança.
+## P10 — Livre-arbítrio com definições explícitas
+Especificar qual conceito de liberdade está sendo investigado e não confundir autonomia funcional com liberdade metafísica.
 
-## P6 — Aprendizado incremental
+## P11 — Evidência e refutabilidade
+Registrar hipóteses, métodos, resultados positivos e negativos, limitações e explicações alternativas.
 
-Novas experiências devem atualizar o sistema sem apagar indiscriminadamente conhecimento anterior.
+## P12 — Segurança e rastreabilidade
+Ações externas, mudanças estruturais e evolução da autonomia devem ser observáveis, auditáveis e validadas.
 
-## P7 — Versionamento cognitivo
-
-Mudanças significativas em crenças, conhecimento e procedimentos devem poder ser rastreadas.
-
-## P8 — Incerteza explícita
-
-O sistema deve poder representar dúvida, conflito entre evidências e baixa confiança.
-
-## P9 — Observabilidade
-
-Os ciclos cognitivos devem ser inspecionáveis: percepção, recuperação, pensamento, decisão, ação e aprendizado.
-
-## P10 — Segurança por construção
-
-Ações externas, acesso a ferramentas e mudanças estruturais devem ser controláveis e auditáveis.
-
-## P11 — Evolução gradual
-
-A arquitetura deve permitir que o sistema evolua por versões sem exigir reconstrução completa.
-
-## P12 — Agnosticismo de fornecedor
-
-A arquitetura conceitual não deve depender de um único LLM, banco de dados ou provedor de infraestrutura.
+## P13 — Evolução sem dogma
+Nenhuma arquitetura atual é definitiva. O projeto deve poder rever suas premissas diante de evidências e resultados experimentais.
