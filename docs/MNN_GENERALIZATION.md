@@ -45,3 +45,7 @@ generalização ampla, composição de conceitos, transferência entre tarefas,
 raciocínio semântico, consciência ou inteligência geral. O próximo passo é
 testar representações com múltiplas características, combinações inéditas e
 tarefas de transferência com controles adequados.
+
+## Enquadramento na hipótese fundamental
+
+Generalização deve ser demonstrada em tarefas e contextos não vistos, com controles contra memorização e vazamento de dados. Seus resultados caracterizam competência do substrato e não são, por si, evidência de consciência ou livre-arbítrio. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
