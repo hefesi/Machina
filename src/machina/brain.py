@@ -827,8 +827,14 @@ class VirtualBrain:
             raise ValueError("every usefulness label must be boolean")
 
         retrieval = self.store.latest_artifact(cycle_id, "memory.retrieved")
+        action_result = self.store.latest_artifact(cycle_id, "action.result")
+        evaluation = self.store.latest_artifact(cycle_id, "evaluation.completed")
         if retrieval is None:
             raise ValueError("cycle has no persisted memory retrieval to evaluate")
+        if action_result is None or evaluation is None:
+            raise ValueError(
+                "retrieval feedback requires a persisted action result and evaluation"
+            )
         retrieved_ids = {
             item.get("fragment_id")
             for item in retrieval.data.get("fragment_context", [])
@@ -880,8 +886,16 @@ class VirtualBrain:
                 "strength": float(strength),
                 "outcomes": dict(outcomes),
                 "results": serialized,
+                "outcome_evidence": {
+                    "action_result_ref": action_result.id,
+                    "action_status": action_result.data["status"],
+                    "observed_result": action_result.data["observed_result"],
+                    "evaluation_ref": evaluation.id,
+                    "evaluation_success": evaluation.data["success"],
+                    "prediction_error": evaluation.data["prediction_error"],
+                },
             },
-            input_refs=[retrieval.id],
+            input_refs=[retrieval.id, action_result.id, evaluation.id],
             source_refs=retrieval.source_refs,
             epistemic_status=EpistemicStatus.INTERPRETED,
             confidence=1.0,
