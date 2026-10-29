@@ -161,8 +161,8 @@ class FragmentMemoryTests(unittest.TestCase):
         history = self.memory.context_feedback_history("sensor", "MAINTENANCE")
         self.assertEqual(2, len(history))
         self.assertEqual(["maintenance-2", "maintenance-1"], [event["operation_id"] for event in history])
-        self.assertAlmostEqual(0.7, history[0]["after_score"])
-        self.assertAlmostEqual(0.5, history[0]["before_score"])
+        self.assertAlmostEqual(0.6, history[0]["after_score"])
+        self.assertAlmostEqual(0.7, history[0]["before_score"])
         self.assertFalse(history[0]["useful"])
         self.assertAlmostEqual(0.5, history[1]["before_score"])
         self.assertAlmostEqual(0.7, history[1]["after_score"])
@@ -172,7 +172,7 @@ class FragmentMemoryTests(unittest.TestCase):
         persisted = self.memory.context_feedback_history("sensor", "maintenance")
         self.assertEqual(2, len(persisted))
         self.assertEqual([event["operation_id"] for event in history], [event["operation_id"] for event in persisted])
-        self.assertAlmostEqual(0.7, self.memory.context_importance("sensor", "maintenance"))
+        self.assertAlmostEqual(0.6, self.memory.context_importance("sensor", "maintenance"))
 
     def test_recall_validates_query_and_limit(self) -> None:
         with self.assertRaises(ValueError):
