@@ -58,6 +58,33 @@ class MNNMemoryRetrievalFeedbackTests(unittest.TestCase):
         updated, _ = self.feedback.apply("decision", useful=False, strength=1.0)
         self.assertEqual(0.0, updated.importance)
 
+    def test_batch_feedback_updates_each_explicit_fragment(self) -> None:
+        self.memory.add(
+            "Secondary memory", source_uri="test://secondary",
+            importance=0.4, fragment_id="secondary",
+        )
+        results = self.feedback.apply_many(
+            {"decision": True, "secondary": False}, strength=0.2
+        )
+        self.assertEqual(["decision", "secondary"], [event.fragment_id for _, event in results])
+        self.assertAlmostEqual(0.7, self.memory.get("decision", record_access=False).importance)
+        self.assertAlmostEqual(0.2, self.memory.get("secondary", record_access=False).importance)
+
+    def test_batch_with_unknown_id_changes_nothing(self) -> None:
+        self.memory.add(
+            "Secondary memory", source_uri="test://secondary",
+            importance=0.4, fragment_id="secondary",
+        )
+        with self.assertRaises(KeyError):
+            self.feedback.apply_many({"decision": True, "missing": False})
+        self.assertAlmostEqual(0.5, self.memory.get("decision", record_access=False).importance)
+        self.assertAlmostEqual(0.4, self.memory.get("secondary", record_access=False).importance)
+
+    def test_batch_rejects_non_boolean_label_before_updates(self) -> None:
+        with self.assertRaises(ValueError):
+            self.feedback.apply_many({"decision": True, "bad": 1})
+        self.assertAlmostEqual(0.5, self.memory.get("decision", record_access=False).importance)
+
     def test_invalid_feedback_is_rejected(self) -> None:
         for kwargs in (
             {"useful": 1},
