@@ -285,3 +285,7 @@ Rótulos são fornecidos explicitamente pelo chamador: o sistema não deduz
 causalidade a partir de sucesso ou fracasso, nem altera o conteúdo ou a
 procedência dos fragmentos. A utilidade aprendida num contexto não altera a
 força em outro contexto.
+
+## Enquadramento na hipótese fundamental
+
+A recuperação de memória deve ser estudada como processo ativo que pode alterar atenção, interpretação e decisão, e não apenas como busca de dados. Medir efeitos causais da recuperação no ciclo cognitivo e registrar falhas, vieses e feedbacks. A recuperação contextual não prova consciência. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
