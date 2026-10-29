@@ -62,7 +62,7 @@ class RetrievalFeedbackIntegrationTests(unittest.TestCase):
                 result = MNNMemoryRetrievalFeedback(memory).apply(
                     "critical", useful=False, strength=0.5, feedback_id="pinned-negative"
                 )
-                self.assertEqual(0.3, result[0].importance)
+                self.assertAlmostEqual(0.3, result[0].importance)
                 self.assertTrue(result[0].pinned)
 
                 # The non-idempotent API must preserve the same protection.
