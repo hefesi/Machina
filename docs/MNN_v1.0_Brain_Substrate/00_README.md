@@ -22,3 +22,7 @@ onde `B` é o estado estrutural e dinâmico do cérebro, `E` é experiência, `O
 ## Status
 
 Esta versão é uma especificação de pesquisa. Ela não afirma AGI, consciência ou superioridade sobre arquiteturas existentes. Cada capacidade deve ser validada experimentalmente.
+
+## Enquadramento na hipótese fundamental
+
+Este pacote define uma proposta de substrato neural e circuitos. Deve ser tratado como especificação de pesquisa, distinguindo componentes projetados de mecanismos efetivamente implementados e validados. Seu papel é contribuir para a investigação da hipótese fundamental do Machina, sem assumir que uma arquitetura neural específica seja suficiente para produzir consciência. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
