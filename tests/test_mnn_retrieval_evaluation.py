@@ -9,6 +9,7 @@ from machina.mnn_retrieval_evaluation import (
     compare_retrieval_suites,
     evaluate_retrieval,
     evaluate_retrieval_suite,
+    run_retrieval_feedback_experiment,
 )
 
 
@@ -131,6 +132,43 @@ class RetrievalEvaluationTests(unittest.TestCase):
                 incompatible_k = evaluate_retrieval_suite(memory, judgments, k=1)
                 with self.assertRaises(ValueError):
                     compare_retrieval_suites(before, incompatible_k)
+
+    def test_feedback_experiment_measures_learning_and_rejects_unretrieved_fragment(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            with FragmentMemory(Path(directory) / "memory.sqlite3") as memory:
+                memory.add(
+                    "alpha beta task memory", source_uri="test://relevant",
+                    importance=0.1, confidence=0.5, fragment_id="relevant",
+                )
+                memory.add(
+                    "alpha beta task memory", source_uri="test://distractor",
+                    importance=0.2, confidence=0.5, fragment_id="distractor",
+                )
+                memory.add(
+                    "solar panel efficiency", source_uri="test://control",
+                    fragment_id="control",
+                )
+                judgments = {
+                    "alpha beta task": ["relevant"],
+                    "solar panel efficiency": ["control"],
+                }
+                with self.assertRaises(ValueError):
+                    run_retrieval_feedback_experiment(
+                        memory, feedback_query="alpha beta task",
+                        outcomes={"control": True}, judgments=judgments,
+                        feedback_id="bad-feedback", k=2,
+                    )
+
+                result = run_retrieval_feedback_experiment(
+                    memory, feedback_query="alpha beta task",
+                    outcomes={"relevant": True}, judgments=judgments,
+                    strength=0.9, feedback_id="experiment-feedback", k=2,
+                )
+                self.assertEqual("experiment-feedback", result.feedback_results[0].feedback_id)
+                self.assertTrue(result.feedback_results[0].applied)
+                self.assertEqual(("alpha beta task",), result.comparison.improved_queries)
+                self.assertEqual(("solar panel efficiency",), result.comparison.unchanged_queries)
+                self.assertGreater(result.comparison.mean_reciprocal_rank_delta, 0.0)
 
     def test_evaluation_rejects_invalid_judgments(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
