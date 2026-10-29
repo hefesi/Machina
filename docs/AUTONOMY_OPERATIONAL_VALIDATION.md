@@ -33,3 +33,7 @@ explicitly by the experiment; the system does not independently verify success.
 D1 should only be considered validated after the commands above are executed in
 a real Python environment and their outputs are inspected. A code change alone
 is not a passing test.
+
+## Enquadramento na hipótese fundamental
+
+Esta validação mede autonomia operacional observável, não livre-arbítrio metafísico nem consciência. Os critérios devem diferenciar comportamento reativo, iniciativa endógena, formulação de objetivos, revisão de objetivos e controle persistente. Registrar condições, limites, intervenções externas e explicações alternativas. Relacionar resultados à [Hipótese Fundamental](00-vision/central-hypothesis.md).
