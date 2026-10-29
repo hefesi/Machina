@@ -158,3 +158,7 @@ Limitações: o protótipo ainda não executa automaticamente cada etapa nem rea
 pesquisa aberta. O usuário ou um avaliador externo fornece o resultado explícito.
 Isso cria continuidade e estrutura de planejamento auditável, mas não demonstra
 por si só raciocínio geral, consciência ou AGI.
+
+## Enquadramento na hipótese fundamental
+
+O protótipo é uma realização parcial e experimental da visão do Machina, não uma versão completa do ser artificial pretendido. Documentar explicitamente quais mecanismos estão implementados, quais são simulados, quais dependem de serviços externos e quais permanecem apenas conceituais. Avaliar o protótipo pelo que demonstra sobre integração, persistência e autonomia funcional, sem alegar consciência. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
