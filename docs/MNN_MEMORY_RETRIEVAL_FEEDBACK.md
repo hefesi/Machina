@@ -56,3 +56,23 @@ Usefulness is task-relative. A memory can be unhelpful for one query and still b
 
 Unit tests cover positive/negative feedback, persistence across reopen, bounds, invalid inputs, missing fragment IDs, mixed batch updates, prevalidation, and idempotent retries using `feedback_id`. The feedback ledger and importance updates are committed in one SQLite transaction. Integration tests verify that feedback can change subsequent lexical recall ranking, that the ranking survives a database restart, and that pinned memory is protected from negative feedback. Run with:
 python -m unittest tests.test_mnn_memory_retrieval_feedback
+
+## Retrieval evaluation
+
+`machina.mnn_retrieval_evaluation.evaluate_retrieval()` provides a deterministic baseline for measuring recall ranking against explicit relevant fragment IDs. It reports precision@k, recall@k, and reciprocal rank (MRR for a single query). The evaluator does not infer which records are relevant and does not modify memory; relevance labels must come from a test fixture or an observed task outcome.
+
+Example:
+
+```python
+from machina.mnn_retrieval_evaluation import evaluate_retrieval
+
+result = evaluate_retrieval(
+    memory,
+    "Recall the sensor calibration",
+    relevant_ids=["calibration-fragment"],
+    k=5,
+)
+print(result.precision_at_k, result.recall_at_k, result.reciprocal_rank)
+```
+
+The integration test compares metrics before and after explicit feedback, then reopens the SQLite database and checks that the ranking persists. This distinguishes a measurable ranking improvement from merely changing an internal importance value.
