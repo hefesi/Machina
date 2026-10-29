@@ -1001,3 +1001,7 @@ Depois deste documento, a arquitetura deve avançar para:
 6. `schemas/` — transformar este contrato conceitual em schemas executáveis.
 
 > **Nota:** este documento define a semântica do sistema, não a tecnologia de armazenamento. A decisão entre PostgreSQL, banco vetorial, grafo, documentos ou arquitetura híbrida deve ser tomada depois que o modelo cognitivo estiver estável.
+
+## Enquadramento na hipótese fundamental
+
+O modelo de dados cognitivos é uma representação formal de estados e relações funcionais. Não se deve confundir a presença de campos como self, emotion, intention ou experience com a existência dos fenômenos subjetivos correspondentes. Cada campo precisa ter semântica operacional, proveniência, ciclo de vida e evidência observável. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
