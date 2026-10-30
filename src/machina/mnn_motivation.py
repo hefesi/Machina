@@ -75,14 +75,22 @@ class MotivationSystem:
             raise ValueError(f"duplicate drive: {drive.name}")
         self.drives[drive.name] = drive
 
-    def step(self, fulfillment: Mapping[str, float] | None = None) -> dict[str, float]:
-        """Advance all drives once; omitted outcomes mean no fulfillment."""
+    def validate_fulfillment(
+        self, fulfillment: Mapping[str, float] | None = None
+    ) -> dict[str, float]:
+        """Validate and normalize all fulfillment observations without mutation."""
         outcomes = dict(fulfillment or {})
         unknown = set(outcomes) - self.drives.keys()
         if unknown:
             raise ValueError(f"unknown motivational drives: {sorted(unknown)}")
-        # Validate the entire input before mutating any drive.
-        validated = {name: _bounded(f"fulfillment[{name}]", value) for name, value in outcomes.items()}
+        return {
+            name: _bounded(f"fulfillment[{name}]", value)
+            for name, value in outcomes.items()
+        }
+
+    def step(self, fulfillment: Mapping[str, float] | None = None) -> dict[str, float]:
+        """Advance all drives once; omitted outcomes mean no fulfillment."""
+        validated = self.validate_fulfillment(fulfillment)
         for name, drive in self.drives.items():
             drive.advance(validated.get(name, 0.0))
         self.timestep += 1
