@@ -54,7 +54,7 @@ class MNNShortTermPlasticity:
         if not isinstance(network, MNN):
             raise ValueError("network must be an MNN")
         live = set(network.connections)
-        if not set(self.utilization).issubset(live) or set(self.utilization) != set(self.resources):
+        if set(self.utilization) != live or set(self.resources) != live:
             raise ValueError("network topology changed; explicitly reconcile plasticity state")
         result: dict[str, float] = {}
         for edge_id, edge in network.connections.items():
