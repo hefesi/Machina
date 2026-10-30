@@ -6,7 +6,7 @@ biological chemistry or consciousness.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import math
 import re
 from typing import Mapping
@@ -15,6 +15,7 @@ from .fragment_memory import FragmentMemory, MemoryFragment
 
 from .chemical_signaling import ChemicalEvent, ChemicalSignaling
 from .mnn import MNN
+from .mnn_motivation import MotivationSystem
 from .self_continuity import SelfContinuity
 
 
@@ -60,12 +61,13 @@ class OrganismStep:
     plasticity_gain: float
     attention_gain: float
     weight_changes: Mapping[str, float]
+    motivation_urgencies: Mapping[str, float]
 
 
 class MNNOrganism:
     """Coordinate persistent MNN, chemical-control, and Self-continuity state."""
 
-    SNAPSHOT_SCHEMA = 1
+    SNAPSHOT_SCHEMA = 2
 
     def __init__(
         self,
@@ -77,6 +79,7 @@ class MNNOrganism:
         chemical_inputs: Mapping[str, str] | None = None,
         learning_rate: float = 0.0,
         memory: FragmentMemory | None = None,
+        motivation: MotivationSystem | None = None,
     ) -> None:
         if not agent_id or not agent_id.strip():
             raise ValueError("agent_id must be non-empty")
@@ -93,6 +96,8 @@ class MNNOrganism:
             raise ValueError("continuity agent_id must match organism agent_id")
         if self.network.timestep != self.signaling.state.timestep:
             raise ValueError("neural and chemical timesteps must match")
+        if motivation is not None and motivation.timestep != self.network.timestep:
+            raise ValueError("neural, chemical, and motivational timesteps must match")
         self.chemical_inputs = dict(chemical_inputs or {})
         for chemical, unit_id in self.chemical_inputs.items():
             if chemical not in {"dopamine", "acetylcholine", "noradrenaline", "serotonin"}:
@@ -101,6 +106,7 @@ class MNNOrganism:
                 raise ValueError(f"chemical input unit does not exist: {unit_id}")
         self.learning_rate = float(learning_rate)
         self.memory = memory
+        self.motivation = motivation
 
     @property
     def timestep(self) -> int:
@@ -112,6 +118,7 @@ class MNNOrganism:
         event: ChemicalEvent | None = None,
         *,
         memory_guidance: MemoryGuidance | None = None,
+        fulfillment: Mapping[str, float] | None = None,
     ) -> OrganismStep:
         """Advance all coupled states exactly one deterministic logical tick."""
         neural_inputs = dict(inputs or {})
@@ -132,7 +139,13 @@ class MNNOrganism:
                 raise ValueError("memory guidance signal must be finite and within [0, 1]")
             neural_inputs[memory_guidance.target_unit] = memory_guidance.signal
 
+        validated_fulfillment = (
+            self.motivation.validate_fulfillment(fulfillment)
+            if self.motivation is not None else {}
+        )
         event = event or ChemicalEvent()
+        if self.motivation is not None:
+            event = replace(event, motivational_pressure=self.motivation.chemical_pressure)
         chemical = self.signaling.step(event)
         for name, unit_id in self.chemical_inputs.items():
             neural_inputs[unit_id] = chemical.concentrations[name]
@@ -146,10 +159,16 @@ class MNNOrganism:
                 reward=chemical.prediction_error,
             )
 
+        motivation_urgencies = (
+            self.motivation.step(validated_fulfillment)
+            if self.motivation is not None else {}
+        )
+
         self.continuity.record_event(
             "integrated_state_transition",
             "mnn_organism",
-            reason=f"timestep={self.timestep}; prediction_error={chemical.prediction_error:.8f}",
+            reason=(f"timestep={self.timestep}; prediction_error={chemical.prediction_error:.8f}; "
+                    f"motivation={motivation_urgencies}"),
         )
         if self.memory is not None:
             self.memory.add(
@@ -172,6 +191,7 @@ class MNNOrganism:
                     "plasticity_gain": chemical.plasticity_gain,
                     "attention_gain": chemical.attention_gain,
                     "weight_changes": dict(weight_changes),
+                    "motivation_urgencies": dict(motivation_urgencies),
                 },
                 fragment_id=f"mnn-episode-{self.agent_id}-{self.timestep}",
             )
@@ -184,6 +204,7 @@ class MNNOrganism:
             plasticity_gain=chemical.plasticity_gain,
             attention_gain=chemical.attention_gain,
             weight_changes=dict(weight_changes),
+            motivation_urgencies=dict(motivation_urgencies),
         )
 
     def recall_experiences(
@@ -356,12 +377,14 @@ class MNNOrganism:
             },
             "chemical_inputs": dict(self.chemical_inputs),
             "learning_rate": self.learning_rate,
+            "motivation": self.motivation.snapshot() if self.motivation is not None else None,
         }
 
     @classmethod
     def from_snapshot(cls, data: Mapping) -> "MNNOrganism":
         """Restore and validate an integrated state from its versioned snapshot."""
-        if data.get("schema_version") != cls.SNAPSHOT_SCHEMA:
+        schema_version = data.get("schema_version")
+        if schema_version not in {1, cls.SNAPSHOT_SCHEMA}:
             raise ValueError("unsupported MNN organism snapshot schema")
         continuity_data = data.get("continuity")
         if not isinstance(continuity_data, Mapping):
@@ -380,4 +403,8 @@ class MNNOrganism:
             continuity=continuity,
             chemical_inputs=data.get("chemical_inputs", {}),
             learning_rate=data.get("learning_rate", 0.0),
+            motivation=(
+                MotivationSystem.from_snapshot(data["motivation"])
+                if data.get("motivation") is not None else None
+            ),
         )
