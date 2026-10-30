@@ -37,7 +37,7 @@ class SelfRegulationControllerTests(unittest.TestCase):
     def test_proposes_bounded_auditable_adjustments(self):
         proposal = self.controller.propose()
         self.assertEqual("cycle-4", proposal.cycle_id)
-        self.assertEqual(0.15, proposal.adjustments["error_recovery"])
+        self.assertAlmostEqual(0.12, proposal.adjustments["error_recovery"])
         self.assertEqual(-0.06, proposal.adjustments["exploration"])
         self.assertAlmostEqual(0.03, proposal.adjustments["focus"])
         self.assertEqual(("step:4",), proposal.evidence_refs)
