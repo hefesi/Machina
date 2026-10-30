@@ -50,3 +50,32 @@ observation mode, conflict surfacing, and input validation. A later integration
 step should connect this lifecycle to the durable `VirtualBrain` cycle only
 after defining transaction and recovery semantics across `EventStore` and
 `FragmentMemory`.
+
+## Contextual knowledge-use feedback (v0.2)
+
+`MNNKnowledgeUseFeedback` connects an externally confirmed strategy outcome
+with the existing contextual relevance scores in `FragmentMemory`.
+
+```python
+from machina import MNNKnowledgeUseFeedback
+
+feedback = MNNKnowledgeUseFeedback(memory, strength=0.1)
+result = feedback.apply(
+    proposal,
+    {"fragment-id-1": True, "fragment-id-2": False},
+    execution_confirmed=True,
+    executed_action=proposal["action"],
+    operation_id="unique-outcome-id",
+)
+```
+
+The caller must explicitly label each cited fragment as useful or not useful.
+The adapter rejects unconfirmed execution, action mismatch, uncited fragment IDs,
+and non-boolean labels. Feedback changes only relevance for the supplied task
+context; global memory importance is unchanged. The underlying SQLite batch is
+atomic and idempotent: retrying the same operation returns the original scores,
+while reusing the operation ID with changed labels is rejected.
+
+Reward is deliberately not translated automatically into per-fragment
+usefulness. A high-reward action does not prove every cited source was useful,
+and a low-reward action does not prove every source was irrelevant.
