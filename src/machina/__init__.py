@@ -22,6 +22,7 @@ from .mnn_motivation import MotivationalDrive, MotivationSystem
 from .mnn_organism import (DecisionAssessment, DecisionOption, MNNOrganism, MemoryGuidance, OrganismStep)
 from .mnn_adapter import MNNCognitionAdapter
 from .self_model import SelfModel
+from .self_state_dynamics import SelfStateDynamicsAnalyzer, SelfStateTransition
 from .self_model_learning import SelfModelLearningBridge
 from .self_autobiography import SelfAutobiography
 from .self_transformation import SelfTransformationTracker
@@ -96,6 +97,8 @@ __all__ = [
     "OrganismStep",
     "MNNCognitionAdapter",
     "SelfModel",
+    "SelfStateDynamicsAnalyzer",
+    "SelfStateTransition",
     "SelfModelLearningBridge",
     "SelfAutobiography",
     "SelfTransformationTracker",
