@@ -786,3 +786,17 @@ policy assumptions, not biologically validated homeostatic setpoints. In
 particular, reducing prediction error is not always desirable; experiments
 must test target profiles against task performance and avoid suppressing
 useful novelty or exploration.
+
+## Temporal stabilization of self-regulation (experimental)
+
+`TemporalRegulationFilter` applies an exponential moving average to successive
+bounded regulation proposals. The configurable `alpha` controls responsiveness;
+a small deadband suppresses negligible residual adjustments. Its own state and
+logical timestep are snapshot/restorable, so a process restart preserves the
+next filtered result.
+
+The filter accepts proposals only and returns a new immutable proposal with
+the same cycle, errors, and evidence references plus an explicit filter trace.
+It never applies the resulting adjustment to motivation or action selection.
+This is a signal-stabilization primitive, not a learned homeostatic controller;
+the choice of alpha and deadband requires task-specific evaluation.
