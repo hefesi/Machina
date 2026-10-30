@@ -241,3 +241,44 @@ feedback improves decisions. That claim requires controlled, held-out
 experiments with fixed datasets, repeated seeds, and retrieval/no-retrieval
 baselines. The feedback label must come from a defined evaluator or outcome,
 not from the model's own unsupported assertion that a memory was useful.
+
+
+## Memory-informed alternative assessment (experimental)
+
+The organism can now compare a caller-supplied set of candidate actions with
+`assess_decisions(...)`. Each `DecisionOption` contains an action label, an
+externally estimated base utility, and a query used to retrieve relevant
+episodes. The assessment adds a bounded memory contribution to each base
+utility and returns the selected action, per-action scores, evidence IDs, and
+the selected option's `MemoryGuidance`.
+
+This is deliberately a deliberation primitive, not an autonomous action
+executor. It does not invent alternatives, estimate base utility, or execute
+the winner. The caller can inspect the assessment and explicitly pass
+`selected_guidance` to a subsequent organism step. Ties are resolved by
+action name for deterministic behavior.
+
+Example:
+
+```python
+from machina import DecisionOption
+
+assessment = organism.assess_decisions(
+    [
+        DecisionOption("reuse-experience", 0.40, "prediction error"),
+        DecisionOption("unfamiliar-route", 0.55, "volcano astronomy"),
+    ],
+    target_unit="memory_context",
+    context="route-planning",
+    memory_weight=0.25,
+)
+# Inspect assessment, then explicitly apply its selected memory guidance.
+organism.step(memory_guidance=assessment.selected_guidance)
+```
+
+A higher score in this baseline only means the configured arithmetic favored
+that option. It does not show that the action is objectively better. Base
+utilities and usefulness labels need external ground truth. The next
+validation must measure held-out task outcomes against a no-memory baseline,
+including negative feedback, misleading memories, and cases where recalling
+an experience should not change the decision.
