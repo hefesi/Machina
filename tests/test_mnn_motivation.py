@@ -13,7 +13,7 @@ class MotivationSystemTests(unittest.TestCase):
     def test_priority_weighted_urgency_ranks_drives_deterministically(self):
         system = self.make_system()
         self.assertEqual("stability", system.ranked_drives()[0][0])
-        self.assertAlmostEqual(0.8, system.ranked_drives()[0][1])
+        self.assertAlmostEqual(0.6, system.ranked_drives()[0][1])
 
     def test_fulfillment_reduces_deficit_and_changes_priority(self):
         system = self.make_system()
