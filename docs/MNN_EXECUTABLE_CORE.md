@@ -463,3 +463,12 @@ A camada de autonomia agora pode receber uma instância compatível com `Motivat
 A urgência do candidato vem de `temporal_urgencies()`, e o feedback de seleção usa `temporal_autonomy_adjustments()`. Assim, uma pressão que persiste por vários ciclos pode continuar influenciando a agenda interna mesmo quando a urgência instantânea já mudou. O objetivo é candidato interno e explicável: a camada não executa ações externas nem declara que o drive foi satisfeito. O chamador ainda precisa registrar resultados observados e fornecer feedback explícito.
 
 O gerador aceita o contrato estrutural de pressão temporal, sem importar a implementação concreta da MNN. Isso mantém a autonomia desacoplada da arquitetura neural. Testes cobrem geração acima do limiar, ausência abaixo dele e integração na seleção de objetivos. Trata-se de geração operacional de objetivos a partir de variáveis persistentes, não de prova de vontade própria ou experiência subjetiva.
+
+
+### Progresso e prioridade persistentes dos objetivos
+
+A `PersistentGoalStore` registra agora `progress` e `priority` para cada instância de objetivo. Ambos são valores limitados a [0, 1] e sobrevivem ao reinício do processo. `update_progress(goal_id, progress, evidence=..., priority=...)` exige evidência textual explícita; a prioridade é opcional e, quando omitida, permanece inalterada.
+
+O progresso pode aumentar ou diminuir. Uma estimativa anterior não é tratada como verdade imutável: evidência posterior pode revelar que parte do trabalho não foi concluída ou que a avaliação inicial estava errada. Cada atualização acrescenta sua justificativa ao histórico textual do objetivo. Objetivos concluídos, pausados ou abandonados não aceitam atualização de progresso; é necessário retomar um objetivo pausado ou criar uma nova instância conforme o estado.
+
+A migração adiciona as colunas sem apagar objetivos de bancos SQLite existentes. O valor inicial de progresso é zero e a prioridade inicial é neutra (0,5). O sistema não calcula progresso por contagem de ciclos, ativação neural ou autodeclaração: um avaliador ou ambiente deve fornecer a medida e sua evidência. Isso melhora a continuidade operacional de objetivos, mas não demonstra intenção subjetiva ou vontade própria.
