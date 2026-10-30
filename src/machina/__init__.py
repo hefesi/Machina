@@ -14,6 +14,7 @@ from .fragment_memory import FragmentMemory, MemoryFragment
 from .goal_store import PersistentGoalStore
 from .goal_review import GoalReview, GoalReviewer
 from .goal_constraints import GoalConflictResolver, GoalConstraintAssessment, GoalSchedule
+from .adaptive_planning import AdaptivePlanReviewer, PlanRevision
 from .deliberation import DeliberationDecision, InternalDeliberator
 from .mnn import Connection, MNN, Unit
 from .mnn_motivation import MotivationalDrive, MotivationSystem
@@ -54,6 +55,8 @@ __all__ = [
     "GoalConflictResolver",
     "GoalConstraintAssessment",
     "GoalSchedule",
+    "AdaptivePlanReviewer",
+    "PlanRevision",
     "DeliberationDecision",
     "InternalDeliberator",
     "HierarchicalPlanner",
