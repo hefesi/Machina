@@ -76,7 +76,52 @@ class MotivationSystemTests(unittest.TestCase):
         self.assertEqual(system.step(), restored.step())
         self.assertEqual(system.snapshot(), restored.snapshot())
 
+
+    def test_temporal_pressure_accumulates_and_releases_gradually(self):
+        drive = MotivationalDrive(
+            "curiosity", level=1.0, setpoint=1.0, priority=1.0,
+            relief_gain=1.0, persistence=0.75,
+        )
+        system = MotivationSystem([drive])
+        self.assertAlmostEqual(1.0, system.temporal_urgencies()["curiosity"])
+        system.step({"curiosity": 1.0})
+        after_relief = system.temporal_urgencies()["curiosity"]
+        self.assertGreater(after_relief, 0.0)
+        self.assertLess(after_relief, 1.0)
+        system.step({"curiosity": 1.0})
+        self.assertLess(system.temporal_urgencies()["curiosity"], after_relief)
+
+    def test_zero_persistence_tracks_effective_urgency_immediately(self):
+        system = MotivationSystem([
+            MotivationalDrive("a", level=0.9, persistence=0.0),
+            MotivationalDrive("b", level=0.2, persistence=0.0),
+        ], [MotivationalConflict("a", "b", 0.5)])
+        effective = system.step()
+        self.assertEqual(effective, system.temporal_urgencies())
+
+    def test_temporal_pressure_persists_and_restores_future_dynamics(self):
+        system = MotivationSystem([
+            MotivationalDrive("a", level=0.9, persistence=0.6),
+            MotivationalDrive("b", level=0.2, persistence=0.3),
+        ], [MotivationalConflict("a", "b", 0.4)])
+        system.step()
+        restored = MotivationSystem.from_snapshot(system.snapshot())
+        self.assertEqual(system.snapshot(), restored.snapshot())
+        self.assertEqual(system.step(), restored.step())
+        self.assertEqual(system.temporal_urgencies(), restored.temporal_urgencies())
+
+    def test_temporal_ranking_is_deterministic(self):
+        system = MotivationSystem([
+            MotivationalDrive("slow", level=0.8, persistence=0.9),
+            MotivationalDrive("fast", level=0.2, persistence=0.0),
+        ])
+        system.step({"slow": 1.0})
+        self.assertEqual(sorted(system.temporal_urgencies().items(), key=lambda item: (-item[1], item[0])),
+                         system.ranked_temporal_drives())
+
     def test_rejects_duplicate_drive_and_invalid_parameters(self):
+        with self.assertRaises(ValueError):
+            MotivationalDrive("bad_persistence", persistence=1.1)
         with self.assertRaises(ValueError):
             MotivationSystem([MotivationalDrive("same"), MotivationalDrive("same")])
         with self.assertRaises(ValueError):
