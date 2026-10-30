@@ -100,3 +100,94 @@ class InternalDeliberatorTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GoalReviewerTests(unittest.TestCase):
+    def test_review_is_advisory_and_apply_persists_measured_progress(self):
+        from machina.goal_review import GoalReviewer
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            store.register(GoalCandidate(
+                "research", "Investigate a hypothesis", "curiosity",
+                .8, .8, .8, .2, .02,
+            ))
+            reviewer = GoalReviewer(store)
+            review = reviewer.review(
+                "research",
+                observed_progress=.4,
+                evidence="Evaluator verified two of five milestones.",
+                proposed_priority=.7,
+            )
+            self.assertEqual("continue", review.recommendation)
+            self.assertEqual(0.0, store.list_goals()[0]["progress"])
+            updated = reviewer.apply(review)
+            self.assertEqual(.4, updated["progress"])
+            self.assertEqual(.7, updated["priority"])
+            self.assertIn("two of five", updated["evidence"])
+            store.close()
+
+    def test_regression_recommends_revision_but_does_not_transition_automatically(self):
+        from machina.goal_review import GoalReviewer
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            goal = GoalCandidate(
+                "research", "Investigate a hypothesis", "curiosity",
+                .8, .8, .8, .2, .02,
+            )
+            store.register(goal)
+            store.update_progress(
+                "research", .6, evidence="Initial evaluator estimate."
+            )
+            reviewer = GoalReviewer(store)
+            review = reviewer.review(
+                "research",
+                observed_progress=.3,
+                evidence="New evidence invalidated earlier milestones.",
+            )
+            self.assertEqual("revise", review.recommendation)
+            self.assertEqual("active", store.list_goals()[0]["status"])
+            updated = reviewer.apply(review)
+            self.assertEqual(.3, updated["progress"])
+            self.assertEqual("active", updated["status"])
+            store.close()
+
+    def test_explicit_failure_feedback_can_flag_goal_for_revision(self):
+        from machina.goal_review import GoalReviewer
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(
+                Path(directory) / "goals.sqlite3",
+                failures_before_revision=1,
+            )
+            store.register(GoalCandidate(
+                "research", "Investigate a hypothesis", "curiosity",
+                .8, .8, .8, .2, .02,
+            ))
+            reviewer = GoalReviewer(store)
+            review = reviewer.review(
+                "research",
+                observed_progress=0.0,
+                evidence="Independent evaluator rejected the current approach.",
+            )
+            updated = reviewer.apply(review, outcome="failure")
+            self.assertEqual("needs_revision", updated["status"])
+            self.assertEqual(1, updated["failure_count"])
+            store.close()
+
+    def test_review_rejects_missing_evidence_and_invalid_progress(self):
+        from machina.goal_review import GoalReviewer
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            store.register(GoalCandidate(
+                "research", "Investigate a hypothesis", "curiosity",
+                .8, .8, .8, .2, .02,
+            ))
+            reviewer = GoalReviewer(store)
+            with self.assertRaises(ValueError):
+                reviewer.review("research", observed_progress=1.2, evidence="Evidence")
+            with self.assertRaises(ValueError):
+                reviewer.review("research", observed_progress=.2, evidence=" ")
+            store.close()
