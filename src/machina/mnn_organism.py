@@ -199,7 +199,7 @@ class MNNOrganism:
 
         fragments = self.recall_experiences(query, limit=limit, context=context)
         def tokens(value: str) -> set[str]:
-            return {token.casefold() for token in re.findall(r"\\w+", value, flags=re.UNICODE) if len(token) > 1}
+            return {token.casefold() for token in re.findall(r"\w+", value, flags=re.UNICODE) if len(token) > 1}
 
         query_tokens = tokens(query)
         scores: dict[str, float] = {}
