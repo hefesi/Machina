@@ -163,7 +163,7 @@ class HomeostaticRegulator:
             if not isinstance(state, Mapping) or state.get("direction") not in (None, "below", "above"):
                 raise ValueError("invalid homeostatic streak")
             count = state.get("count")
-            if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count < regulator.persistence_cycles:
+            if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count <= 1000000:
                 raise ValueError("invalid homeostatic streak count")
             if (state.get("direction") is None) != (count == 0):
                 raise ValueError("inconsistent homeostatic streak")
