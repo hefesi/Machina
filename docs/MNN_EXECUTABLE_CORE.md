@@ -472,3 +472,8 @@ A `PersistentGoalStore` registra agora `progress` e `priority` para cada instân
 O progresso pode aumentar ou diminuir. Uma estimativa anterior não é tratada como verdade imutável: evidência posterior pode revelar que parte do trabalho não foi concluída ou que a avaliação inicial estava errada. Cada atualização acrescenta sua justificativa ao histórico textual do objetivo. Objetivos concluídos, pausados ou abandonados não aceitam atualização de progresso; é necessário retomar um objetivo pausado ou criar uma nova instância conforme o estado.
 
 A migração adiciona as colunas sem apagar objetivos de bancos SQLite existentes. O valor inicial de progresso é zero e a prioridade inicial é neutra (0,5). O sistema não calcula progresso por contagem de ciclos, ativação neural ou autodeclaração: um avaliador ou ambiente deve fornecer a medida e sua evidência. Isso melhora a continuidade operacional de objetivos, mas não demonstra intenção subjetiva ou vontade própria.
+
+
+### Priorização de objetivos persistentes
+
+`PersistentGoalStore.ranked_open_goals()` expõe uma fila determinística de objetivos acionáveis. A ordenação considera prioridade explícita (maior primeiro), estado (ativos antes dos que exigem revisão) e progresso (menor primeiro, favorecendo objetivos ainda incompletos); a ordem de criação desempata. Objetivos pausados ficam fora da fila até uma retomada explícita. A fila não executa objetivos nem decide sozinha abandonar ou concluir nenhum deles.
