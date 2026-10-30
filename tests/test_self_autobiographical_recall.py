@@ -23,6 +23,21 @@ class SelfAutobiographicalRecallTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def append(self, cycle, event_type, kind, data, refs=(), causation=None):
+        data = dict(data)
+        if kind == ContractKind.EXPERIENCE:
+            data.setdefault("observation_refs", [])
+            data.setdefault("action_intent_ref", "intent:test")
+            data.setdefault("action_result_ref", "result:test")
+            data.setdefault("expected_outcome", 1)
+            data.setdefault("actual_outcome", 1)
+            data.setdefault("prediction_error", 0)
+            data.setdefault("occurred_at", "2026-01-01T00:00:00Z")
+        if kind == ContractKind.MODEL_UPDATE:
+            data.setdefault("target", "SelfModel")
+            data.setdefault("previous_version", "v1")
+            data.setdefault("new_version", "v2")
+            data.setdefault("reason", "test transformation")
+            data.setdefault("created_by", "test")
         artifact = Artifact.create(
             kind, cycle_id=cycle, producer="test", data=data,
             input_refs=refs, source_refs=refs, epistemic_status="inferred",
