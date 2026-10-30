@@ -112,6 +112,21 @@ class GoalConflictResolver:
 
 
 
+    def schedule(
+        self,
+        goal_ids: tuple[str, ...] | list[str],
+        *,
+        utilities: Mapping[str, float] | None = None,
+        resource_costs: Mapping[str, Mapping[str, float]] | None = None,
+        resource_limits: Mapping[str, float] | None = None,
+    ) -> "GoalSchedule":
+        """Choose the highest-utility feasible subset; never changes goal state."""
+        return _schedule(
+            self, goal_ids, utilities=utilities,
+            resource_costs=resource_costs, resource_limits=resource_limits,
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class GoalSchedule:
     """Best feasible subset under explicit utilities, constraints, and budgets."""
@@ -200,6 +215,3 @@ def _schedule(
             "permanecem abertos. Empates são resolvidos pela ordem lexical."
         ),
     )
-
-
-GoalConflictResolver.schedule = _schedule  # type: ignore[attr-defined]
