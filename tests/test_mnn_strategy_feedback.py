@@ -30,6 +30,7 @@ class StrategyFeedbackAdapterTests(unittest.TestCase):
             execution_confirmed=True,
             executed_action="candidate",
             observed_reward=0.9,
+            inputs={"sensor": 1.0},
             progress=0.8,
             uncertainty=0.2,
         )
