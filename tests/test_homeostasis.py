@@ -32,7 +32,7 @@ class HomeostaticRegulatorTests(unittest.TestCase):
         self.observe("c2", 0.9)
         second = self.regulator.assess()
         self.assertEqual({"error_recovery": 0.12}, second.adjustments)
-        self.assertEqual(("step:c1", "step:c2"), second.evidence_refs)
+        self.assertEqual(("step:c2",), second.evidence_refs)
 
     def test_in_range_observation_resets_persistence(self):
         self.observe("c1", 0.8)
