@@ -67,6 +67,20 @@ class PersistentGoalStore:
             )
             """
         )
+        self._db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS goal_relations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_goal_id TEXT NOT NULL,
+                target_goal_id TEXT NOT NULL,
+                relation TEXT NOT NULL CHECK (relation IN ('conflicts', 'supports', 'requires')),
+                strength REAL NOT NULL CHECK (strength >= 0.0 AND strength <= 1.0),
+                evidence TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(source_goal_id, target_goal_id, relation)
+            )
+            """
+        )
         self._db.commit()
 
     def close(self) -> None:
@@ -328,6 +342,68 @@ class PersistentGoalStore:
             item["context"] = json.loads(item.pop("context_json"))
             result.append(item)
         return result
+
+    def add_goal_relation(
+        self,
+        source_goal_id: str,
+        target_goal_id: str,
+        relation: str,
+        *,
+        strength: float = 1.0,
+        evidence: str,
+    ) -> dict[str, Any]:
+        """Persist an explicit, evidence-backed relation between goal types."""
+        import math
+
+        source = source_goal_id.strip() if isinstance(source_goal_id, str) else ""
+        target = target_goal_id.strip() if isinstance(target_goal_id, str) else ""
+        note = evidence.strip() if isinstance(evidence, str) else ""
+        if not source or not target or source == target:
+            raise ValueError("goal relations require two distinct non-empty goal IDs")
+        if relation not in {"conflicts", "supports", "requires"}:
+            raise ValueError("relation must be conflicts, supports, or requires")
+        if isinstance(strength, bool) or not isinstance(strength, (int, float)) or not math.isfinite(strength) or not 0.0 <= strength <= 1.0:
+            raise ValueError("strength must be finite and between 0 and 1")
+        if not note:
+            raise ValueError("goal relations require non-empty evidence")
+        if relation == "conflicts":
+            left, right = sorted((source, target))
+            self._db.execute(
+                "DELETE FROM goal_relations WHERE relation = 'conflicts' "
+                "AND ((source_goal_id = ? AND target_goal_id = ?) "
+                "OR (source_goal_id = ? AND target_goal_id = ?))",
+                (left, right, right, left),
+            )
+            source, target = left, right
+        self._db.execute(
+            "INSERT INTO goal_relations "
+            "(source_goal_id, target_goal_id, relation, strength, evidence) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(source_goal_id, target_goal_id, relation) DO UPDATE SET "
+            "strength = excluded.strength, evidence = excluded.evidence",
+            (source, target, relation, float(strength), note),
+        )
+        self._db.commit()
+        row = self._db.execute(
+            "SELECT * FROM goal_relations WHERE source_goal_id = ? "
+            "AND target_goal_id = ? AND relation = ?",
+            (source, target, relation),
+        ).fetchone()
+        return dict(row)
+
+    def goal_relations(self, goal_id: str | None = None) -> list[dict[str, Any]]:
+        """List explicit relations; conflict edges are stored in canonical order."""
+        if goal_id is None:
+            rows = self._db.execute(
+                "SELECT * FROM goal_relations ORDER BY id ASC"
+            ).fetchall()
+        else:
+            rows = self._db.execute(
+                "SELECT * FROM goal_relations WHERE source_goal_id = ? "
+                "OR target_goal_id = ? ORDER BY id ASC",
+                (goal_id, goal_id),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
     def summary(self) -> dict[str, int]:
         rows = self._db.execute(
