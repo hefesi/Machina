@@ -42,7 +42,7 @@ class SelfAutobiographicalEvaluatorTests(unittest.TestCase):
             assessment.neutral_count,
         ))
         self.assertAlmostEqual(0.5, assessment.mean_outcome)
-        self.assertAlmostEqual(0.3, assessment.mean_absolute_prediction_error)
+        self.assertAlmostEqual((0.1 + 0.6 + 0.0) / 3, assessment.mean_absolute_prediction_error)
         self.assertIn("do not establish", assessment.interpretation)
 
     def test_missing_outcomes_are_not_guessed(self):
