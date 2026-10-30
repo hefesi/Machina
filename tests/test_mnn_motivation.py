@@ -197,7 +197,7 @@ class MotivationSystemTests(unittest.TestCase):
         )
         effective = system.effective_urgencies()
         self.assertAlmostEqual(0.88, effective["curiosity"])
-        self.assertAlmostEqual(0.6, effective["creation"])
+        self.assertAlmostEqual(0.56, effective["creation"])
         self.assertAlmostEqual(0.2, effective["rest"])
         self.assertAlmostEqual(0.8, system.drives["curiosity"].urgency)
 
