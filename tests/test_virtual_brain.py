@@ -6,7 +6,7 @@ from pathlib import Path
 
 from machina import (
     AutonomyContext, AutonomyController, IntegrityError, InternalDeliberator,
-    PersistentGoalStore, VirtualBrain, HomeostaticProposal,
+    PersistentGoalStore, VirtualBrain, HomeostaticProposal, SelfHistoryInfluence, SelfStateTransition,
 )
 
 
@@ -236,6 +236,38 @@ class VirtualBrainLoopTests(unittest.TestCase):
         self.assertEqual(["step:12"], trace.data["homeostatic_regulation"]["evidence_refs"])
         failure_option = next(item for item in trace.data["deliberation"]["autonomy"]["alternatives"] if item["goal"]["drive"] == "error_recovery")
         self.assertAlmostEqual(0.12, failure_option["score"]["feedback_adjustment"])
+        self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+        brain.close()
+        goal_store.close()
+
+
+    def test_self_history_influence_is_applied_and_journaled(self) -> None:
+        goal_store = PersistentGoalStore(
+            Path(self.temporary_directory.name) / "self-history-goals.sqlite"
+        )
+        deliberator = InternalDeliberator(AutonomyController(), goal_store)
+        brain = VirtualBrain(self.database_path, internal_deliberator=deliberator)
+        transition = SelfStateTransition(
+            "internal.mnn.prediction_error", 0.2, 0.8,
+            "self-cycle-1", "self-cycle-3", 3,
+            "persistent_since_change", ("telemetry:1", "telemetry:3"),
+        )
+        influence = SelfHistoryInfluence(
+            adjustments={"error_recovery": 0.08},
+            transitions=(transition,),
+            evidence_refs=("telemetry:1", "telemetry:3"),
+            rationale=("persistent prediction error in Self history",),
+        )
+        result = brain.run_deliberated_cycle(
+            "Review persistent internal prediction error.",
+            AutonomyContext(failed_cycles=1),
+            self_history_influence=influence,
+        )
+        trace = next(event.artifact for event in result.events if event.event_type == "goal.deliberated")
+        self.assertEqual({"error_recovery": 0.08}, trace.data["self_history_influence"]["adjustments"])
+        self.assertEqual(["telemetry:1", "telemetry:3"], trace.data["self_history_influence"]["evidence_refs"])
+        option = next(item for item in trace.data["deliberation"]["autonomy"]["alternatives"] if item["goal"]["drive"] == "error_recovery")
+        self.assertAlmostEqual(0.08, option["score"]["feedback_adjustment"])
         self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
         brain.close()
         goal_store.close()
