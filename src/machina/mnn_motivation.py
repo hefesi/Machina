@@ -67,6 +67,16 @@ class MotivationalDrive:
         self.pressure = min(1.0, max(0.0, self.pressure))
         return self.pressure
 
+    def temporal_autonomy_adjustments(self, *, gain: float = 0.3) -> dict[str, float]:
+        """Translate persistent pressure into bounded goal-selection feedback."""
+        gain = _bounded("gain", gain)
+        if gain > 0.3:
+            raise ValueError("gain must not exceed 0.3")
+        return {
+            name: (pressure - 0.5) * gain
+            for name, pressure in self.temporal_urgencies().items()
+        }
+
     def snapshot(self) -> dict[str, object]:
         return asdict(self)
 
