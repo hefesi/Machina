@@ -148,6 +148,58 @@ class MNNOrganismTests(unittest.TestCase):
                 organism.prepare_memory_guidance("query", target_unit="missing")
             organism.memory.close()
 
+
+    def test_memory_guidance_feedback_learns_contextual_usefulness_idempotently(self):
+        with tempfile.TemporaryDirectory() as directory:
+            memory = FragmentMemory(Path(directory) / "episodes.sqlite3")
+            organism = self.make_organism()
+            organism.memory = memory
+            organism.step({"sensor": 0.6})
+            guidance = organism.prepare_memory_guidance(
+                "prediction error", target_unit="memory_context"
+            )
+            fragment_id = guidance.evidence_ids[0]
+            before = memory.context_importance(fragment_id, "task-a")
+            result, applied = organism.evaluate_memory_guidance(
+                guidance, {fragment_id: True},
+                context="task-a", operation_id="evaluation-001",
+                strength=0.15,
+            )
+            self.assertTrue(applied)
+            self.assertAlmostEqual(before + 0.15, result[fragment_id])
+            self.assertAlmostEqual(before + 0.15, memory.context_importance(fragment_id, "task-a"))
+            repeated, applied_again = organism.evaluate_memory_guidance(
+                guidance, {fragment_id: True},
+                context="task-a", operation_id="evaluation-001",
+                strength=0.15,
+            )
+            self.assertFalse(applied_again)
+            self.assertEqual(result, repeated)
+            self.assertAlmostEqual(before + 0.15, memory.context_importance(fragment_id, "task-a"))
+            self.assertAlmostEqual(0.5, memory.context_importance(fragment_id, "task-b"))
+            memory.close()
+
+    def test_memory_feedback_rejects_unrelated_evidence_and_non_boolean_labels(self):
+        with tempfile.TemporaryDirectory() as directory:
+            memory = FragmentMemory(Path(directory) / "episodes.sqlite3")
+            organism = self.make_organism()
+            organism.memory = memory
+            organism.step({"sensor": 0.6})
+            guidance = organism.prepare_memory_guidance(
+                "prediction error", target_unit="memory_context"
+            )
+            with self.assertRaises(ValueError):
+                organism.evaluate_memory_guidance(
+                    guidance, {"not-in-evidence": True},
+                    context="task-a", operation_id="bad-001",
+                )
+            with self.assertRaises(ValueError):
+                organism.evaluate_memory_guidance(
+                    guidance, {guidance.evidence_ids[0]: 1},
+                    context="task-a", operation_id="bad-002",
+                )
+            memory.close()
+
     def test_memory_is_optional_and_recall_requires_attachment(self):
         organism = self.make_organism()
         organism.step({"sensor": 0.1})
