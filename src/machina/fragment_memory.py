@@ -260,6 +260,20 @@ class FragmentMemory:
                 created_at TEXT NOT NULL
             )
         """)
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS memory_fragment_revisions (
+                revision_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                fragment_id TEXT NOT NULL,
+                operation_id TEXT NOT NULL UNIQUE,
+                evidence_id TEXT NOT NULL,
+                prior_content TEXT NOT NULL,
+                revised_content TEXT NOT NULL,
+                prior_confidence REAL NOT NULL CHECK (prior_confidence BETWEEN 0 AND 1),
+                revised_confidence REAL NOT NULL CHECK (revised_confidence BETWEEN 0 AND 1),
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (fragment_id) REFERENCES memory_fragments(id) ON DELETE CASCADE
+            )
+        """)
         self._db.commit()
         self._closed = False
 
@@ -425,6 +439,107 @@ class FragmentMemory:
                 raise KeyError(fragment_id)
             fragments[fragment_id] = self._from_row(row)
         return fragments, before_after, True
+
+    def reconsolidate(
+        self,
+        fragment_id: str,
+        *,
+        revised_content: str,
+        evidence_id: str,
+        operation_id: str,
+        confidence: float | None = None,
+    ) -> tuple[MemoryFragment, dict[str, Any], bool]:
+        """Revise a retrieved memory while preserving an append-only prior version.
+
+        The caller supplies new evidence explicitly. Operation IDs make retries
+        idempotent; reusing an ID with different input is rejected.
+        """
+        self._ensure_open()
+        for name, value in (("fragment_id", fragment_id), ("evidence_id", evidence_id), ("operation_id", operation_id)):
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{name} must be a non-empty string")
+        if not isinstance(revised_content, str) or not revised_content.strip():
+            raise ValueError("revised_content must be a non-empty string")
+        next_confidence = None if confidence is None else _score(confidence, "confidence")
+        payload = _json({
+            "fragment_id": fragment_id,
+            "revised_content": revised_content,
+            "evidence_id": evidence_id,
+            "confidence": next_confidence,
+        })
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            prior_operation = self._db.execute(
+                "SELECT fragment_id, evidence_id, prior_content, revised_content, "
+                "prior_confidence, revised_confidence, created_at FROM memory_fragment_revisions "
+                "WHERE operation_id = ?", (operation_id,)
+            ).fetchone()
+            if prior_operation is not None:
+                if (
+                    prior_operation["fragment_id"] != fragment_id
+                    or prior_operation["evidence_id"] != evidence_id
+                    or prior_operation["revised_content"] != revised_content
+                    or (next_confidence is not None and float(prior_operation["revised_confidence"]) != next_confidence)
+                ):
+                    raise ValueError("operation_id was already used with different revision data")
+                row = self._db.execute("SELECT * FROM memory_fragments WHERE id = ?", (fragment_id,)).fetchone()
+                if row is None:
+                    raise KeyError(fragment_id)
+                revision = dict(prior_operation)
+                self._db.commit()
+                return self._from_row(row), revision, False
+
+            row = self._db.execute(
+                "SELECT content, confidence FROM memory_fragments WHERE id = ?", (fragment_id,)
+            ).fetchone()
+            if row is None:
+                raise KeyError(f"unknown memory fragment: {fragment_id}")
+            prior_content = str(row["content"])
+            prior_confidence = float(row["confidence"])
+            revised_confidence = prior_confidence if next_confidence is None else next_confidence
+            now = _now()
+            self._db.execute(
+                "INSERT INTO memory_fragment_revisions "
+                "(fragment_id, operation_id, evidence_id, prior_content, revised_content, "
+                "prior_confidence, revised_confidence, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (fragment_id, operation_id, evidence_id, prior_content, revised_content,
+                 prior_confidence, revised_confidence, now),
+            )
+            self._db.execute(
+                "UPDATE memory_fragments SET content = ?, confidence = ?, "
+                "access_count = access_count + 1, last_accessed_at = ? WHERE id = ?",
+                (revised_content, revised_confidence, now, fragment_id),
+            )
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
+        return self.get(fragment_id, record_access=False), {
+            "fragment_id": fragment_id,
+            "operation_id": operation_id,
+            "evidence_id": evidence_id,
+            "prior_content": prior_content,
+            "revised_content": revised_content,
+            "prior_confidence": prior_confidence,
+            "revised_confidence": revised_confidence,
+            "created_at": now,
+        }, True
+
+    def revision_history(self, fragment_id: str) -> list[dict[str, Any]]:
+        """Return chronological prior-version records for one fragment."""
+        self._ensure_open()
+        if not isinstance(fragment_id, str) or not fragment_id.strip():
+            raise ValueError("fragment_id must be a non-empty string")
+        if self._db.execute(
+            "SELECT 1 FROM memory_fragments WHERE id = ?", (fragment_id,)
+        ).fetchone() is None:
+            raise KeyError(f"unknown memory fragment: {fragment_id}")
+        rows = self._db.execute(
+            "SELECT fragment_id, operation_id, evidence_id, prior_content, revised_content, "
+            "prior_confidence, revised_confidence, created_at FROM memory_fragment_revisions "
+            "WHERE fragment_id = ? ORDER BY revision_id", (fragment_id,)
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def reinforce(
         self,
