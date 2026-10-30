@@ -61,7 +61,7 @@ class MNNStrategyEventBridge:
         proposal_id: str,
     ) -> StoredEvent:
         """Append a proposal or abstention; this never represents execution."""
-        self._identifier("cycle_id", cycle_id)
+        cycle_id = self._identifier("cycle_id", cycle_id)
         if not self.store.has_cycle(cycle_id):
             raise KeyError(f"unknown cycle: {cycle_id}")
         if not isinstance(proposal, Mapping):
@@ -121,6 +121,7 @@ class MNNStrategyEventBridge:
         operation_id: str,
     ) -> StoredEvent:
         """Append an outcome only for an explicitly confirmed matching action."""
+        cycle_id = self._identifier("cycle_id", cycle_id)
         identifier = self._identifier("proposal_id", proposal_id)
         operation = self._identifier("operation_id", operation_id)
         proposal_event = next(
