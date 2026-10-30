@@ -1260,3 +1260,18 @@ A relação é declarada pelo avaliador externo; não é inferida por semelhanç
 textual. Conceitos concorrentes não são fundidos, apagados ou escolhidos como
 verdadeiros. Registros idênticos são idempotentes; evidências ou contextos
 diferentes geram registros distintos, preservando a evolução da avaliação.
+
+
+### Revisão de conceitos considerando relações explícitas
+
+O `MNNConceptReviewer` também consulta `MNNConceptRelationStore`.
+Uma relação explícita `contradicts` entre dois conceitos faz com que a
+revisão dos conceitos envolvidos seja classificada como `conflicted`, mesmo
+quando a descoberta baseada em tags não detecta polaridades opostas. O
+resultado inclui os IDs da relação, do conceito relacionado e das evidências
+associadas, permitindo rastrear por que a hipótese foi sinalizada.
+
+Relações `competes_with` continuam representando concorrência entre hipóteses,
+não contradição automática. `supports` e `contextualizes` também não são
+convertidas em certeza. A revisão permanece somente de leitura; não reescreve
+nem elimina conceitos.
