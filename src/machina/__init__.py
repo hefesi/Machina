@@ -24,6 +24,7 @@ from .mnn_adapter import MNNCognitionAdapter
 from .self_model import SelfModel
 from .self_state_dynamics import SelfStateDynamicsAnalyzer, SelfStateTransition
 from .self_history_influence import SelfHistoryInfluence, SelfHistoryInfluenceAdapter, SelfHistoryRule
+from .self_autobiographical_recall import SelfAutobiographicalMatch, SelfAutobiographicalRecall
 from .self_model_learning import SelfModelLearningBridge
 from .self_autobiography import SelfAutobiography
 from .self_transformation import SelfTransformationTracker
@@ -103,6 +104,8 @@ __all__ = [
     "SelfHistoryInfluence",
     "SelfHistoryInfluenceAdapter",
     "SelfHistoryRule",
+    "SelfAutobiographicalMatch",
+    "SelfAutobiographicalRecall",
     "SelfModelLearningBridge",
     "SelfAutobiography",
     "SelfTransformationTracker",
