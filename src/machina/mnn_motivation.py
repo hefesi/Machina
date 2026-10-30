@@ -109,7 +109,9 @@ class MotivationSystem:
     ) -> None:
         self.drives: dict[str, MotivationalDrive] = {}
         self.conflicts: dict[tuple[str, str], MotivationalConflict] = {}
+        self.cooperations: dict[tuple[str, str], MotivationalCooperation] = {}
         self.conflict_gain = _bounded("conflict_gain", conflict_gain)
+        self.cooperation_gain = _bounded("cooperation_gain", cooperation_gain)
         self.timestep = 0
         for drive in drives or []:
             self.add_drive(drive)
