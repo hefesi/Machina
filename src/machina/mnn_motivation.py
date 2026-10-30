@@ -95,6 +95,13 @@ class MotivationSystem:
             key=lambda item: (-item[1], item[0]),
         )
 
+    @property
+    def chemical_pressure(self) -> float:
+        """Mean urgency presented as a bounded internal signal to neuromodulation."""
+        if not self.drives:
+            return 0.0
+        return sum(drive.urgency for drive in self.drives.values()) / len(self.drives)
+
     def autonomy_adjustments(self, *, gain: float = 0.3) -> dict[str, float]:
         """Translate drive urgency into bounded per-drive goal-selection feedback.
 
