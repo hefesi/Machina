@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
+import re
 from typing import Mapping
 
 from .fragment_memory import FragmentMemory, MemoryFragment
@@ -15,6 +16,17 @@ from .fragment_memory import FragmentMemory, MemoryFragment
 from .chemical_signaling import ChemicalEvent, ChemicalSignaling
 from .mnn import MNN
 from .self_continuity import SelfContinuity
+
+
+@dataclass(frozen=True)
+class MemoryGuidance:
+    """Auditable, bounded lexical evidence routed to one explicit MNN input."""
+
+    query: str
+    target_unit: str
+    signal: float
+    evidence_ids: tuple[str, ...]
+    evidence_scores: Mapping[str, float]
 
 
 @dataclass(frozen=True)
@@ -77,6 +89,8 @@ class MNNOrganism:
         self,
         inputs: Mapping[str, float] | None = None,
         event: ChemicalEvent | None = None,
+        *,
+        memory_guidance: MemoryGuidance | None = None,
     ) -> OrganismStep:
         """Advance all coupled states exactly one deterministic logical tick."""
         neural_inputs = dict(inputs or {})
@@ -86,6 +100,16 @@ class MNNOrganism:
         for key, value in neural_inputs.items():
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
                 raise ValueError(f"input {key!r} must be a finite number")
+        if memory_guidance is not None:
+            if not isinstance(memory_guidance, MemoryGuidance):
+                raise ValueError("memory_guidance must be a MemoryGuidance instance")
+            if memory_guidance.target_unit not in self.network.units:
+                raise ValueError("memory guidance target unit does not exist")
+            if memory_guidance.target_unit in neural_inputs or memory_guidance.target_unit in self.chemical_inputs.values():
+                raise ValueError("memory guidance target must not conflict with another input route")
+            if not math.isfinite(memory_guidance.signal) or not 0.0 <= memory_guidance.signal <= 1.0:
+                raise ValueError("memory guidance signal must be finite and within [0, 1]")
+            neural_inputs[memory_guidance.target_unit] = memory_guidance.signal
 
         event = event or ChemicalEvent()
         chemical = self.signaling.step(event)
@@ -148,6 +172,50 @@ class MNNOrganism:
         if self.memory is None:
             raise RuntimeError("no FragmentMemory is attached to this organism")
         return self.memory.recall(query, limit=limit, context=context)
+
+    def prepare_memory_guidance(
+        self,
+        query: str,
+        *,
+        target_unit: str,
+        limit: int = 5,
+        context: str | None = None,
+        min_overlap: float = 0.10,
+    ) -> MemoryGuidance:
+        """Prepare explicit lexical memory evidence for a later neural step.
+
+        The signal is a confidence-weighted mean token overlap, bounded to
+        [0, 1]. No match yields zero. This is deliberately not semantic
+        similarity, and preparation does not mutate the MNN or memory archive.
+        """
+        if self.memory is None:
+            raise RuntimeError("no FragmentMemory is attached to this organism")
+        if target_unit not in self.network.units:
+            raise ValueError(f"unknown memory guidance target unit: {target_unit}")
+        if not isinstance(query, str) or not query.strip():
+            raise ValueError("query must be a non-empty string")
+        if isinstance(min_overlap, bool) or not isinstance(min_overlap, (int, float)) or not math.isfinite(min_overlap) or not 0.0 <= min_overlap <= 1.0:
+            raise ValueError("min_overlap must be finite and within [0, 1]")
+
+        fragments = self.recall_experiences(query, limit=limit, context=context)
+        def tokens(value: str) -> set[str]:
+            return {token.casefold() for token in re.findall(r"\\w+", value, flags=re.UNICODE) if len(token) > 1}
+
+        query_tokens = tokens(query)
+        scores: dict[str, float] = {}
+        for fragment in fragments:
+            searchable = " ".join((fragment.content, fragment.kind, " ".join(fragment.tags), str(dict(fragment.metadata))))
+            overlap = len(query_tokens & tokens(searchable)) / len(query_tokens)
+            if overlap >= float(min_overlap):
+                scores[fragment.id] = min(1.0, max(0.0, overlap * fragment.confidence))
+        signal = sum(scores.values()) / len(scores) if scores else 0.0
+        return MemoryGuidance(
+            query=query,
+            target_unit=target_unit,
+            signal=min(1.0, max(0.0, signal)),
+            evidence_ids=tuple(scores),
+            evidence_scores=dict(scores),
+        )
 
     def snapshot(self) -> dict:
         """Return a JSON-compatible snapshot of the complete integrated state."""
