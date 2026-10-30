@@ -1246,3 +1246,17 @@ verdadeira. Uma revisão posterior pode usar `MNNMemoryReconsolidationPipeline`
 com evidência explícita e compare-and-swap, preservando o conteúdo anterior
 no histórico de revisões. Isso evita sobrescritas silenciosas e mantém
 divergências disponíveis para reavaliação.
+
+
+## Relações explícitas entre conceitos
+
+`MNNConceptRelationStore` registra relações entre hipóteses de conceito já
+materializadas: `supports`, `contradicts`, `contextualizes` e
+`competes_with`. Cada relação exige ao menos uma referência de evidência,
+pode registrar referências de contexto e permanece como um fragmento
+`concept_relation` separado.
+
+A relação é declarada pelo avaliador externo; não é inferida por semelhança
+textual. Conceitos concorrentes não são fundidos, apagados ou escolhidos como
+verdadeiros. Registros idênticos são idempotentes; evidências ou contextos
+diferentes geram registros distintos, preservando a evolução da avaliação.
