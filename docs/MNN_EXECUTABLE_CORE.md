@@ -800,3 +800,28 @@ the same cycle, errors, and evidence references plus an explicit filter trace.
 It never applies the resulting adjustment to motivation or action selection.
 This is a signal-stabilization primitive, not a learned homeostatic controller;
 the choice of alpha and deadband requires task-specific evaluation.
+
+
+## Persistent computational homeostasis (experimental)
+
+`HomeostaticRegulator` adds a temporal layer above instantaneous self-regulation. Each explicit `HomeostaticRule` maps one observed SelfModel metric to a drive, a permitted range, and caller-defined signed corrections for values below or above that range. A deviation must persist for a configurable number of distinct cycles before a correction is proposed. Returning to range, changing deviation direction, or losing observed telemetry resets that variable's streak.
+
+```python
+from machina import HomeostaticRegulator, HomeostaticRule
+
+regulator = HomeostaticRegulator(
+    self_model,
+    {
+        "prediction_error": HomeostaticRule(
+            "internal.mnn.prediction_error", "error_recovery",
+            lower=0.1, upper=0.4,
+            below_adjustment=-0.05, above_adjustment=0.12,
+        )
+    },
+    persistence_cycles=3,
+)
+proposal = regulator.assess()
+# Explicitly inspect and route proposal.adjustments to a later decision cycle.
+```
+
+The regulator requires evidence-backed `observed` telemetry, rejects duplicate cycle assessments, exposes deviation/persistence/evidence in each proposal, and supports snapshots of its temporal counters. It never changes the SelfModel, MNN, motivation, or goals. Rule signs and ranges are experimental control choices, not universal biological laws. Persistent numerical deviation is an operational signal; it is not proof of discomfort, need, or subjective feeling.
