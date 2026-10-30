@@ -443,3 +443,14 @@ O valor final é limitado a [0, 1]. As urgências brutas e os níveis dos drives
 `ranked_drives()`, `autonomy_adjustments()` e `chemical_pressure` consomem a urgência efetiva, de modo que cooperação e competição podem influenciar a escolha de objetivos e a modulação química virtual. A regra é determinística e independente da ordem de registro. O snapshot passa ao schema 3, incluindo relações cooperativas e seu ganho; schemas 1 e 2 continuam aceitos.
 
 Os testes verificam reforço positivo, simetria, limites, conflito/cooperação mutuamente exclusivos, persistência e compatibilidade retroativa. Isso ainda é uma regra de acoplamento linear simplificada. Não representa sinergia biológica nem demonstra motivação subjetiva. A validação seguinte deve comparar tarefas com relações desativadas, cooperativas e competitivas, medindo qualidade da decisão, estabilidade e efeitos colaterais.
+
+
+### Persistência temporal da pressão motivacional (experimental)
+
+Cada drive possui agora um parâmetro `persistence` e um estado `pressure`. Após cada ciclo, a pressão integra a urgência efetiva do ciclo por um filtro de primeira ordem:
+
+`pressure(t+1) = pressure(t) + (effective_urgency(t) - pressure(t)) × (1 - persistence)`
+
+Com persistência zero, a pressão acompanha imediatamente a urgência efetiva. Valores maiores tornam a mudança mais lenta: a pressão demora mais para crescer e também para desaparecer depois de uma redução do déficit. Isso permite investigar continuidade temporal, acúmulo e dissipação sem confundir o estado instantâneo do drive com seu histórico recente.
+
+A API mantém separados `effective_urgencies()` (arbitragem instantânea) e `temporal_urgencies()` (pressão integrada), com ranking temporal próprio em `ranked_temporal_drives()`. A pressão temporal é persistida no snapshot schema 4; schemas 1, 2 e 3 continuam aceitos. O mecanismo é um integrador matemático limitado, não uma emoção, sensação ou prova de experiência subjetiva. A etapa seguinte de validação deve medir como diferentes constantes temporais afetam estabilidade e seleção de objetivos em tarefas prolongadas.
