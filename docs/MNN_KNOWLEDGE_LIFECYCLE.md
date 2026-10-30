@@ -79,3 +79,26 @@ while reusing the operation ID with changed labels is rejected.
 Reward is deliberately not translated automatically into per-fragment
 usefulness. A high-reward action does not prove every cited source was useful,
 and a low-reward action does not prove every source was irrelevant.
+
+
+## Coordinated strategy learning cycle (v0.3)
+
+`MNNStrategyLearningCycle` provides one explicit entry point for the existing
+contextual advisor and the two distinct learning channels:
+
+- `propose(context, campaign_ids)` delegates to the evidence-gated advisor.
+  It returns a proposal or abstention and never executes an action.
+- `learn_strategy_outcome(...)` sends a confirmed, matching action and
+  normalized observed reward to `MNNOrganism` through
+  `MNNStrategyFeedbackAdapter`.
+- `learn_evidence_use(...)` applies caller-labelled usefulness only to cited
+  fragments through `MNNKnowledgeUseFeedback`.
+
+The channels are deliberately separate. Reward trains the organism's bounded
+neural/chemical dynamics; explicit usefulness labels update task-relative
+retrieval relevance. Neither signal is silently inferred from the other.
+
+This facade is not a distributed transaction: organism state and SQLite memory
+do not share a commit boundary. Callers should persist snapshots and reconcile
+the two feedback operations independently after failures. No method executes
+the proposed external action or changes the advisor's policy automatically.
