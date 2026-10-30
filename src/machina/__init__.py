@@ -22,6 +22,7 @@ from .mnn_motivation import MotivationalDrive, MotivationSystem
 from .mnn_organism import (DecisionAssessment, DecisionOption, MNNOrganism, MemoryGuidance, OrganismStep)
 from .mnn_adapter import MNNCognitionAdapter
 from .self_model import SelfModel
+from .self_model_learning import SelfModelLearningBridge
 from .mnn_reward import RewardModulator
 from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
@@ -86,6 +87,7 @@ __all__ = [
     "OrganismStep",
     "MNNCognitionAdapter",
     "SelfModel",
+    "SelfModelLearningBridge",
     "RewardModulator",
     "Unit",
     "VirtualBrain",
