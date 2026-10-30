@@ -31,6 +31,7 @@ from .self_observer import MNNStateSelfObserver
 from .self_regulation import RegulationProposal, SelfRegulationController
 from .temporal_regulation import TemporalRegulationFilter
 from .homeostasis import HomeostaticProposal, HomeostaticRegulator, HomeostaticRule
+from .homeostatic_learning import HomeostaticFeedbackLearner, HomeostaticLearningEstimate
 from .mnn_reward import RewardModulator
 from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
@@ -108,6 +109,8 @@ __all__ = [
     "HomeostaticProposal",
     "HomeostaticRegulator",
     "HomeostaticRule",
+    "HomeostaticFeedbackLearner",
+    "HomeostaticLearningEstimate",
     "RewardModulator",
     "Unit",
     "VirtualBrain",
