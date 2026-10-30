@@ -27,6 +27,7 @@ from .self_autobiography import SelfAutobiography
 from .self_transformation import SelfTransformationTracker
 from .self_experience_integration import SelfExperienceIntegrator
 from .self_influence import SelfInfluence, SelfInfluenceAdapter
+from .self_observer import MNNStateSelfObserver
 from .mnn_reward import RewardModulator
 from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
@@ -97,6 +98,7 @@ __all__ = [
     "SelfExperienceIntegrator",
     "SelfInfluence",
     "SelfInfluenceAdapter",
+    "MNNStateSelfObserver",
     "RewardModulator",
     "Unit",
     "VirtualBrain",
