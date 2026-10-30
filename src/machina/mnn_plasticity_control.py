@@ -12,6 +12,7 @@ import hashlib
 import json
 import math
 from typing import Mapping
+from types import MappingProxyType
 
 from .mnn import MNN
 
@@ -26,9 +27,9 @@ def _finite(value: float, name: str) -> float:
 class MNNPlasticityProposal:
     proposal_id: str
     topology_fingerprint: str
-    base_weights: dict[str, float]
-    proposed_weights: dict[str, float]
-    deltas: dict[str, float]
+    base_weights: Mapping[str, float]
+    proposed_weights: Mapping[str, float]
+    deltas: Mapping[str, float]
     learning_rate: float
     reward: float
     max_delta: float
@@ -106,9 +107,9 @@ class MNNPlasticityController:
         return MNNPlasticityProposal(
             proposal_id=proposal_id,
             topology_fingerprint=self._topology_fingerprint(network),
-            base_weights=base,
-            proposed_weights=proposed,
-            deltas=deltas,
+            base_weights=MappingProxyType(dict(base)),
+            proposed_weights=MappingProxyType(dict(proposed)),
+            deltas=MappingProxyType(dict(deltas)),
             learning_rate=rate,
             reward=reward_value,
             max_delta=delta_limit,
