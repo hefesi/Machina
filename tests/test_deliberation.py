@@ -191,3 +191,47 @@ class GoalReviewerTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 reviewer.review("research", observed_progress=.2, evidence=" ")
             store.close()
+
+
+class GoalReviewConcurrencyTests(unittest.TestCase):
+    def test_stale_review_cannot_overwrite_newer_evaluator_feedback(self):
+        from machina.goal_review import GoalReviewer
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            store.register(GoalCandidate(
+                "research", "Investigate a hypothesis", "curiosity",
+                .8, .8, .8, .2, .02,
+            ))
+            reviewer = GoalReviewer(store)
+            stale = reviewer.review(
+                "research", observed_progress=.4, evidence="First evaluation."
+            )
+            store.update_progress(
+                "research", .6, evidence="A newer evaluation arrived."
+            )
+            with self.assertRaisesRegex(ValueError, "changed since review"):
+                reviewer.apply(stale)
+            self.assertEqual(.6, store.list_goals()[0]["progress"])
+            store.close()
+
+    def test_review_targets_its_exact_goal_record(self):
+        from machina.goal_review import GoalReviewer
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            candidate = GoalCandidate(
+                "research", "Investigate a hypothesis", "curiosity",
+                .8, .8, .8, .2, .02,
+            )
+            first = store.register(candidate)
+            review = GoalReviewer(store).review(
+                "research", observed_progress=.3, evidence="Evidence for first."
+            )
+            store.record_outcome("research", "success", "First completed.")
+            second = store.register(candidate)
+            self.assertNotEqual(first["id"], second["id"])
+            with self.assertRaises(ValueError):
+                GoalReviewer(store).apply(review)
+            self.assertEqual(0.0, store.list_goals()[0]["progress"])
+            store.close()
