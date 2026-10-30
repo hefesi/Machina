@@ -952,3 +952,30 @@ semantic understanding. No link is inferred from temporal proximity alone,
 and an empty result is valid. The projection is read-only and does not
 change goal scores or execute actions. A later policy may explicitly consume
 these matches, but must retain their evidence and uncertainty.
+
+
+## Autobiographical outcome evaluation
+
+`SelfAutobiographicalEvaluator` summarizes outcomes from experiences already
+retrieved through explicit autobiographical links. It reports success,
+unsuccessful and neutral counts, mean outcome, and mean absolute prediction
+error for each recalled transformation. Missing labels are omitted rather
+than guessed; outcomes must be finite and within [0, 1].
+
+```python
+from machina import SelfAutobiographicalEvaluator
+
+evaluation = SelfAutobiographicalEvaluator().evaluate(matches)
+for assessment in evaluation.assessments:
+    print(
+        assessment.changed_paths,
+        assessment.experience_count,
+        assessment.mean_outcome,
+        assessment.mean_absolute_prediction_error,
+    )
+```
+
+This component is descriptive and read-only. It does not infer that a
+transformation caused a later outcome, update capability estimates, or
+automatically alter goal priorities. Sample size and explicit provenance must
+be considered before any future learning policy consumes these assessments.
