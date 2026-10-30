@@ -24,6 +24,7 @@ from .autonomy import AutonomyContext
 from .deliberation import InternalDeliberator
 from .mnn_memory_retrieval_feedback import MNNMemoryRetrievalFeedback
 from .homeostasis import HomeostaticProposal
+from .self_history_influence import SelfHistoryInfluence
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,6 +185,7 @@ class VirtualBrain:
         motivation: Any | None = None,
         drive_adjustments: dict[str, float] | None = None,
         homeostatic_proposal: HomeostaticProposal | None = None,
+        self_history_influence: SelfHistoryInfluence | None = None,
         recent_goal_ids: Sequence[str] = (),
         **cycle_kwargs: Any,
     ) -> CycleResult:
@@ -214,6 +216,34 @@ class VirtualBrain:
                 "persistence": dict(homeostatic_proposal.persistence),
                 "evidence_refs": list(homeostatic_proposal.evidence_refs),
                 "rationale": list(homeostatic_proposal.rationale),
+            }
+        self_history_trace = None
+        if self_history_influence is not None:
+            if not isinstance(self_history_influence, SelfHistoryInfluence):
+                raise TypeError("self_history_influence must be a SelfHistoryInfluence")
+            for drive, adjustment in self_history_influence.adjustments.items():
+                if not isinstance(drive, str) or not drive.strip():
+                    raise ValueError("self-history drive names must be non-empty strings")
+                if isinstance(adjustment, bool) or not isinstance(adjustment, (int, float)) or not (-0.3 <= adjustment <= 0.3):
+                    raise ValueError("self-history adjustments must be within [-0.3, 0.3]")
+                combined_adjustments[drive] = max(-0.3, min(0.3, combined_adjustments.get(drive, 0.0) + adjustment))
+            self_history_trace = {
+                "adjustments": dict(self_history_influence.adjustments),
+                "transitions": [
+                    {
+                        "property_name": item.property_name,
+                        "initial_value": item.initial_value,
+                        "current_value": item.current_value,
+                        "first_cycle": item.first_cycle,
+                        "last_cycle": item.last_cycle,
+                        "observations": item.observations,
+                        "status": item.status,
+                        "evidence_refs": list(item.evidence_refs),
+                    }
+                    for item in self_history_influence.transitions
+                ],
+                "evidence_refs": list(self_history_influence.evidence_refs),
+                "rationale": list(self_history_influence.rationale),
             }
         deliberation = self.internal_deliberator.deliberate(
             context,
@@ -252,6 +282,7 @@ class VirtualBrain:
                 "selected_source": deliberation.selected_source,
                 "deliberation": deliberation.to_dict(),
                 "homeostatic_regulation": homeostasis_trace,
+                "self_history_influence": self_history_trace,
             },
             input_refs=[active_goal.id],
             source_refs=active_goal.source_refs,
