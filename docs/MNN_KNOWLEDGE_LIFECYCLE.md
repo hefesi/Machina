@@ -150,3 +150,12 @@ Each fragment receives a deterministic ID derived from its source event ID. The 
 `project(after_sequence=..., limit=...)` supports bounded replay. The returned `last_sequence` advances over all scanned events, including events excluded by an optional event-type filter. Persist that cursor only after the call succeeds; after a crash, retry from the previous cursor. This is at-least-once replay with deterministic deduplication, not a distributed transaction across the two SQLite databases.
 
 The projector is explicit and opt-in. It does not execute actions, infer new facts, modify source events, or automatically reinforce memory importance.
+
+
+## Autobiographical event recall (v0.7)
+
+`MNNAutobiographicalRecall` retrieves prior EventStore events from the replayable episodic projection in FragmentMemory. It delegates lexical ranking to `FragmentMemory.recall` and restricts candidates to `episodic_event` fragments, so ordinary notes and other memory kinds cannot crowd out event matches. The memory API now supports an optional kind filter that also constrains one-hop associated results.
+
+Each returned episode carries the source event ID, sequence, cycle, event type, hash, causation reference, artifact identity, epistemic status and decoded artifact. The recall layer checks the projection version and artifact identity before returning a record.
+
+This is a lexical retrieval baseline, not semantic understanding. It does not infer that a remembered event caused a later outcome, that a strategy was successful, or that a reward value proves usefulness. Contextual relevance may adjust retrieval ranking through the existing memory mechanism, without changing global importance.
