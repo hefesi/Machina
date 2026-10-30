@@ -31,6 +31,22 @@ class ChemicalSignalingTests(unittest.TestCase):
         self.assertGreater(novel.attention_gain, familiar.attention_gain)
         self.assertGreater(novel.exploration_drive, familiar.exploration_drive)
 
+
+    def test_internal_motivational_pressure_increases_exploration_and_alertness(self):
+        baseline = ChemicalSignaling().step(ChemicalEvent())
+        pressured = ChemicalSignaling().step(
+            ChemicalEvent(motivational_pressure=1.0)
+        )
+        self.assertGreater(pressured.exploration_drive, baseline.exploration_drive)
+        self.assertGreater(
+            pressured.concentrations["acetylcholine"],
+            baseline.concentrations["acetylcholine"],
+        )
+        self.assertGreater(
+            pressured.concentrations["noradrenaline"],
+            baseline.concentrations["noradrenaline"],
+        )
+
     def test_snapshot_round_trip(self):
         system = ChemicalSignaling()
         system.step(ChemicalEvent(reward=0.8, novelty=0.4))
