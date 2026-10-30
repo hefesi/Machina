@@ -1,0 +1,155 @@
+"""Integrated persistent dynamics for the experimental MNN organism.
+
+Coordinates neural state, virtual neuromodulation, and functional identity
+history in one deterministic, resumable cycle. This is not evidence of
+biological chemistry or consciousness.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+import math
+from typing import Mapping
+
+from .chemical_signaling import ChemicalEvent, ChemicalSignaling
+from .mnn import MNN
+from .self_continuity import SelfContinuity
+
+
+@dataclass(frozen=True)
+class OrganismStep:
+    timestep: int
+    neural_state: Mapping[str, float]
+    chemical_state: Mapping[str, float]
+    prediction_error: float
+    exploration_drive: float
+    plasticity_gain: float
+    attention_gain: float
+    weight_changes: Mapping[str, float]
+
+
+class MNNOrganism:
+    """Coordinate persistent MNN, chemical-control, and Self-continuity state."""
+
+    SNAPSHOT_SCHEMA = 1
+
+    def __init__(
+        self,
+        agent_id: str,
+        network: MNN | None = None,
+        signaling: ChemicalSignaling | None = None,
+        continuity: SelfContinuity | None = None,
+        *,
+        chemical_inputs: Mapping[str, str] | None = None,
+        learning_rate: float = 0.0,
+    ) -> None:
+        if not agent_id or not agent_id.strip():
+            raise ValueError("agent_id must be non-empty")
+        if isinstance(learning_rate, bool) or not isinstance(learning_rate, (int, float)):
+            raise ValueError("learning_rate must be a finite non-negative number")
+        if not math.isfinite(learning_rate) or learning_rate < 0:
+            raise ValueError("learning_rate must be a finite non-negative number")
+
+        self.agent_id = agent_id
+        self.network = network or MNN()
+        self.signaling = signaling or ChemicalSignaling()
+        self.continuity = continuity or SelfContinuity(agent_id)
+        if self.continuity.agent_id != agent_id:
+            raise ValueError("continuity agent_id must match organism agent_id")
+        if self.network.timestep != self.signaling.state.timestep:
+            raise ValueError("neural and chemical timesteps must match")
+        self.chemical_inputs = dict(chemical_inputs or {})
+        for chemical, unit_id in self.chemical_inputs.items():
+            if chemical not in {"dopamine", "acetylcholine", "noradrenaline", "serotonin"}:
+                raise ValueError(f"unknown chemical signal: {chemical}")
+            if unit_id not in self.network.units:
+                raise ValueError(f"chemical input unit does not exist: {unit_id}")
+        self.learning_rate = float(learning_rate)
+
+    @property
+    def timestep(self) -> int:
+        return self.network.timestep
+
+    def step(
+        self,
+        inputs: Mapping[str, float] | None = None,
+        event: ChemicalEvent | None = None,
+    ) -> OrganismStep:
+        """Advance all coupled states exactly one deterministic logical tick."""
+        neural_inputs = dict(inputs or {})
+        unknown = set(neural_inputs) - self.network.units.keys()
+        if unknown:
+            raise ValueError(f"unknown neural input units: {sorted(unknown)}")
+        for key, value in neural_inputs.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+                raise ValueError(f"input {key!r} must be a finite number")
+
+        event = event or ChemicalEvent()
+        chemical = self.signaling.step(event)
+        for name, unit_id in self.chemical_inputs.items():
+            neural_inputs[unit_id] = chemical.concentrations[name]
+
+        neural_state = self.network.step(neural_inputs)
+        weight_changes: Mapping[str, float] = {}
+        if self.learning_rate:
+            effective_rate = self.learning_rate * chemical.plasticity_gain
+            weight_changes = self.network.apply_hebbian(
+                learning_rate=effective_rate,
+                reward=chemical.prediction_error,
+            )
+
+        self.continuity.record_event(
+            "integrated_state_transition",
+            "mnn_organism",
+            reason=f"timestep={self.timestep}; prediction_error={chemical.prediction_error:.8f}",
+        )
+        return OrganismStep(
+            timestep=self.timestep,
+            neural_state=dict(neural_state),
+            chemical_state=dict(chemical.concentrations),
+            prediction_error=chemical.prediction_error,
+            exploration_drive=chemical.exploration_drive,
+            plasticity_gain=chemical.plasticity_gain,
+            attention_gain=chemical.attention_gain,
+            weight_changes=dict(weight_changes),
+        )
+
+    def snapshot(self) -> dict:
+        """Return a JSON-compatible snapshot of the complete integrated state."""
+        return {
+            "schema_version": self.SNAPSHOT_SCHEMA,
+            "agent_id": self.agent_id,
+            "network": self.network.snapshot(),
+            "signaling": self.signaling.snapshot(),
+            "continuity": {
+                "schema_version": self.continuity.schema_version,
+                "commitments": dict(self.continuity.commitments),
+                "event_history": [dict(item) for item in self.continuity.event_history],
+                "component_versions": dict(self.continuity.component_versions),
+            },
+            "chemical_inputs": dict(self.chemical_inputs),
+            "learning_rate": self.learning_rate,
+        }
+
+    @classmethod
+    def from_snapshot(cls, data: Mapping) -> "MNNOrganism":
+        """Restore and validate an integrated state from its versioned snapshot."""
+        if data.get("schema_version") != cls.SNAPSHOT_SCHEMA:
+            raise ValueError("unsupported MNN organism snapshot schema")
+        continuity_data = data.get("continuity")
+        if not isinstance(continuity_data, Mapping):
+            raise ValueError("continuity snapshot must be a mapping")
+        continuity = SelfContinuity(
+            agent_id=data["agent_id"],
+            schema_version=continuity_data.get("schema_version", 1),
+            commitments=dict(continuity_data.get("commitments", {})),
+            event_history=[dict(item) for item in continuity_data.get("event_history", [])],
+            component_versions=dict(continuity_data.get("component_versions", {})),
+        )
+        return cls(
+            agent_id=data["agent_id"],
+            network=MNN.from_snapshot(data["network"]),
+            signaling=ChemicalSignaling.from_snapshot(data["signaling"]),
+            continuity=continuity,
+            chemical_inputs=data.get("chemical_inputs", {}),
+            learning_rate=data.get("learning_rate", 0.0),
+        )
