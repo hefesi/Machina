@@ -224,8 +224,7 @@ class MotivationSystem:
             cooperative_links = partners[name]
             boost = 0.0
             if cooperative_links:
-                total_weight = sum(weight for weight, _ in cooperative_links)
-                partner_pressure = sum(weight * urgency for weight, urgency in cooperative_links) / total_weight
+                partner_pressure = sum(weight * urgency for weight, urgency in cooperative_links) / len(cooperative_links)
                 boost = self.cooperation_gain * partner_pressure
             conflict_links = opponents[name]
             inhibition = 0.0
