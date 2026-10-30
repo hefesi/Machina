@@ -146,9 +146,7 @@ checkpoint = organism.snapshot()
 This is a functional integration milestone, not an autonomous organism, a
 complete cognitive architecture, or evidence of subjective experience. The
 chemical variables are computational control signals, not simulated
-neurotransmitter molecules. The coordinator also does not yet integrate the
-VirtualBrain event journal or semantic/episodic memory repository; those
-remain separate persistence domains and are explicit next integration work.
+neurotransmitter molecules. The coordinator does not yet integrate the VirtualBrain event journal. Episodic memory can be attached as a separate persistence domain, as described below.
 
 
 ## Episodic memory coupling
@@ -174,3 +172,37 @@ automatically influence cognition. The next integration experiment must test
 whether retrieved experience changes a downstream decision and improves
 held-out performance against a no-retrieval baseline.
 
+
+
+## Explicit memory-to-neural guidance (experimental)
+
+Memory retrieval can now be turned into an explicit neural input without
+making retrieval an invisible side effect of every cycle:
+
+```python
+guidance = organism.prepare_memory_guidance(
+    "prediction error",
+    target_unit="memory_context",
+)
+state = organism.step(memory_guidance=guidance)
+```
+
+The returned `MemoryGuidance` contains the original query, target unit,
+bounded signal, evidence fragment IDs, and per-fragment scores. The current
+signal is a confidence-weighted lexical token-overlap baseline. It is not
+semantic similarity, truth estimation, or proof that a recalled episode is
+relevant to the present situation. If no evidence matches, the signal is zero
+and the evidence list is empty.
+
+The target must be an existing MNN unit and cannot conflict with another
+input route in the same step. Preparing guidance does not advance the neural
+clock or rewrite memory; only passing it explicitly to `step` routes it into
+the designated unit. This keeps the causal path inspectable and makes
+retrieval-versus-no-retrieval experiments possible.
+
+Tests cover evidence routing, zero-signal abstention for unrelated queries,
+route conflicts, and the fact that preparation itself does not change the
+organism snapshot. This is an integration primitive, not yet evidence that
+memory improves decisions or generalization. The next experiment is a
+controlled task where memory-guided and no-memory conditions are compared on
+held-out examples.
