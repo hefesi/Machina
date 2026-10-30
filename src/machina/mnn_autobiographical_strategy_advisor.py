@@ -61,7 +61,7 @@ class MNNAutobiographicalStrategyAdvisor:
         """Compare confirmed outcomes for one exact context; abstain on weak data."""
         if not isinstance(context, str) or not context.strip():
             raise ValueError("context must be a non-empty string")
-        if current_action not in self.actions:
+        if not isinstance(current_action, str) or current_action not in self.actions:
             raise ValueError("current_action must be one of the configured actions")
         normalized_context = self._normalize(context)
         episodes = self.recall.recall(
@@ -92,7 +92,7 @@ class MNNAutobiographicalStrategyAdvisor:
                 ignored["unconfirmed_or_invalid_reward"] += 1
                 continue
             action = data.get("action")
-            if action not in samples:
+            if not isinstance(action, str) or action not in samples:
                 ignored["unknown_action"] += 1
                 continue
             reward = data.get("observed_reward")
