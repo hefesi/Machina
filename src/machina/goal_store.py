@@ -81,6 +81,20 @@ class PersistentGoalStore:
             )
             """
         )
+        self._db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS plan_revision_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                previous_goal_ids_json TEXT NOT NULL,
+                selected_goal_ids_json TEXT NOT NULL,
+                deferred_goal_ids_json TEXT NOT NULL,
+                trigger TEXT NOT NULL,
+                rationale TEXT NOT NULL,
+                context_json TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         self._db.commit()
 
     def close(self) -> None:
@@ -340,6 +354,59 @@ class PersistentGoalStore:
             item = dict(row)
             item["alternatives"] = json.loads(item.pop("alternatives_json"))
             item["context"] = json.loads(item.pop("context_json"))
+            result.append(item)
+        return result
+
+
+    def record_plan_revision(
+        self,
+        *,
+        previous_goal_ids: list[str],
+        selected_goal_ids: list[str],
+        deferred_goal_ids: list[str],
+        trigger: str,
+        rationale: str,
+        context: dict[str, Any] | None = None,
+    ) -> int:
+        """Append an auditable plan comparison; does not alter goal lifecycle."""
+        values = (previous_goal_ids, selected_goal_ids, deferred_goal_ids)
+        if any(not isinstance(items, list) or any(
+            not isinstance(item, str) or not item.strip() for item in items
+        ) or len(set(items)) != len(items) for items in values):
+            raise ValueError("plan goal IDs must be unique non-empty string lists")
+        if not isinstance(trigger, str) or not trigger.strip():
+            raise ValueError("plan revision trigger must be non-empty")
+        if not isinstance(rationale, str) or not rationale.strip():
+            raise ValueError("plan revision rationale must be non-empty")
+        if context is not None and not isinstance(context, dict):
+            raise ValueError("plan revision context must be a dictionary")
+        cursor = self._db.execute(
+            "INSERT INTO plan_revision_history "
+            "(previous_goal_ids_json, selected_goal_ids_json, deferred_goal_ids_json, "
+            "trigger, rationale, context_json) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                json.dumps(previous_goal_ids, ensure_ascii=False),
+                json.dumps(selected_goal_ids, ensure_ascii=False),
+                json.dumps(deferred_goal_ids, ensure_ascii=False),
+                trigger.strip(), rationale.strip(),
+                json.dumps(context or {}, ensure_ascii=False, sort_keys=True),
+            ),
+        )
+        self._db.commit()
+        return int(cursor.lastrowid)
+
+    def recent_plan_revisions(self, limit: int = 10) -> list[dict[str, Any]]:
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive integer")
+        rows = self._db.execute(
+            "SELECT * FROM plan_revision_history ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            for key in ("previous_goal_ids", "selected_goal_ids", "deferred_goal_ids", "context"):
+                column = key + "_json"
+                item[key] = json.loads(item.pop(column))
             result.append(item)
         return result
 
