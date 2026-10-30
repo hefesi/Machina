@@ -576,3 +576,10 @@ importante de corrupção temporal do estado.
 Resource costs and limits are supplied by the caller; the resolver does not pretend to measure compute, time, money, or other resources itself. Relations are explicit evidence, not inferred from similar descriptions. The assessment is advisory and never pauses, abandons, completes, or executes a goal. `supports` relations are preserved for future prioritization work but do not yet change scoring.
 
 This is a first constraint-evaluation layer, not yet a global scheduler. A later step should define resource reservation, multi-goal scheduling, and explicit application of a reviewed proposal, with concurrency checks and a complete audit trail.
+## Multi-goal scheduling under explicit constraints (experimental)
+
+`GoalConflictResolver.schedule(...)` now enumerates feasible subsets of up to 16 candidate goals and selects the subset with the highest supplied utility. When a utility is omitted, the scheduler uses the persistent goal priority when available, otherwise a neutral default of 0.5. It respects explicit conflicts, required dependencies, and declared resource limits. Explicit `supports` relations add their strength as a pairwise utility bonus when both goals are selected.
+
+The result separates selected and deferred goals, reports aggregate utility, and embeds the constraint assessment. Deferred goals remain unchanged in persistent storage; scheduling does not reserve resources, pause goals, or execute work. Utility and resource costs remain estimates supplied by the caller, so the output is a reproducible proposal rather than an objective measure of value.
+
+The current search is exhaustive and intentionally capped at 16 candidates to keep runtime predictable. Larger goal sets require a later bounded/approximate optimizer and a resource reservation protocol.
