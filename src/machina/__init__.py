@@ -65,6 +65,7 @@ from .mnn_strategy_learning_cycle import MNNStrategyLearningCycle
 from .mnn_strategy_outcome_journal import MNNStrategyOutcomeJournal
 from .mnn_strategy_event_bridge import MNNStrategyEventBridge
 from .mnn_event_memory_projector import MNNEventMemoryProjector, MNNEventProjectionResult
+from .mnn_autobiographical_recall import MNNAutobiographicalEpisode, MNNAutobiographicalRecall
 from .mnn_synaptic_consolidation import MNNSynapticConsolidator
 from .mnn_short_term_plasticity import MNNShortTermPlasticity
 
@@ -177,6 +178,8 @@ __all__ = [
     "MNNStrategyEventBridge",
     "MNNEventMemoryProjector",
     "MNNEventProjectionResult",
+    "MNNAutobiographicalEpisode",
+    "MNNAutobiographicalRecall",
     "StrategyFeedback",
     "StrategyLearningResult",
     "MNNSynapticConsolidator",
