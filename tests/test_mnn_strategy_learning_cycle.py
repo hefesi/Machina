@@ -20,7 +20,7 @@ class StrategyLearningCycleTests(unittest.TestCase):
         self.memory = FragmentMemory(Path(self.tmp.name) / "memory.db")
         self.addCleanup(self.memory.close)
         self.evidence = self.memory.add(
-            "Evidence for workload A", kind="note", tags=("workload-a",)
+            "Evidence for workload A", kind="note", source_uri="test://evidence/workload-a", tags=("workload-a",)
         )
         self.proposal = {
             "status": "proposed", "action": "candidate",
