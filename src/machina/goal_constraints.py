@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import math
-from typing import Mapping
+from typing import Mapping, Any
+from itertools import combinations
 
 from .goal_store import PersistentGoalStore
 
@@ -108,3 +109,97 @@ class GoalConflictResolver:
             resource_limits=normalized_limits,
             rationale=rationale,
         )
+
+
+
+@dataclass(frozen=True, slots=True)
+class GoalSchedule:
+    """Best feasible subset under explicit utilities, constraints, and budgets."""
+
+    selected_goal_ids: tuple[str, ...]
+    deferred_goal_ids: tuple[str, ...]
+    total_utility: float
+    assessment: GoalConstraintAssessment
+    rationale: str
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "selected_goal_ids": list(self.selected_goal_ids),
+            "deferred_goal_ids": list(self.deferred_goal_ids),
+            "total_utility": self.total_utility,
+            "assessment": self.assessment.to_dict(),
+            "rationale": self.rationale,
+        }
+
+
+def _schedule(
+    resolver: GoalConflictResolver,
+    goal_ids: tuple[str, ...] | list[str],
+    *,
+    utilities: Mapping[str, float] | None = None,
+    resource_costs: Mapping[str, Mapping[str, float]] | None = None,
+    resource_limits: Mapping[str, float] | None = None,
+) -> GoalSchedule:
+    ids = tuple(goal_ids)
+    if not ids or len(ids) > 16:
+        raise ValueError("scheduling requires between 1 and 16 candidate goals")
+    if len(set(ids)) != len(ids) or any(not isinstance(x, str) or not x.strip() for x in ids):
+        raise ValueError("goal_ids must be unique non-empty strings")
+    utility_map: dict[str, float] = {}
+    for key, value in (utilities or {}).items():
+        if key not in ids or isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise ValueError("utilities must be finite, non-negative, and refer to candidate goals")
+        utility_map[key] = float(value)
+    records = resolver.store.ranked_open_goals(limit=1000)
+    stored = {item["goal_id"]: float(item["priority"]) for item in records}
+    for goal_id in ids:
+        utility_map.setdefault(goal_id, stored.get(goal_id, 0.5))
+    relations = resolver.store.goal_relations()
+    supports = [
+        item for item in relations
+        if item["relation"] == "supports"
+        and item["source_goal_id"] in ids and item["target_goal_id"] in ids
+    ]
+    best: tuple[str, ...] = ()
+    best_score = -1.0
+    best_assessment: GoalConstraintAssessment | None = None
+    # Enumerate feasible subsets. Stable lexical tie-break makes the result reproducible.
+    for size in range(1, len(ids) + 1):
+        for subset in combinations(sorted(ids), size):
+            assessment = resolver.assess(
+                subset, resource_costs=resource_costs, resource_limits=resource_limits
+            )
+            if not assessment.compatible:
+                continue
+            selected = set(subset)
+            score = sum(utility_map[item] for item in subset)
+            score += sum(
+                float(item["strength"])
+                for item in supports
+                if item["source_goal_id"] in selected and item["target_goal_id"] in selected
+            )
+            if score > best_score or (score == best_score and subset < best):
+                best, best_score, best_assessment = subset, score, assessment
+    if best_assessment is None:
+        # Empty selection is safer than returning an infeasible combination.
+        best_assessment = resolver.assess(
+            ids[:1], resource_costs=resource_costs, resource_limits=resource_limits
+        )
+        if best_assessment.compatible:
+            best, best_score = (), 0.0
+        else:
+            raise ValueError("no feasible goal subset exists, including individual candidates")
+    deferred = tuple(item for item in sorted(ids) if item not in set(best))
+    return GoalSchedule(
+        selected_goal_ids=best,
+        deferred_goal_ids=deferred,
+        total_utility=best_score,
+        assessment=best_assessment,
+        rationale=(
+            "Subconjunto viável com maior utilidade explícita; objetivos adiados "
+            "permanecem abertos. Empates são resolvidos pela ordem lexical."
+        ),
+    )
+
+
+GoalConflictResolver.schedule = _schedule  # type: ignore[attr-defined]
