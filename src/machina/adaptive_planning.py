@@ -68,10 +68,12 @@ class AdaptivePlanReviewer:
         retained = tuple(sorted(prior & current))
         newly_selected = tuple(sorted(current - prior))
         newly_deferred = tuple(sorted(prior - current))
-        restored = tuple(sorted(current & set(
-            item for record in self.store.recent_plan_revisions(limit=1)
+        prior_deferred = {
+            item
+            for record in self.store.recent_plan_revisions(limit=1000)
             for item in record["deferred_goal_ids"]
-        )))
+        }
+        restored = tuple(sorted(current & prior_deferred))
         changes = []
         if newly_selected:
             changes.append("novos objetivos selecionados: " + ", ".join(newly_selected))
