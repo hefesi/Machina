@@ -36,6 +36,8 @@ class PersistentGoalStore:
                 status TEXT NOT NULL CHECK (status IN
                     ('active', 'completed', 'paused', 'needs_revision', 'abandoned')),
                 failure_count INTEGER NOT NULL DEFAULT 0,
+                progress REAL NOT NULL DEFAULT 0.0 CHECK (progress >= 0.0 AND progress <= 1.0),
+                priority REAL NOT NULL DEFAULT 0.5 CHECK (priority >= 0.0 AND priority <= 1.0),
                 evidence TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -43,6 +45,11 @@ class PersistentGoalStore:
             )
             """
         )
+        columns = {row["name"] for row in self._db.execute("PRAGMA table_info(persistent_goals)")}
+        if "progress" not in columns:
+            self._db.execute("ALTER TABLE persistent_goals ADD COLUMN progress REAL NOT NULL DEFAULT 0.0")
+        if "priority" not in columns:
+            self._db.execute("ALTER TABLE persistent_goals ADD COLUMN priority REAL NOT NULL DEFAULT 0.5")
         self._db.execute(
             "CREATE INDEX IF NOT EXISTS idx_persistent_goals_status ON persistent_goals(status, id)"
         )
@@ -75,6 +82,56 @@ class PersistentGoalStore:
         self._db.commit()
         return self._as_dict(self._db.execute(
             "SELECT * FROM persistent_goals WHERE id = ?", (cursor.lastrowid,)
+        ).fetchone())
+
+    def update_progress(
+        self,
+        goal_id: str,
+        progress: float,
+        *,
+        evidence: str,
+        priority: float | None = None,
+    ) -> dict[str, Any]:
+        """Record measured progress and optional priority for an open goal.
+
+        Progress is an explicit estimate supplied by an evaluator. It may move
+        in either direction when new evidence invalidates earlier assumptions.
+        """
+        import math
+
+        if isinstance(progress, bool) or not isinstance(progress, (int, float)) or not math.isfinite(progress) or not 0.0 <= progress <= 1.0:
+            raise ValueError("progress must be finite and between 0 and 1")
+        if priority is not None and (
+            isinstance(priority, bool) or not isinstance(priority, (int, float))
+            or not math.isfinite(priority) or not 0.0 <= priority <= 1.0
+        ):
+            raise ValueError("priority must be finite and between 0 and 1")
+        note = evidence.strip()
+        if not note:
+            raise ValueError("progress updates require non-empty evidence")
+        row = self._db.execute(
+            "SELECT * FROM persistent_goals WHERE goal_id = ? AND status IN "
+            "('active', 'needs_revision') ORDER BY id DESC LIMIT 1",
+            (goal_id,),
+        ).fetchone()
+        if row is None:
+            raise ValueError(f"no open persistent goal found for {goal_id!r}")
+        combined = row["evidence"] + "\\n" + note if row["evidence"] else note
+        if priority is None:
+            self._db.execute(
+                "UPDATE persistent_goals SET progress = ?, evidence = ?, "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (float(progress), combined, row["id"]),
+            )
+        else:
+            self._db.execute(
+                "UPDATE persistent_goals SET progress = ?, priority = ?, evidence = ?, "
+                "updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+                (float(progress), float(priority), combined, row["id"]),
+            )
+        self._db.commit()
+        return self._as_dict(self._db.execute(
+            "SELECT * FROM persistent_goals WHERE id = ?", (row["id"],)
         ).fetchone())
 
     def record_outcome(self, goal_id: str, outcome: str, evidence: str = "") -> dict[str, Any]:
