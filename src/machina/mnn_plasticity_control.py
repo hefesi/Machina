@@ -45,10 +45,13 @@ class MNNPlasticityController:
 
     @staticmethod
     def _topology_fingerprint(network: MNN) -> str:
-        topology = [
-            (edge.id, edge.source, edge.target, bool(edge.enabled))
-            for edge in sorted(network.connections.values(), key=lambda item: item.id)
-        ]
+        topology = {
+            "units": sorted(network.units),
+            "connections": [
+                (edge.id, edge.source, edge.target, bool(edge.enabled))
+                for edge in sorted(network.connections.values(), key=lambda item: item.id)
+            ],
+        }
         encoded = json.dumps(topology, separators=(",", ":"), ensure_ascii=True).encode()
         return hashlib.sha256(encoded).hexdigest()
 
