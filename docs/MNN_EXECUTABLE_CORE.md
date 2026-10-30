@@ -861,3 +861,29 @@ This is bounded calibration from explicit evaluator labels—not autonomous
 proof that an intervention helped, and not a model of biological learning or
 felt relief. The caller remains responsible for evaluating outcomes and
 deciding whether to pass an adapted proposal into deliberation.
+
+
+## Longitudinal operational Self-state dynamics
+
+`SelfStateDynamicsAnalyzer` compares a sequence of explicit `SelfModel`
+snapshots and classifies a property as `stable`, `persistent_since_change`,
+`recurrent`, `reverted`, or `changed`. Only evidence-backed observations
+with status `observed` participate; unknown, stale, or inferred samples are
+not silently treated as measurements. Each result includes the sampled cycle
+range and the evidence references used.
+
+```python
+from machina import SelfStateDynamicsAnalyzer
+
+history = [snapshot_before, snapshot_after, snapshot_later]
+dynamics = SelfStateDynamicsAnalyzer().analyze_all(history)
+for transition in dynamics:
+    print(transition.property_name, transition.status, transition.evidence_refs)
+```
+
+These labels describe sampled records, not continuous persistence between
+samples. `persistent_since_change` means the same value appeared in all
+subsequent eligible checkpoints in the supplied history. `recurrent` means
+the current value appeared more than once after another value intervened.
+This analysis is read-only and does not update the SelfModel, infer identity,
+or establish subjective continuity.
