@@ -7,7 +7,7 @@ from pathlib import Path
 
 from machina.chemical_signaling import ChemicalEvent
 from machina.mnn import Connection, MNN, Unit
-from machina.mnn_organism import MNNOrganism
+from machina.mnn_organism import DecisionOption, MNNOrganism
 from machina.fragment_memory import FragmentMemory
 from machina.self_continuity import SelfContinuity
 
@@ -206,6 +206,53 @@ class MNNOrganismTests(unittest.TestCase):
                     context="task-a", operation_id="bad-002",
                 )
             memory.close()
+
+
+    def test_memory_guided_decision_can_change_ranking_and_returns_auditable_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            memory = FragmentMemory(Path(directory) / "episodes.sqlite3")
+            organism = self.make_organism()
+            organism.memory = memory
+            organism.step({"sensor": 0.6})
+            options = [
+                DecisionOption("reuse-experience", 0.40, "prediction error"),
+                DecisionOption("unfamiliar-route", 0.55, "volcano astronomy"),
+            ]
+            assessment = organism.assess_decisions(
+                options,
+                target_unit="memory_context",
+                context="route-planning",
+                memory_weight=0.25,
+            )
+            self.assertEqual("reuse-experience", assessment.selected_action)
+            self.assertGreater(
+                assessment.scores["reuse-experience"],
+                assessment.base_utilities["reuse-experience"],
+            )
+            self.assertEqual((), assessment.evidence_ids["unfamiliar-route"])
+            self.assertEqual(
+                assessment.evidence_ids["reuse-experience"],
+                assessment.selected_guidance.evidence_ids,
+            )
+            # The assessment is deliberative only: it does not advance the organism.
+            self.assertEqual(1, organism.timestep)
+            memory.close()
+
+    def test_decision_assessment_without_memory_does_not_execute_actions(self):
+        organism = self.make_organism()
+        with tempfile.TemporaryDirectory() as directory:
+            organism.memory = FragmentMemory(Path(directory) / "episodes.sqlite3")
+            result = organism.assess_decisions(
+                [
+                    DecisionOption("a", 0.2, "nothing"),
+                    DecisionOption("b", 0.8, "unrelated"),
+                ],
+                target_unit="memory_context",
+                context="test",
+            )
+            self.assertEqual("b", result.selected_action)
+            self.assertEqual(0, organism.timestep)
+            organism.memory.close()
 
     def test_memory_is_optional_and_recall_requires_attachment(self):
         organism = self.make_organism()
