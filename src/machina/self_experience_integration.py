@@ -56,13 +56,14 @@ class SelfExperienceIntegrator:
             if r["event_type"] in {"experience.recorded", "experience.completed", "action.result", "evaluation.completed"}
             or r["kind"] in {"experience", "evaluation", "action_result"}
         ]
+        experience_by_id = {r["event_id"]: r for r in experiences}
         transformations = [r for r in records if r["event_type"] == "self.transformed"]
         results = []
         for index, current in enumerate(transformations):
             refs = set(current["input_refs"]) | set(current["source_refs"])
             causation = current["causation_id"]
             linked_ids = set()
-            if causation in by_event:
+            if causation in experience_by_id:
                 linked_ids.add(causation)
             for candidate in experiences:
                 if candidate["event_id"] in refs or candidate["artifact_id"] in refs:
