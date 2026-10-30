@@ -632,3 +632,32 @@ feedback = learner.observe(
 ```
 
 The learner does not evaluate its own success, inspect the environment, or infer reward from a completed cycle. An external evaluator must provide the outcome and evidence. Prediction error is inspectable and changes future estimates, but this alone is not evidence of understanding, subjective experience, or free will.
+
+
+## Self-model learning bridge (experimental)
+
+`SelfModelLearningBridge` connects `GoalOutcomeLearner` to `SelfModel`. Given a goal type with at least one evaluator-supplied outcome, it updates a named operational capability estimate with the learner's posterior mean, uncertainty, and observation count. The capability is marked `inferred`, never `observed`, because it is a statistical summary of prior outcomes rather than direct proof of a general ability.
+
+The bridge also appends the latest prediction error to the SelfModel's prediction-error history and links the estimate to the outcome record ID. It refuses to create a capability estimate when no evaluated history exists. It does not alter MNN parameters, autonomously execute a task, or decide whether the evaluator's score was correct.
+
+Example:
+
+```python
+from machina import GoalOutcomeLearner, SelfModel, SelfModelLearningBridge
+
+learner = GoalOutcomeLearner("machina-outcomes.sqlite3")
+self_model = SelfModel()
+bridge = SelfModelLearningBridge(self_model, learner)
+
+# Only after an external evaluator records a result:
+learner.observe(
+    "research", 0.8,
+    evidence="Evaluator confirmed four of five acceptance checks.",
+    observation_id="cycle-204-result",
+)
+updated = bridge.update_capability(
+    "research", capability_name="research_execution", cycle_id="cycle-204"
+)
+```
+
+This creates a measurable feedback path from past outcomes to a revisable self-description. It is a functional self-model, not evidence that the system experiences itself subjectively.
