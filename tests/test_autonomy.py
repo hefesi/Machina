@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from machina.autonomy import AutonomyContext, AutonomyController, GoalCandidate
+from machina.mnn_motivation import MotivationSystem, MotivationalDrive
 
 
 class AutonomyControllerTests(unittest.TestCase):
@@ -14,6 +15,28 @@ class AutonomyControllerTests(unittest.TestCase):
         self.assertIsNotNone(decision.selected_goal)
         self.assertEqual("establish_memory_baseline", decision.selected_goal.goal_id)
         self.assertTrue(decision.alternatives)
+
+
+    def test_motivational_urgency_changes_goal_ranking(self):
+        motivation = MotivationSystem([
+            MotivationalDrive("curiosity", level=1.0, priority=1.0),
+            MotivationalDrive("stability", level=0.0, priority=1.0),
+        ])
+        curiosity = GoalCandidate(
+            "explore", "Explore a relevant unknown", "curiosity",
+            0.5, 0.5, 0.8, 0.2, 0.05,
+        )
+        stability = GoalCandidate(
+            "stabilize", "Inspect system stability", "stability",
+            0.5, 0.5, 0.8, 0.2, 0.05,
+        )
+        decision = self.controller.choose(
+            [stability, curiosity],
+            drive_adjustments=motivation.autonomy_adjustments(),
+        )
+        self.assertEqual("explore", decision.selected_goal.goal_id)
+        scores = {item["goal"]["goal_id"]: item["score"]["total"] for item in decision.alternatives}
+        self.assertGreater(scores["explore"], scores["stabilize"])
 
     def test_failed_cycle_promotes_error_recovery_goal(self):
         decision = self.controller.step(
