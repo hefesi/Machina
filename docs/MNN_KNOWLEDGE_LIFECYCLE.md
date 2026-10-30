@@ -139,3 +139,14 @@ VirtualBrain exposes MNNStrategyEventBridge through its strategy_events attribut
 Proposal events preserve status, action, context, expected reward and evidence IDs, and are always marked as not executed. Outcome events require explicit execution confirmation, an exact action match and a normalized observed reward. The outcome artifact references its proposal and the event records the proposal as its cause. Both events participate in the EventStore hash chain.
 
 Stable proposal and operation IDs support sequential retries and reject changed payloads. Concurrent callers using the same IDs must be serialized. The bridge does not execute actions, infer execution from a proposal, or automatically update FragmentMemory or organism weights.
+
+
+## Replayable autobiographical event projection (v0.6)
+
+`MNNEventMemoryProjector` materializes immutable `EventStore` events as searchable episodic fragments in `FragmentMemory`. The EventStore remains authoritative; FragmentMemory is a derived read model that can be rebuilt by replaying the journal.
+
+Each fragment receives a deterministic ID derived from its source event ID. The projection preserves event hash, sequence, cycle, event type, artifact identity, epistemic status, provenance references and causal reference. Replaying the same range is idempotent. Existing fragments are checked against the source event and conflicting data raises an error rather than overwriting memory.
+
+`project(after_sequence=..., limit=...)` supports bounded replay. The returned `last_sequence` advances over all scanned events, including events excluded by an optional event-type filter. Persist that cursor only after the call succeeds; after a crash, retry from the previous cursor. This is at-least-once replay with deterministic deduplication, not a distributed transaction across the two SQLite databases.
+
+The projector is explicit and opt-in. It does not execute actions, infer new facts, modify source events, or automatically reinforce memory importance.
