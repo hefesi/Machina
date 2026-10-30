@@ -266,6 +266,7 @@ class FragmentMemory:
                 fragment_id TEXT NOT NULL,
                 operation_id TEXT NOT NULL UNIQUE,
                 evidence_id TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
                 prior_content TEXT NOT NULL,
                 revised_content TEXT NOT NULL,
                 prior_confidence REAL NOT NULL CHECK (prior_confidence BETWEEN 0 AND 1),
@@ -470,7 +471,7 @@ class FragmentMemory:
         self._db.execute("BEGIN IMMEDIATE")
         try:
             prior_operation = self._db.execute(
-                "SELECT fragment_id, evidence_id, prior_content, revised_content, "
+                "SELECT fragment_id, evidence_id, payload_json, prior_content, revised_content, "
                 "prior_confidence, revised_confidence, created_at FROM memory_fragment_revisions "
                 "WHERE operation_id = ?", (operation_id,)
             ).fetchone()
@@ -478,8 +479,7 @@ class FragmentMemory:
                 if (
                     prior_operation["fragment_id"] != fragment_id
                     or prior_operation["evidence_id"] != evidence_id
-                    or prior_operation["revised_content"] != revised_content
-                    or (next_confidence is not None and float(prior_operation["revised_confidence"]) != next_confidence)
+                    or prior_operation["payload_json"] != payload
                 ):
                     raise ValueError("operation_id was already used with different revision data")
                 row = self._db.execute("SELECT * FROM memory_fragments WHERE id = ?", (fragment_id,)).fetchone()
@@ -500,9 +500,9 @@ class FragmentMemory:
             now = _now()
             self._db.execute(
                 "INSERT INTO memory_fragment_revisions "
-                "(fragment_id, operation_id, evidence_id, prior_content, revised_content, "
-                "prior_confidence, revised_confidence, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (fragment_id, operation_id, evidence_id, prior_content, revised_content,
+                "(fragment_id, operation_id, evidence_id, payload_json, prior_content, revised_content, "
+                "prior_confidence, revised_confidence, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (fragment_id, operation_id, evidence_id, payload, prior_content, revised_content,
                  prior_confidence, revised_confidence, now),
             )
             self._db.execute(
