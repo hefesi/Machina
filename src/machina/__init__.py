@@ -61,6 +61,7 @@ from .mnn_strategy_evaluation import MNNStrategyExperimentEvaluator
 from .mnn_strategy_context_memory import MNNStrategyContextMemory
 from .mnn_strategy_decision_advisor import MNNStrategyDecisionAdvisor
 from .mnn_strategy_feedback import MNNStrategyFeedbackAdapter, StrategyFeedback, StrategyLearningResult
+from .mnn_strategy_learning_cycle import MNNStrategyLearningCycle
 from .mnn_synaptic_consolidation import MNNSynapticConsolidator
 from .mnn_short_term_plasticity import MNNShortTermPlasticity
 
@@ -168,6 +169,7 @@ __all__ = [
     "MNNStrategyContextMemory",
     "MNNStrategyDecisionAdvisor",
     "MNNStrategyFeedbackAdapter",
+    "MNNStrategyLearningCycle",
     "StrategyFeedback",
     "StrategyLearningResult",
     "MNNSynapticConsolidator",
