@@ -212,3 +212,52 @@ integration should persist proposal, approval, application and rollback events
 in the authoritative event journal. The current Hebbian proposal is a bounded
 engineering mechanism, not proof that an edge is causally useful or that a
 strategy caused a reward.
+
+
+## Experience-guided reversible plasticity (v1.0)
+
+`MNNExperiencePlasticityAdvisor` connects the autobiographical strategy
+review to the reversible `MNNPlasticityController`. It only prepares a
+synaptic proposal when the strategy advisor returns a candidate supported by
+its configured minimum number of distinct cycles and variability guard.
+
+The integration requires an explicit `action_connection_map` from the caller.
+For example, the caller may configure that a named action is associated with a
+specific set of connection IDs. This is an engineering hypothesis, not a
+causal discovery: the adapter does not infer which synapses produced an
+observed reward. Unknown or unmapped candidate actions produce no proposal.
+
+```python
+from machina import MNNExperiencePlasticityAdvisor
+
+experience_plasticity = MNNExperiencePlasticityAdvisor(
+    strategy_advisor,
+    plasticity_controller,
+    network,
+    action_connection_map={"candidate-action": ["edge-17", "edge-21"]},
+)
+proposal = experience_plasticity.review_and_propose(
+    "motor maintenance",
+    current_action="baseline-action",
+    proposal_id="experience-plasticity-42",
+    learning_rate=0.05,
+    max_delta=0.01,
+)
+if proposal is not None:
+    # Inspect action, context, event IDs, cycles, connection IDs and deltas.
+    experience_plasticity.apply(proposal)  # explicit approval boundary
+```
+
+The proposal preserves the exact outcome event IDs and distinct cycle IDs
+used by the strategy review, plus the configured connection IDs and the
+candidate action's mean observed reward. Review never changes weights.
+Application delegates to the controller's topology/base-weight checks;
+rollback delegates to its conditional guard and refuses to overwrite later
+weight changes.
+
+This adapter does not persist its own lifecycle events yet. The caller should
+retain the proposal and controller/network snapshots until an EventStore
+plasticity-event contract is introduced. The reward is used as a bounded
+Hebbian modulation input, not as proof that the mapped connections caused the
+outcome. No candidate means no proposal, and no proposal is automatically
+applied.
