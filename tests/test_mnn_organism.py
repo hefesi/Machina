@@ -160,7 +160,7 @@ class MNNOrganismTests(unittest.TestCase):
             )
             fragment_id = guidance.evidence_ids[0]
             contextual_before = organism.prepare_memory_guidance(
-                "prediction error", target_unit="memory_context", context="task-a"
+                "prediction error rareword", target_unit="memory_context", context="task-a"
             )
             before = memory.context_importance(fragment_id, "task-a")
             result, applied = organism.evaluate_memory_guidance(
