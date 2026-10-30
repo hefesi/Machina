@@ -72,6 +72,48 @@ class GoalConstraintTests(unittest.TestCase):
                 ["a"], resource_costs={"a": {"cpu": -1}}
             )
 
+    def test_scheduler_selects_best_feasible_subset_and_defers_competitor(self):
+        self.store.add_goal_relation(
+            "research", "deploy", "conflicts",
+            evidence="Both require exclusive access to the release environment.",
+        )
+        schedule = self.resolver.schedule(
+            ["research", "deploy", "document"],
+            utilities={"research": .9, "deploy": .7, "document": .4},
+            resource_costs={
+                "research": {"compute": 3},
+                "deploy": {"compute": 3},
+                "document": {"compute": 1},
+            },
+            resource_limits={"compute": 4},
+        )
+        self.assertEqual(("document", "research"), schedule.selected_goal_ids)
+        self.assertEqual(("deploy",), schedule.deferred_goal_ids)
+        self.assertTrue(schedule.assessment.compatible)
+
+    def test_scheduler_respects_dependencies_and_support_bonus(self):
+        self.store.add_goal_relation(
+            "publish", "review", "requires",
+            evidence="Review must precede publication.",
+        )
+        self.store.add_goal_relation(
+            "review", "publish", "supports", strength=.3,
+            evidence="Review improves publication quality.",
+        )
+        schedule = self.resolver.schedule(
+            ["publish", "review", "explore"],
+            utilities={"publish": .8, "review": .2, "explore": .7},
+        )
+        self.assertEqual(("publish", "review"), schedule.selected_goal_ids)
+        self.assertEqual(("explore",), schedule.deferred_goal_ids)
+        self.assertAlmostEqual(1.3, schedule.total_utility)
+
+    def test_scheduler_rejects_oversized_or_invalid_candidate_sets(self):
+        with self.assertRaises(ValueError):
+            self.resolver.schedule([f"goal-{i}" for i in range(17)])
+        with self.assertRaises(ValueError):
+            self.resolver.schedule(["a", "a"])
+
     def test_assessment_does_not_change_goal_lifecycle(self):
         self.store.register(GoalCandidate(
             "a", "Goal A", "curiosity", .8, .8, .8, .2, .02
