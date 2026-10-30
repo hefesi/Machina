@@ -275,6 +275,16 @@ class FragmentMemory:
                 FOREIGN KEY (fragment_id) REFERENCES memory_fragments(id) ON DELETE CASCADE
             )
         """)
+        revision_columns = {
+            row["name"] for row in self._db.execute(
+                "PRAGMA table_info(memory_fragment_revisions)"
+            ).fetchall()
+        }
+        if "payload_json" not in revision_columns:
+            self._db.execute(
+                "ALTER TABLE memory_fragment_revisions "
+                "ADD COLUMN payload_json TEXT NOT NULL DEFAULT '{}'"
+            )
         self._db.commit()
         self._closed = False
 
