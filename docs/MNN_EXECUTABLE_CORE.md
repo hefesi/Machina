@@ -1024,3 +1024,19 @@ standard errors and noise thresholds. This reduces overinterpretation of a
 small set of volatile outcomes; it is still a descriptive heuristic, not a
 significance test or causal explanation. The evaluator is read-only and does
 not automatically switch strategies.
+
+
+## Memória estratégica separada por contexto
+
+`MNNStrategyContextMemory` cria uma projeção somente de leitura sobre campanhas
+explicitamente agrupadas por contexto. Cada grupo é avaliado separadamente pelo
+`MNNStrategyExperimentEvaluator`; o contexto armazenado nas campanhas precisa
+corresponder ao contexto solicitado. Uma campanha não pode pertencer a dois
+grupos na mesma revisão.
+
+A sequência de campanhas fornecida pelo chamador também permite registrar
+transições observadas entre vantagem da ação candidata e vantagem da ação
+atual. Isso descreve uma mudança entre campanhas, não demonstra recuperação
+causal da estratégia nem mudança no ambiente. Campanhas inconclusivas não são
+convertidas em conclusões, e evidências brutas nunca são combinadas entre
+contextos. A camada não altera políticas ou executa ações.
