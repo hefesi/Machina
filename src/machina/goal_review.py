@@ -95,10 +95,14 @@ class GoalReviewer:
                 review.goal_id,
                 outcome,
                 evidence=review.evidence,
+                record_id=review.record_id,
+                expected_progress=review.prior_progress,
             )
         return self.store.update_progress(
             review.goal_id,
             review.observed_progress,
             evidence=review.evidence,
             priority=review.proposed_priority,
+            record_id=review.record_id,
+            expected_progress=review.prior_progress,
         )
