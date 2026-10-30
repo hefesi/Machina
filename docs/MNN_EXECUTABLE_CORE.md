@@ -1090,3 +1090,20 @@ inatividade como inutilidade e não é executado automaticamente em cada ciclo.
 A política e o histórico de evidências podem ser salvos e restaurados por
 snapshot. Essa etapa fornece um experimento controlado para estudar retenção
 e esquecimento sem destruir dados ou estruturas silenciosamente.
+
+
+## Plasticidade sináptica de curto prazo
+
+`MNNShortTermPlasticity` introduz dinâmica rápida por conexão, separada dos
+pesos duradouros. Cada aresta mantém utilização e recursos disponíveis:
+atividade pré-sináptica pode elevar temporariamente a utilização e consumir
+recursos; em ciclos posteriores, a utilização relaxa e os recursos se
+recuperam. O ganho resultante escala apenas a transmissão daquele passo.
+
+`MNN.step` aceita agora `connection_gains` opcionais. Sem esse argumento,
+o comportamento anterior permanece inalterado. O módulo de plasticidade
+mantém seu próprio snapshot, exige correspondência exata entre a topologia
+salva e a rede e falha explicitamente se conexões forem adicionadas ou
+removidas sem reconciliação. Os ganhos transitórios não sobrescrevem os pesos
+de longo prazo, que continuam sob controle dos mecanismos de aprendizagem
+existentes.
