@@ -745,3 +745,23 @@ chooses mappings, or executes actions. The numeric encoding is an experimental
 control convention, not a claim that the mapped field has a universal
 psychological meaning. Controlled experiments must compare mapped influence
 against a no-influence baseline.
+
+## Neural-state observation into the operational SelfModel (experimental)
+
+`MNNStateSelfObserver` provides the return path from an executed
+`OrganismStep` to the operational SelfModel. It records the exact timestep,
+neural unit activations, virtual chemical concentrations, prediction error,
+exploration/plasticity/attention controls, and motivational urgency as
+evidence-backed beliefs under the `internal.mnn.*` namespace.
+
+The caller must explicitly supply the cycle ID and evidence reference for the
+completed step. Telemetry is marked `observed` because it is a measurement of
+runtime state; it is not promoted into a capability estimate, emotion, desire,
+or semantic interpretation. Invalid or non-finite telemetry is rejected
+before the SelfModel is updated.
+
+Together with `SelfInfluenceAdapter`, this creates an inspectable two-way
+experimental path: recorded Self changes can be routed into explicitly mapped
+MNN inputs, and the resulting neural telemetry can be recorded back into the
+operational SelfModel. It is not an autonomous feedback loop: orchestration,
+mapping, timing, and evidence provenance remain explicit caller decisions.
