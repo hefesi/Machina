@@ -1224,3 +1224,25 @@ Esse circuito permite investigar se consequências autobiográficas podem
 informar a persistência de estruturas neurais, sem confundir correlação com
 causalidade, recomendação com aprovação ou consolidação de evidência com
 fortalecimento biológico. Não demonstra memória fenomenal nem consciência.
+
+
+## Revisão não destrutiva de memórias conflitantes
+
+`MNNMemoryConflictReviewer` recebe uma memória existente, uma nova afirmação
+e uma classificação de relação fornecida por um avaliador externo:
+`contradicts`, `supports`, `contextualizes`, `unrelated` ou `uncertain`.
+Ele retorna uma `MemoryConflictReview` imutável com o conteúdo anterior, o
+conteúdo recebido, a evidência e uma recomendação de tratamento.
+
+- Contradição: `needs_review`; comparar fonte, escopo e tempo antes de revisar.
+- Apoio: `corroborate_without_rewrite`; preservar a evidência adicional.
+- Contextualização: `preserve_both`; manter os registros e seus contextos.
+- Não relacionado: `no_conflict`.
+- Incerto: `defer`; não alterar a memória.
+
+O componente é somente de leitura. Não detecta contradições semanticamente:
+a relação é fornecida pelo avaliador, e o módulo não decide qual afirmação é
+verdadeira. Uma revisão posterior pode usar `MNNMemoryReconsolidationPipeline`
+com evidência explícita e compare-and-swap, preservando o conteúdo anterior
+no histórico de revisões. Isso evita sobrescritas silenciosas e mantém
+divergências disponíveis para reavaliação.
