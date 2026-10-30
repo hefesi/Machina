@@ -219,9 +219,11 @@ Feedback is restricted to fragment IDs present in the corresponding
 
 The operation delegates to FragmentMemory's context-specific feedback ledger.
 Positive and negative labels adjust a bounded relevance score for that context
-without changing the fragment's global importance or other task contexts.
-A stable `operation_id` makes retries idempotent, and the feedback history is
-auditable. Example:
+without changing the fragment's global importance or other task contexts. When
+the same context is supplied to a later `prepare_memory_guidance(...,
+context="route-planning")` call, its learned relevance scales the evidence
+signal (neutral score 0.5 leaves the lexical signal unchanged). A stable
+`operation_id` makes retries idempotent, and the feedback history is auditable. Example:
 
 ```python
 scores, applied = organism.evaluate_memory_guidance(
