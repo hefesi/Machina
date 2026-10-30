@@ -95,6 +95,21 @@ class MotivationSystem:
             key=lambda item: (-item[1], item[0]),
         )
 
+    def autonomy_adjustments(self, *, gain: float = 0.3) -> dict[str, float]:
+        """Translate drive urgency into bounded per-drive goal-selection feedback.
+
+        Centering at 0.5 makes neutral urgency produce no adjustment. The
+        default gain maps [0, 1] to [-0.15, +0.15], matching AutonomyController's
+        feedback clamp. This changes ranking only; it does not create goals.
+        """
+        gain = _bounded("gain", gain)
+        if gain > 0.3:
+            raise ValueError("gain must not exceed 0.3")
+        return {
+            name: (drive.urgency - 0.5) * gain
+            for name, drive in self.drives.items()
+        }
+
     def snapshot(self) -> dict[str, object]:
         return {
             "schema_version": self.SNAPSHOT_SCHEMA,
