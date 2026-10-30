@@ -8,6 +8,7 @@ from pathlib import Path
 from machina.fragment_memory import FragmentMemory
 from machina.mnn_concept_review import MNNConceptReviewer
 from machina.mnn_concepts import MNNConceptBuilder
+from machina.mnn_concept_relations import MNNConceptRelationStore
 
 
 class MNNConceptReviewerTests(unittest.TestCase):
@@ -59,6 +60,25 @@ class MNNConceptReviewerTests(unittest.TestCase):
         self.reviewer.refresh()
         reviews = self.reviewer.review()
         self.assertTrue(any(item.state == "conflicted" for item in reviews))
+
+
+    def test_explicit_contradiction_relation_marks_concept_conflicted(self) -> None:
+        self.add("a")
+        self.add("b")
+        concept_a = self.builder.consolidate()[0]
+        concept_b = self.memory.add(
+            "Competing hypothesis", kind="concept", source_uri="test://concept-b",
+            metadata={"concept_key": "other", "evidence_ids": ["a", "b"]},
+            fragment_id="concept-b",
+        )
+        relation = MNNConceptRelationStore(self.memory).add(
+            concept_a.id, concept_b.id, "contradicts", evidence_ids=("a",),
+        )
+        review = next(item for item in self.reviewer.review() if item.concept.id == concept_a.id)
+        self.assertEqual("conflicted", review.state)
+        self.assertEqual((relation.relation_id,), review.explicit_relation_ids)
+        self.assertEqual((concept_b.id,), review.related_concept_ids)
+        self.assertEqual(("a",), review.relation_evidence_ids)
 
     def test_review_log_is_idempotent_for_same_review_state(self) -> None:
         self.add("a")
