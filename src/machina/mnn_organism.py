@@ -207,7 +207,14 @@ class MNNOrganism:
             searchable = " ".join((fragment.content, fragment.kind, " ".join(fragment.tags), str(dict(fragment.metadata))))
             overlap = len(query_tokens & tokens(searchable)) / len(query_tokens)
             if overlap >= float(min_overlap):
-                scores[fragment.id] = min(1.0, max(0.0, overlap * fragment.confidence))
+                contextual_weight = (
+                    2.0 * self.memory.context_importance(fragment.id, context)
+                    if context is not None else 1.0
+                )
+                scores[fragment.id] = min(
+                    1.0,
+                    max(0.0, overlap * fragment.confidence * contextual_weight),
+                )
         signal = sum(scores.values()) / len(scores) if scores else 0.0
         return MemoryGuidance(
             query=query,
