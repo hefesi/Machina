@@ -12,6 +12,7 @@ from .chemical_signaling import ChemicalEvent, ChemicalParameters, ChemicalSigna
 from .event_store import EventStore, IntegrityError
 from .fragment_memory import FragmentMemory, MemoryFragment
 from .goal_store import PersistentGoalStore
+from .goal_review import GoalReview, GoalReviewer
 from .deliberation import DeliberationDecision, InternalDeliberator
 from .mnn import Connection, MNN, Unit
 from .mnn_motivation import MotivationalDrive, MotivationSystem
@@ -47,6 +48,8 @@ __all__ = [
     "AutonomyExperienceStore",
     "GoalCandidate",
     "PersistentGoalStore",
+    "GoalReview",
+    "GoalReviewer",
     "DeliberationDecision",
     "InternalDeliberator",
     "HierarchicalPlanner",
