@@ -314,3 +314,38 @@ its dynamics can be tested before coupling it to neural activity, chemical
 signaling, persistent goals, and action selection. The next integration
 experiment should test whether changing drive deficits causes measurable,
 adaptive differences in goal selection without destabilizing the system.
+
+
+### Motivation-to-goal selection coupling
+
+`MotivationSystem.autonomy_adjustments()` exposes the current urgency of each
+drive as bounded feedback keyed by drive name. Pass this mapping to
+`AutonomyController.choose(..., drive_adjustments=...)` or
+`AutonomyController.step(..., drive_adjustments=...)`. With the default gain,
+urgency 0.5 is neutral and the extremes map to -0.15/+0.15, matching the
+controller's existing feedback clamp.
+
+```python
+from machina import (
+    AutonomyContext, AutonomyController,
+    MotivationalDrive, MotivationSystem,
+)
+
+motivation = MotivationSystem([
+    MotivationalDrive("curiosity", level=0.9, priority=1.0),
+    MotivationalDrive("stability", level=0.3, priority=1.0),
+])
+controller = AutonomyController()
+decision = controller.step(
+    AutonomyContext(unresolved_questions=2),
+    drive_adjustments=motivation.autonomy_adjustments(),
+)
+```
+
+This coupling biases the ranking of goals that already exist in the autonomy
+controller; it does not create a new goal for every drive. Goal generation
+remains bounded by the controller's explicit candidate rules and safety
+filters. The motivational state is still a separate persistence domain and
+must be snapshotted/restored by its owner. Tests verify that changing drive
+urgency changes goal ranking while retaining the controller's risk and
+external-action restrictions.
