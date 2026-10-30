@@ -104,15 +104,24 @@ class MNNAutobiographicalStrategyAdvisor:
 
         summaries: dict[str, dict[str, Any]] = {}
         for action, records in samples.items():
-            values = [record[0] for record in records]
-            cycles = sorted({record[1] for record in records})
-            mean = sum(values) / len(values) if values else None
+            values_by_cycle: dict[str, list[float]] = defaultdict(list)
+            for reward, cycle_id, _event_id, _sequence in records:
+                values_by_cycle[cycle_id].append(reward)
+            cycles = sorted(values_by_cycle)
+            # Give each cognitive cycle equal weight. Multiple outcomes within
+            # one cycle are summarized before estimating across-cycle variance.
+            cycle_means = [
+                sum(values_by_cycle[cycle_id]) / len(values_by_cycle[cycle_id])
+                for cycle_id in cycles
+            ]
+            mean = sum(cycle_means) / len(cycle_means) if cycle_means else None
             variance = (
-                sum((value - mean) ** 2 for value in values) / (len(values) - 1)
-                if len(values) >= 2 else None
+                sum((value - mean) ** 2 for value in cycle_means) / (len(cycle_means) - 1)
+                if len(cycle_means) >= 2 else None
             )
             summaries[action] = {
-                "sample_count": len(values),
+                "sample_count": len(cycle_means),
+                "outcome_count": len(records),
                 "distinct_cycle_count": len(cycles),
                 "mean_observed_reward": mean,
                 "sample_variance": variance,
