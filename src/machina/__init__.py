@@ -25,6 +25,7 @@ from .self_model import SelfModel
 from .self_model_learning import SelfModelLearningBridge
 from .self_autobiography import SelfAutobiography
 from .self_transformation import SelfTransformationTracker
+from .self_experience_integration import SelfExperienceIntegrator
 from .mnn_reward import RewardModulator
 from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
@@ -92,6 +93,7 @@ __all__ = [
     "SelfModelLearningBridge",
     "SelfAutobiography",
     "SelfTransformationTracker",
+    "SelfExperienceIntegrator",
     "RewardModulator",
     "Unit",
     "VirtualBrain",
