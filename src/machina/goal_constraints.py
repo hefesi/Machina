@@ -181,8 +181,13 @@ def _schedule(
     # Enumerate feasible subsets. Stable lexical tie-break makes the result reproducible.
     for size in range(1, len(ids) + 1):
         for subset in combinations(sorted(ids), size):
+            subset_costs = {
+                goal_id: resources
+                for goal_id, resources in (resource_costs or {}).items()
+                if goal_id in subset
+            }
             assessment = resolver.assess(
-                subset, resource_costs=resource_costs, resource_limits=resource_limits
+                subset, resource_costs=subset_costs, resource_limits=resource_limits
             )
             if not assessment.compatible:
                 continue
