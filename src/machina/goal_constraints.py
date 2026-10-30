@@ -186,6 +186,15 @@ def _schedule(
                 for goal_id, resources in (resource_costs or {}).items()
                 if goal_id in subset
             }
+            selected_subset = set(subset)
+            explicit_conflict = any(
+                item["relation"] == "conflicts"
+                and item["source_goal_id"] in selected_subset
+                and item["target_goal_id"] in selected_subset
+                for item in relations
+            )
+            if explicit_conflict:
+                continue
             assessment = resolver.assess(
                 subset, resource_costs=subset_costs, resource_limits=resource_limits
             )
