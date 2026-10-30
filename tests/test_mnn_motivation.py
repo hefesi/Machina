@@ -2,6 +2,7 @@ import unittest
 
 from machina.mnn_motivation import (
     MotivationalConflict,
+    MotivationalCooperation,
     MotivationalDrive,
     MotivationSystem,
 )
@@ -137,6 +138,69 @@ class MotivationSystemTests(unittest.TestCase):
             "drives": [MotivationalDrive("legacy", level=0.4).snapshot()],
         }
         self.assertEqual(0.4, MotivationSystem.from_snapshot(legacy).effective_urgencies()["legacy"])
+
+
+    def test_cooperation_boosts_partner_urgency_without_changing_raw_drive(self):
+        system = MotivationSystem(
+            [
+                MotivationalDrive("curiosity", level=0.8),
+                MotivationalDrive("creation", level=0.4),
+                MotivationalDrive("rest", level=0.2),
+            ],
+            cooperations=[MotivationalCooperation("curiosity", "creation", 0.8)],
+            cooperation_gain=0.25,
+        )
+        effective = system.effective_urgencies()
+        self.assertAlmostEqual(0.88, effective["curiosity"])
+        self.assertAlmostEqual(0.56, effective["creation"])
+        self.assertAlmostEqual(0.2, effective["rest"])
+        self.assertAlmostEqual(0.8, system.drives["curiosity"].urgency)
+
+    def test_cooperation_is_symmetric_and_registration_order_independent(self):
+        a = MotivationSystem(
+            [MotivationalDrive("a", level=0.8), MotivationalDrive("b", level=0.4)],
+            cooperations=[MotivationalCooperation("a", "b", 0.6)],
+        )
+        b = MotivationSystem(
+            [MotivationalDrive("b", level=0.4), MotivationalDrive("a", level=0.8)],
+            cooperations=[MotivationalCooperation("b", "a", 0.6)],
+        )
+        self.assertEqual(a.effective_urgencies(), b.effective_urgencies())
+        self.assertGreater(a.effective_urgencies()["a"], a.drives["a"].urgency)
+        self.assertGreater(a.effective_urgencies()["b"], a.drives["b"].urgency)
+
+    def test_conflict_and_cooperation_on_same_pair_are_rejected(self):
+        system = MotivationSystem(
+            [MotivationalDrive("a"), MotivationalDrive("b")],
+            [MotivationalConflict("a", "b")],
+        )
+        with self.assertRaises(ValueError):
+            system.add_cooperation(MotivationalCooperation("a", "b"))
+
+    def test_cooperation_validates_and_persists_with_schema_three(self):
+        with self.assertRaises(ValueError):
+            MotivationalCooperation("a", "a")
+        system = MotivationSystem(
+            [MotivationalDrive("a", level=0.8), MotivationalDrive("b", level=0.6)],
+            cooperations=[MotivationalCooperation("a", "b", 0.7)],
+            cooperation_gain=0.2,
+        )
+        restored = MotivationSystem.from_snapshot(system.snapshot())
+        self.assertEqual(3, system.snapshot()["schema_version"])
+        self.assertEqual(system.snapshot(), restored.snapshot())
+        self.assertEqual(system.step(), restored.step())
+
+    def test_schema_two_snapshot_remains_compatible(self):
+        legacy = {
+            "schema_version": 2,
+            "timestep": 1,
+            "drives": [MotivationalDrive("legacy", level=0.4).snapshot()],
+            "conflicts": [],
+            "conflict_gain": 0.5,
+        }
+        restored = MotivationSystem.from_snapshot(legacy)
+        self.assertEqual(0.4, restored.effective_urgencies()["legacy"])
+        self.assertEqual([], restored.snapshot()["cooperations"])
 
 
 if __name__ == "__main__":
