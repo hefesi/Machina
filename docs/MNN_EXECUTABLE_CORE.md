@@ -1040,3 +1040,18 @@ atual. Isso descreve uma mudança entre campanhas, não demonstra recuperação
 causal da estratégia nem mudança no ambiente. Campanhas inconclusivas não são
 convertidas em conclusões, e evidências brutas nunca são combinadas entre
 contextos. A camada não altera políticas ou executa ações.
+
+
+## Proposta contextual de ação
+
+`MNNStrategyDecisionAdvisor` conecta a memória contextual à etapa de decisão.
+Recebe um contexto e uma sequência explícita de campanhas, solicita a revisão
+independente dessas campanhas e só propõe uma ação quando há vantagem
+consistente da ação candidata ou da ação atual segundo os limites configurados.
+
+A proposta inclui campanhas, contagem de campanhas conclusivas, concordância e
+identificadores das evidências. Em resultados mistos, contextos incompatíveis
+ou evidência insuficiente, o componente se abstém. A proposta é consultiva:
+`executed` permanece falso, nenhuma política é alterada e a execução depende
+de um componente externo autorizado. A concordância observacional não prova
+causalidade nem significância estatística.
