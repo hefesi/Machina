@@ -6,6 +6,7 @@ error is descriptive (observed minus expected reward), not a causal estimate.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from typing import Mapping
 from uuid import uuid4
 
@@ -36,6 +37,23 @@ class MNNStrategyOutcomeJournal:
             raise ValueError(f"{name} must be a non-empty string")
         return value.strip()
 
+    @staticmethod
+    def _evidence_ids(proposal: Mapping[str, object]) -> list[str]:
+        raw = proposal.get("evidence_ids", ())
+        if isinstance(raw, (str, bytes)) or not isinstance(raw, Sequence):
+            raise ValueError("evidence_ids must be a sequence of non-empty strings")
+        evidence_ids: list[str] = []
+        seen: set[str] = set()
+        for value in raw:
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError("evidence_ids must contain only non-empty strings")
+            identifier = value.strip()
+            if identifier in seen:
+                raise ValueError("evidence_ids must not contain duplicates")
+            seen.add(identifier)
+            evidence_ids.append(identifier)
+        return evidence_ids
+
     def record_proposal(
         self,
         proposal: Mapping[str, object],
@@ -47,16 +65,19 @@ class MNNStrategyOutcomeJournal:
         if not isinstance(proposal, Mapping):
             raise ValueError("proposal must be a mapping")
         status = proposal.get("status")
-        if status not in {"proposed", "abstain"}:
+        if not isinstance(status, str) or status not in {"proposed", "abstain"}:
             raise ValueError("proposal status must be 'proposed' or 'abstain'")
         context = proposal.get("context")
         if not isinstance(context, str) or not context.strip():
             raise ValueError("proposal context must be non-empty")
         action = proposal.get("action")
-        if status == "proposed" and (not isinstance(action, str) or not action.strip()):
-            raise ValueError("actionable proposal must include an action")
-        if status == "abstain" and action is not None:
+        if status == "proposed":
+            if not isinstance(action, str) or not action.strip():
+                raise ValueError("actionable proposal must include an action")
+            action = action.strip()
+        elif action is not None:
             raise ValueError("abstention must not include an action")
+        evidence_ids = self._evidence_ids(proposal)
         expected = self._score("expected_reward", expected_reward)
         identifier = self._identifier("proposal", proposal_id)
         fragment_id = f"mnn-strategy-proposal-{identifier}"
@@ -67,7 +88,7 @@ class MNNStrategyOutcomeJournal:
             "action": action,
             "context": " ".join(context.casefold().split()),
             "expected_reward": expected,
-            "evidence_ids": list(proposal.get("evidence_ids", ())),
+            "evidence_ids": evidence_ids,
             "executed": False,
         }
         try:
