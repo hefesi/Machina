@@ -47,6 +47,7 @@ from .mnn_concept_advisor import ConceptRecommendation, MNNConceptAdvisor
 from .mnn_concepts import ConceptHypothesis, MNNConceptBuilder
 from .mnn_contextual_outcome_policy import MNNContextualOutcomePolicy
 from .mnn_experience import MNNExperienceCycle
+from .mnn_autobiographical_learning import AutobiographicalLearningSignal, MNNAutobiographicalLearningAdvisor
 from .mnn_memory_consolidation import ConsolidatedMemory, MNNMemoryConsolidator
 from .mnn_reward_drift import MNNRewardDriftDetector
 from .mnn_strategy_review import MNNStrategyReviewer
@@ -159,4 +160,6 @@ __all__ = [
     "MNNSynapticConsolidator",
     "MNNShortTermPlasticity",
     "MNNExperienceCycle",
+    "AutobiographicalLearningSignal",
+    "MNNAutobiographicalLearningAdvisor",
 ]
