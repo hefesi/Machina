@@ -23,6 +23,7 @@ from .fragment_memory import FragmentMemory
 from .autonomy import AutonomyContext
 from .deliberation import InternalDeliberator
 from .mnn_memory_retrieval_feedback import MNNMemoryRetrievalFeedback
+from .homeostasis import HomeostaticProposal
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +183,7 @@ class VirtualBrain:
         *,
         motivation: Any | None = None,
         drive_adjustments: dict[str, float] | None = None,
+        homeostatic_proposal: HomeostaticProposal | None = None,
         recent_goal_ids: Sequence[str] = (),
         **cycle_kwargs: Any,
     ) -> CycleResult:
@@ -194,10 +196,29 @@ class VirtualBrain:
         """
         if self.internal_deliberator is None:
             raise RuntimeError("run_deliberated_cycle requires internal_deliberator")
+        combined_adjustments = dict(drive_adjustments or {})
+        homeostasis_trace = None
+        if homeostatic_proposal is not None:
+            if not isinstance(homeostatic_proposal, HomeostaticProposal):
+                raise TypeError("homeostatic_proposal must be a HomeostaticProposal")
+            for drive, adjustment in homeostatic_proposal.adjustments.items():
+                if not isinstance(drive, str) or not drive.strip():
+                    raise ValueError("homeostatic drive names must be non-empty strings")
+                if isinstance(adjustment, bool) or not isinstance(adjustment, (int, float)) or not (-0.3 <= adjustment <= 0.3):
+                    raise ValueError("homeostatic adjustments must be within [-0.3, 0.3]")
+                combined_adjustments[drive] = max(-0.3, min(0.3, combined_adjustments.get(drive, 0.0) + adjustment))
+            homeostasis_trace = {
+                "cycle_id": homeostatic_proposal.cycle_id,
+                "adjustments": dict(homeostatic_proposal.adjustments),
+                "deviations": dict(homeostatic_proposal.deviations),
+                "persistence": dict(homeostatic_proposal.persistence),
+                "evidence_refs": list(homeostatic_proposal.evidence_refs),
+                "rationale": list(homeostatic_proposal.rationale),
+            }
         deliberation = self.internal_deliberator.deliberate(
             context,
             motivation=motivation,
-            drive_adjustments=drive_adjustments,
+            drive_adjustments=combined_adjustments,
             recent_goal_ids=recent_goal_ids,
         )
         selected = deliberation.selected_goal
@@ -230,6 +251,7 @@ class VirtualBrain:
                 "persistent_goal_record_id": deliberation.persistent_record_id,
                 "selected_source": deliberation.selected_source,
                 "deliberation": deliberation.to_dict(),
+                "homeostatic_regulation": homeostasis_trace,
             },
             input_refs=[active_goal.id],
             source_refs=active_goal.source_refs,
