@@ -23,6 +23,7 @@ from .mnn_organism import (DecisionAssessment, DecisionOption, MNNOrganism, Memo
 from .mnn_adapter import MNNCognitionAdapter
 from .self_model import SelfModel
 from .self_model_learning import SelfModelLearningBridge
+from .self_autobiography import SelfAutobiography
 from .mnn_reward import RewardModulator
 from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
@@ -88,6 +89,7 @@ __all__ = [
     "MNNCognitionAdapter",
     "SelfModel",
     "SelfModelLearningBridge",
+    "SelfAutobiography",
     "RewardModulator",
     "Unit",
     "VirtualBrain",
