@@ -30,6 +30,27 @@ class MemoryGuidance:
 
 
 @dataclass(frozen=True)
+class DecisionOption:
+    """One candidate action with externally estimated base utility and memory query."""
+
+    action: str
+    base_utility: float
+    memory_query: str
+
+
+@dataclass(frozen=True)
+class DecisionAssessment:
+    """Transparent comparison of candidate actions; not a claim of free will."""
+
+    selected_action: str
+    scores: Mapping[str, float]
+    base_utilities: Mapping[str, float]
+    memory_signals: Mapping[str, float]
+    evidence_ids: Mapping[str, tuple[str, ...]]
+    selected_guidance: MemoryGuidance
+
+
+@dataclass(frozen=True)
 class OrganismStep:
     timestep: int
     neural_state: Mapping[str, float]
@@ -222,6 +243,64 @@ class MNNOrganism:
             signal=min(1.0, max(0.0, signal)),
             evidence_ids=tuple(scores),
             evidence_scores=dict(scores),
+        )
+
+    def assess_decisions(
+        self,
+        options: list[DecisionOption] | tuple[DecisionOption, ...],
+        *,
+        target_unit: str,
+        context: str,
+        memory_weight: float = 0.25,
+        limit: int = 5,
+    ) -> DecisionAssessment:
+        """Rank explicit alternatives using base utility plus recalled evidence.
+
+        The caller supplies candidate actions and their base utilities. Memory
+        contributes a bounded, inspectable bonus; it does not invent options,
+        estimate their base utility, or execute the selected action. Ties are
+        resolved lexicographically for reproducibility.
+        """
+        if not isinstance(options, (list, tuple)) or not options:
+            raise ValueError("options must be a non-empty list or tuple")
+        if isinstance(memory_weight, bool) or not isinstance(memory_weight, (int, float)) or not math.isfinite(memory_weight) or memory_weight < 0:
+            raise ValueError("memory_weight must be a finite non-negative number")
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("context must be a non-empty string")
+        actions: set[str] = set()
+        scores: dict[str, float] = {}
+        utilities: dict[str, float] = {}
+        signals: dict[str, float] = {}
+        evidence: dict[str, tuple[str, ...]] = {}
+        guidances: dict[str, MemoryGuidance] = {}
+        for option in options:
+            if not isinstance(option, DecisionOption):
+                raise ValueError("every option must be a DecisionOption")
+            if not isinstance(option.action, str) or not option.action.strip() or option.action in actions:
+                raise ValueError("action names must be unique non-empty strings")
+            if isinstance(option.base_utility, bool) or not isinstance(option.base_utility, (int, float)) or not math.isfinite(option.base_utility):
+                raise ValueError("base_utility must be finite")
+            actions.add(option.action)
+            guidance = self.prepare_memory_guidance(
+                option.memory_query,
+                target_unit=target_unit,
+                limit=limit,
+                context=context,
+            )
+            utility = float(option.base_utility)
+            utilities[option.action] = utility
+            signals[option.action] = guidance.signal
+            evidence[option.action] = guidance.evidence_ids
+            scores[option.action] = utility + float(memory_weight) * guidance.signal
+            guidances[option.action] = guidance
+        selected = min(scores, key=lambda action: (-scores[action], action))
+        return DecisionAssessment(
+            selected_action=selected,
+            scores=dict(scores),
+            base_utilities=dict(utilities),
+            memory_signals=dict(signals),
+            evidence_ids=dict(evidence),
+            selected_guidance=guidances[selected],
         )
 
     def evaluate_memory_guidance(
