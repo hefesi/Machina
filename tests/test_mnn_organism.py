@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from machina.chemical_signaling import ChemicalEvent
+from machina.chemical_signaling import ChemicalEvent, ChemicalSignaling, ChemicalState
 from machina.mnn import Connection, MNN, Unit
 from machina.mnn_motivation import MotivationSystem, MotivationalDrive
 from machina.mnn_organism import DecisionOption, MNNOrganism
@@ -96,9 +96,7 @@ class MNNOrganismTests(unittest.TestCase):
             MNNOrganism(
                 "clock-mismatch",
                 network=network,
-                signaling=__import__("machina.chemical_signaling", fromlist=["ChemicalSignaling"]).ChemicalSignaling(
-                    state=__import__("machina.chemical_signaling", fromlist=["ChemicalState"]).ChemicalState(timestep=1)
-                ),
+                signaling=ChemicalSignaling(state=ChemicalState(timestep=1)),
                 motivation=MotivationSystem([MotivationalDrive("curiosity")]),
             )
 
