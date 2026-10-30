@@ -63,6 +63,32 @@ class MNNAutobiographicalStrategyAdvisorTests(unittest.TestCase):
         self.assertFalse(result["policy_changed"])
         self.assertEqual(6, len(result["evidence_event_ids"]))
 
+    def test_multiple_outcomes_in_one_cycle_do_not_overweight_that_cycle(self):
+        artifact = Artifact.create(
+            ContractKind.STRATEGY_OUTCOME,
+            cycle_id="cycle-3",
+            producer="test",
+            data={
+                "proposal_id": "proposal-extra",
+                "operation_id": "operation-extra",
+                "action": "candidate",
+                "context": "motor maintenance",
+                "expected_reward": 0.5,
+                "observed_reward": 1.0,
+                "prediction_error": 0.5,
+                "execution_confirmed": True,
+                "evidence_ids": [],
+            },
+            epistemic_status=EpistemicStatus.OBSERVED,
+        )
+        self.store.append("strategy.outcome.recorded", artifact)
+        self.projector.project()
+        result = self.advisor.review("motor maintenance", current_action="baseline")
+        candidate = result["action_summaries"]["candidate"]
+        self.assertEqual(3, candidate["sample_count"])
+        self.assertEqual(4, candidate["outcome_count"])
+        self.assertAlmostEqual((0.9 + 0.85 + 0.75) / 3, candidate["mean_observed_reward"])
+
     def test_context_mismatch_does_not_leak_other_context_outcomes(self):
         result = self.advisor.review("battery calibration", current_action="baseline")
         self.assertEqual("inconclusive", result["status"])
