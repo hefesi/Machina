@@ -45,7 +45,7 @@ class SelfTransformationTrackerTests(unittest.TestCase):
         self.assertIn("capability_estimates", result["changes"])
         event = self.store.all_events()[0]
         self.assertEqual("self.transformed", event.event_type)
-        self.assertEqual("MODEL_UPDATE", event.artifact.kind)
+        self.assertEqual("model_update", event.artifact.kind)
         self.assertEqual(["runtime-check-2", "evaluation-8"], event.artifact.data["evidence_refs"])
 
     def test_identical_snapshots_do_not_create_events(self):
