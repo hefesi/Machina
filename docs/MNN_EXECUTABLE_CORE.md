@@ -606,3 +606,29 @@ print(revision.to_dict())
 ```
 
 This adds an auditable comparison between successive plans. It is not yet a closed autonomous adaptation loop: environment observation, utility estimation, resource measurement, and the decision to accept a revised plan remain explicit caller responsibilities.
+
+## Empirical prediction and learning from goal outcomes (experimental)
+
+`GoalOutcomeLearner` maintains a durable history of evaluator-supplied outcomes for each goal type. Before each observation, it records the predicted outcome; after the observation, it records prediction error and squared error. Its estimate is a transparent Beta-Bernoulli posterior mean with configurable positive prior parameters, supporting graded outcomes in [0, 1].
+
+`utility_estimates(goal_types)` exposes posterior means as a mapping accepted by `GoalConflictResolver.schedule(..., utilities=...)`. Prior results can therefore influence which goals are prioritized while explicit dependencies, conflicts, and resource limits remain enforced. Unobserved goal types begin at the neutral prior mean; `predict()` also returns uncertainty and observation count.
+
+Example:
+
+```python
+from machina import GoalOutcomeLearner, GoalConflictResolver
+
+learner = GoalOutcomeLearner("machina-outcomes.sqlite3")
+utilities = learner.utility_estimates(candidate_goal_ids)
+proposal = GoalConflictResolver(goal_store).schedule(
+    candidate_goal_ids, utilities=utilities, resource_limits=resource_limits
+)
+# After an evaluator measures the result:
+feedback = learner.observe(
+    "research", 0.8,
+    evidence="Evaluator confirmed four of five acceptance checks.",
+    observation_id="cycle-204-result",
+)
+```
+
+The learner does not evaluate its own success, inspect the environment, or infer reward from a completed cycle. An external evaluator must provide the outcome and evidence. Prediction error is inspectable and changes future estimates, but this alone is not evidence of understanding, subjective experience, or free will.
