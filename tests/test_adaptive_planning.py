@@ -20,6 +20,9 @@ class AdaptivePlanningTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_plan_change_is_explained_and_persisted(self):
+        self.store.add_goal_relation(
+            "research", "deploy", "conflicts", evidence="Exclusive release resource."
+        )
         first = self.resolver.schedule(
             ["research", "deploy"], utilities={"research": .9, "deploy": .3}
         )
@@ -41,6 +44,9 @@ class AdaptivePlanningTests(unittest.TestCase):
         self.assertEqual({"environment_version": 2}, history[0]["context"])
 
     def test_deferred_goal_can_be_recognized_as_restored(self):
+        self.store.add_goal_relation(
+            "a", "b", "conflicts", evidence="Competing resource."
+        )
         first = self.resolver.schedule(
             ["a", "b"], utilities={"a": .9, "b": .1}
         )
