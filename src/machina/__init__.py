@@ -69,6 +69,7 @@ from .mnn_autobiographical_recall import MNNAutobiographicalEpisode, MNNAutobiog
 from .mnn_autobiographical_strategy_advisor import MNNAutobiographicalStrategyAdvisor
 from .mnn_synaptic_consolidation import MNNSynapticConsolidator
 from .mnn_short_term_plasticity import MNNShortTermPlasticity
+from .mnn_plasticity_control import MNNPlasticityController, MNNPlasticityProposal
 
 __all__ = [
     "Artifact",
@@ -186,6 +187,8 @@ __all__ = [
     "StrategyLearningResult",
     "MNNSynapticConsolidator",
     "MNNShortTermPlasticity",
+    "MNNPlasticityController",
+    "MNNPlasticityProposal",
     "MNNExperienceCycle",
     "AutobiographicalLearningSignal",
     "MNNAutobiographicalLearningAdvisor",
