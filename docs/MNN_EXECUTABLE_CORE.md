@@ -454,3 +454,12 @@ Cada drive possui agora um parâmetro `persistence` e um estado `pressure`. Apó
 Com persistência zero, a pressão acompanha imediatamente a urgência efetiva. Valores maiores tornam a mudança mais lenta: a pressão demora mais para crescer e também para desaparecer depois de uma redução do déficit. Isso permite investigar continuidade temporal, acúmulo e dissipação sem confundir o estado instantâneo do drive com seu histórico recente.
 
 A API mantém separados `effective_urgencies()` (arbitragem instantânea) e `temporal_urgencies()` (pressão integrada), com ranking temporal próprio em `ranked_temporal_drives()`. A pressão temporal é persistida no snapshot schema 4; schemas 1, 2 e 3 continuam aceitos. O mecanismo é um integrador matemático limitado, não uma emoção, sensação ou prova de experiência subjetiva. A etapa seguinte de validação deve medir como diferentes constantes temporais afetam estabilidade e seleção de objetivos em tarefas prolongadas.
+
+
+### Formação de objetivos a partir de pressão motivacional persistente
+
+A camada de autonomia agora pode receber uma instância compatível com `MotivationSystem` em `AutonomyController.step(..., motivation=...)`. Além dos objetivos derivados do contexto (memórias, questões abertas, falhas e reflexão), o controlador gera candidatos internos `sustain_drive:<nome>` quando a pressão temporal do drive atinge o limiar configurado (0,25 por padrão).
+
+A urgência do candidato vem de `temporal_urgencies()`, e o feedback de seleção usa `temporal_autonomy_adjustments()`. Assim, uma pressão que persiste por vários ciclos pode continuar influenciando a agenda interna mesmo quando a urgência instantânea já mudou. O objetivo é candidato interno e explicável: a camada não executa ações externas nem declara que o drive foi satisfeito. O chamador ainda precisa registrar resultados observados e fornecer feedback explícito.
+
+O gerador aceita o contrato estrutural de pressão temporal, sem importar a implementação concreta da MNN. Isso mantém a autonomia desacoplada da arquitetura neural. Testes cobrem geração acima do limiar, ausência abaixo dele e integração na seleção de objetivos. Trata-se de geração operacional de objetivos a partir de variáveis persistentes, não de prova de vontade própria ou experiência subjetiva.
