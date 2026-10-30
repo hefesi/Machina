@@ -583,3 +583,26 @@ This is a first constraint-evaluation layer, not yet a global scheduler. A later
 The result separates selected and deferred goals, reports aggregate utility, and embeds the constraint assessment. Deferred goals remain unchanged in persistent storage; scheduling does not reserve resources, pause goals, or execute work. Utility and resource costs remain estimates supplied by the caller, so the output is a reproducible proposal rather than an objective measure of value.
 
 The current search is exhaustive and intentionally capped at 16 candidates to keep runtime predictable. Larger goal sets require a later bounded/approximate optimizer and a resource reservation protocol.
+## Adaptive plan revision and trajectory continuity (experimental)
+
+`AdaptivePlanReviewer` compares a newly generated `GoalSchedule` with the previously selected goal IDs. It classifies retained goals, newly selected goals, newly deferred goals, and goals restored after appearing in the prior revision's deferred set. It creates a concise rationale from the schedule's explanation and the observed changes.
+
+Every comparison is appended to `plan_revision_history` in `PersistentGoalStore`, including the trigger and caller-supplied context. `recent_plan_revisions()` retrieves this history after process restart. The reviewer does not modify goal lifecycle, infer success, reserve resources, or execute work. A trigger and context are evidence supplied by the caller; they are not automatically detected environmental facts.
+
+Example:
+
+```python
+from machina import AdaptivePlanReviewer, GoalConflictResolver
+
+resolver = GoalConflictResolver(goal_store)
+reviewer = AdaptivePlanReviewer(goal_store)
+proposal = resolver.schedule(candidate_ids, utilities=utilities, resource_limits=budgets)
+revision = reviewer.review(
+    previous_goal_ids, proposal,
+    trigger="new evidence changed resource availability",
+    context={"environment_revision": 3},
+)
+print(revision.to_dict())
+```
+
+This adds an auditable comparison between successive plans. It is not yet a closed autonomous adaptation loop: environment observation, utility estimation, resource measurement, and the decision to accept a revised plan remain explicit caller responsibilities.
