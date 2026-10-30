@@ -62,6 +62,19 @@ class MNNKnowledgeLifecycleTests(unittest.TestCase):
         result = self.lifecycle.run()
         self.assertGreaterEqual(result.conflicted_count, 1)
 
+    def test_materialized_knowledge_survives_reopen(self) -> None:
+        self.add("a")
+        self.add("b")
+        expected = self.lifecycle.run().materialized_concepts[0].id
+        self.memory.close()
+        reopened = FragmentMemory(Path(self.temp_dir.name) / "lifecycle.sqlite3")
+        try:
+            restored = MNNKnowledgeLifecycle(reopened).run(refresh=False, persist_audit=False)
+            self.assertIn(expected, [item.concept.id for item in restored.reviews_after_refresh])
+            self.assertTrue(any(item.state == "current" for item in restored.reviews_after_refresh))
+        finally:
+            reopened.close()
+
     def test_invalid_flags_are_rejected(self) -> None:
         with self.assertRaises(ValueError):
             self.lifecycle.run(refresh=1)
