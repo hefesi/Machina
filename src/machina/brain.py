@@ -20,6 +20,8 @@ from .components import (
 from .contracts import Artifact, ContractKind, EpistemicStatus, new_id, now_utc
 from .event_store import CycleNotFoundError, EventStore, StoredEvent
 from .fragment_memory import FragmentMemory
+from .autonomy import AutonomyContext
+from .deliberation import InternalDeliberator
 from .mnn_memory_retrieval_feedback import MNNMemoryRetrievalFeedback
 
 
@@ -66,12 +68,14 @@ class VirtualBrain:
         action_executor: ActionExecutor | None = None,
         learning: LearningEngine | None = None,
         fragment_memory_path: str | Path | None = None,
+        internal_deliberator: InternalDeliberator | None = None,
     ) -> None:
         self.store = EventStore(storage_path)
         self.cognition = cognition or DeterministicCognition()
         self.agency = agency or FirstCandidateAgency()
         self.action_executor = action_executor or AcknowledgeExecutor()
         self.learning = learning or OutcomeLearner()
+        self.internal_deliberator = internal_deliberator
         self.memory = MemoryRepository(self.store)
         self.fragment_memory = (
             FragmentMemory(fragment_memory_path)
@@ -169,6 +173,73 @@ class VirtualBrain:
         result = self.advance(cycle_id)
         if result is None:  # defensive: no stop checkpoint was requested
             raise RuntimeError("cycle did not reach a terminal state")
+        return result
+
+    def run_deliberated_cycle(
+        self,
+        observation: Any,
+        context: AutonomyContext,
+        *,
+        motivation: Any | None = None,
+        drive_adjustments: dict[str, float] | None = None,
+        recent_goal_ids: Sequence[str] = (),
+        **cycle_kwargs: Any,
+    ) -> CycleResult:
+        """Select an internal goal, journal its rationale, then run one brain cycle.
+
+        The deliberator must be explicitly configured. Its selected goal is
+        persisted in the goal store before the cognitive cycle starts; the
+        complete selection trace is then attached to the append-only cycle
+        journal so it survives restart and can be audited.
+        """
+        if self.internal_deliberator is None:
+            raise RuntimeError("run_deliberated_cycle requires internal_deliberator")
+        deliberation = self.internal_deliberator.deliberate(
+            context,
+            motivation=motivation,
+            drive_adjustments=drive_adjustments,
+            recent_goal_ids=recent_goal_ids,
+        )
+        selected = deliberation.selected_goal
+        if selected is None:
+            raise RuntimeError("internal deliberation produced no eligible goal")
+
+        cycle_id = self.start_cycle(
+            observation,
+            {
+                "description": selected.description,
+                "priority": round(selected.urgency * 100),
+                "constraints": [],
+                "success_criteria": [],
+                "internal_goal_id": selected.goal_id,
+                "persistent_goal_record_id": deliberation.persistent_record_id,
+            },
+            **cycle_kwargs,
+        )
+        active_goal = self._required(cycle_id, "goal.activated")
+        trace = Artifact.create(
+            ContractKind.GOAL,
+            cycle_id=cycle_id,
+            producer="internal_deliberator",
+            data={
+                "description": selected.description,
+                "priority": round(selected.urgency * 100),
+                "constraints": [],
+                "success_criteria": [],
+                "internal_goal_id": selected.goal_id,
+                "persistent_goal_record_id": deliberation.persistent_record_id,
+                "selected_source": deliberation.selected_source,
+                "deliberation": deliberation.to_dict(),
+            },
+            input_refs=[active_goal.id],
+            source_refs=active_goal.source_refs,
+            epistemic_status=EpistemicStatus.INFERRED,
+            confidence=selected.confidence,
+        )
+        self.store.append("goal.deliberated", trace, causation_id=active_goal.id)
+        result = self.advance(cycle_id)
+        if result is None:
+            raise RuntimeError("deliberated cycle did not reach a terminal state")
         return result
 
     def pause(self, cycle_id: str, *, checkpoint: str, reason: str = "requested") -> None:
