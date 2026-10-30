@@ -42,6 +42,8 @@ class ContractKind(StrEnum):
     MEMORY_RECORD = "memory_record"
     EVALUATION = "evaluation"
     LEARNING_PROPOSAL = "learning_proposal"
+    STRATEGY_PROPOSAL = "strategy_proposal"
+    STRATEGY_OUTCOME = "strategy_outcome"
     VALIDATION_RESULT = "validation_result"
     MODEL_UPDATE = "model_update"
     CYCLE_STATUS = "cycle_status"
@@ -222,6 +224,12 @@ REQUIRED_DATA_FIELDS: dict[str, frozenset[str]] = {
             "risks",
             "validation_status",
         }
+    ),
+    ContractKind.STRATEGY_PROPOSAL: frozenset(
+        {"proposal_id", "status", "action", "context", "expected_reward", "evidence_ids", "executed"}
+    ),
+    ContractKind.STRATEGY_OUTCOME: frozenset(
+        {"proposal_id", "operation_id", "action", "context", "expected_reward", "observed_reward", "prediction_error", "execution_confirmed", "evidence_ids"}
     ),
     ContractKind.VALIDATION_RESULT: frozenset(
         {
