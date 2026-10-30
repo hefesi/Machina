@@ -825,3 +825,8 @@ proposal = regulator.assess()
 ```
 
 The regulator requires evidence-backed `observed` telemetry, rejects duplicate cycle assessments, exposes deviation/persistence/evidence in each proposal, and supports snapshots of its temporal counters. It never changes the SelfModel, MNN, motivation, or goals. Rule signs and ranges are experimental control choices, not universal biological laws. Persistent numerical deviation is an operational signal; it is not proof of discomfort, need, or subjective feeling.
+
+
+### Homeostasis-to-deliberation coupling
+
+`VirtualBrain.run_deliberated_cycle(..., homeostatic_proposal=proposal)` can now receive an explicitly assessed `HomeostaticProposal`. Its bounded drive adjustments are combined with caller-provided adjustments (sum clamped to the controller's ±0.3 input bound) before goal ranking. The complete proposal—including source cycle, deviations, persistence counts, evidence references, and rationale—is stored in the `goal.deliberated` journal artifact. The brain does not assess telemetry or create the proposal itself: the caller must run the regulator, inspect its output, and explicitly pass it to the next deliberation cycle. This creates a traceable feedback path from persistent internal deviation to goal-selection bias, not an autonomous closed-loop guarantee or evidence of felt needs.
