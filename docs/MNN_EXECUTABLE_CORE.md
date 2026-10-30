@@ -149,3 +149,28 @@ chemical variables are computational control signals, not simulated
 neurotransmitter molecules. The coordinator also does not yet integrate the
 VirtualBrain event journal or semantic/episodic memory repository; those
 remain separate persistence domains and are explicit next integration work.
+
+
+## Episodic memory coupling
+
+`MNNOrganism` can now receive an existing `FragmentMemory` instance. When
+attached, every successful integrated transition writes one immutable episode
+fragment containing the agent ID, logical timestep, neural activations,
+virtual chemical concentrations, reward-prediction error, modulation outputs,
+and any weight changes. Episode IDs are deterministic for an agent/timestep,
+so a repeated write is rejected rather than silently overwriting a prior
+experience.
+
+The archive remains a separate SQLite persistence domain and is not embedded
+inside the organism snapshot. This is deliberate: the organism checkpoint
+captures dynamic internal state, while FragmentMemory owns durable episodic
+records. Reopen the same memory database after process restart and attach it to
+the restored organism to continue recording and recalling episodes.
+
+`recall_experiences(query, limit, context)` delegates to the existing
+explainable lexical/associative retrieval baseline. It does not imply semantic
+understanding, autobiographical self-awareness, or that retrieved episodes
+automatically influence cognition. The next integration experiment must test
+whether retrieved experience changes a downstream decision and improves
+held-out performance against a no-retrieval baseline.
+
