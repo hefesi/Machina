@@ -231,7 +231,7 @@ class MotivationSystemTests(unittest.TestCase):
             cooperation_gain=0.2,
         )
         restored = MotivationSystem.from_snapshot(system.snapshot())
-        self.assertEqual(3, system.snapshot()["schema_version"])
+        self.assertEqual(4, system.snapshot()["schema_version"])
         self.assertEqual(system.snapshot(), restored.snapshot())
         self.assertEqual(system.step(), restored.step())
 
