@@ -197,17 +197,58 @@ class AutonomyController:
             rejected=tuple(rejected),
         )
 
+    def generate_motivational_goals(self, motivation: Any, *, threshold: float = 0.25) -> list[GoalCandidate]:
+        """Turn sustained internal pressure into inspectable internal goals.
+
+        The motivation object is intentionally consumed through a small
+        structural interface to avoid coupling the autonomy layer to a
+        particular neural implementation.
+        """
+        if not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
+            raise ValueError("threshold must be finite and between 0 and 1")
+        if not hasattr(motivation, "temporal_urgencies"):
+            raise ValueError("motivation must expose temporal_urgencies()")
+        pressures = motivation.temporal_urgencies()
+        if not isinstance(pressures, dict):
+            raise ValueError("temporal_urgencies() must return a mapping")
+        goals: list[GoalCandidate] = []
+        for drive, pressure in sorted(pressures.items()):
+            if not isinstance(drive, str) or not drive.strip():
+                raise ValueError("motivational drive names must be non-empty strings")
+            if isinstance(pressure, bool) or not isinstance(pressure, (int, float)) or not math.isfinite(pressure) or not 0.0 <= pressure <= 1.0:
+                raise ValueError(f"invalid temporal pressure for drive: {drive}")
+            if pressure < threshold:
+                continue
+            goals.append(GoalCandidate(
+                goal_id=f"sustain_drive:{drive}",
+                description=f"Address the sustained internal pressure associated with {drive}",
+                drive=drive,
+                urgency=float(pressure),
+                expected_benefit=0.55,
+                confidence=0.65,
+                estimated_cost=0.25,
+                risk=0.02,
+            ))
+        return goals
+
     def step(
         self,
         context: AutonomyContext,
         *,
         drive_adjustments: dict[str, float] | None = None,
         recent_goal_ids: Iterable[str] = (),
+        motivation: Any | None = None,
     ) -> AutonomyDecision:
-        """Generate and choose one goal using current state and feedback."""
+        """Generate and choose a goal from context and sustained internal pressure."""
+        candidates = self.generate_goals(context)
+        adjustments = dict(drive_adjustments or {})
+        if motivation is not None:
+            candidates.extend(self.generate_motivational_goals(motivation))
+            if hasattr(motivation, "temporal_autonomy_adjustments"):
+                adjustments.update(motivation.temporal_autonomy_adjustments())
         return self.choose(
-            self.generate_goals(context),
-            drive_adjustments=drive_adjustments,
+            candidates,
+            drive_adjustments=adjustments,
             recent_goal_ids=recent_goal_ids,
         )
 
