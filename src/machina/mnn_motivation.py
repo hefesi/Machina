@@ -33,12 +33,18 @@ class MotivationalDrive:
     priority: float = 1.0
     recovery_rate: float = 0.02
     relief_gain: float = 0.25
+    persistence: float = 0.0
+    pressure: float | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.name, str) or not self.name.strip():
             raise ValueError("drive name must be non-empty")
-        for field in ("level", "setpoint", "priority", "recovery_rate", "relief_gain"):
+        for field in ("level", "setpoint", "priority", "recovery_rate", "relief_gain", "persistence"):
             setattr(self, field, _bounded(field, getattr(self, field)))
+        if self.pressure is None:
+            self.pressure = self.urgency
+        else:
+            self.pressure = _bounded("pressure", self.pressure)
 
     @property
     def urgency(self) -> float:
@@ -52,6 +58,14 @@ class MotivationalDrive:
         self.level = max(0.0, self.level - self.relief_gain * amount)
         self.level = min(1.0, max(0.0, self.level))
         return self.level
+
+    def update_pressure(self, target: float) -> float:
+        """Integrate a bounded target with configurable temporal persistence."""
+        target = _bounded("target pressure", target)
+        assert self.pressure is not None
+        self.pressure += (target - self.pressure) * (1.0 - self.persistence)
+        self.pressure = min(1.0, max(0.0, self.pressure))
+        return self.pressure
 
     def snapshot(self) -> dict[str, object]:
         return asdict(self)
@@ -96,7 +110,7 @@ class MotivationalCooperation:
 class MotivationSystem:
     """Deterministic drive ledger with explicit, bounded conflict arbitration."""
 
-    SNAPSHOT_SCHEMA = 3
+    SNAPSHOT_SCHEMA = 4
 
     def __init__(
         self,
@@ -172,7 +186,10 @@ class MotivationSystem:
         for name, drive in self.drives.items():
             drive.advance(validated.get(name, 0.0))
         self.timestep += 1
-        return self.effective_urgencies()
+        effective = self.effective_urgencies()
+        for name, drive in self.drives.items():
+            drive.update_pressure(effective[name])
+        return effective
 
     def effective_urgencies(self, *, gain: float | None = None) -> dict[str, float]:
         """Return urgency after symmetric, order-independent competition.
@@ -219,6 +236,14 @@ class MotivationSystem:
             result[name] = max(0.0, min(1.0, drive.urgency + boost - inhibition))
         return result
 
+    def temporal_urgencies(self) -> dict[str, float]:
+        """Return leaky-integrated motivational pressure from prior cycles."""
+        return {name: float(drive.pressure or 0.0) for name, drive in self.drives.items()}
+
+    def ranked_temporal_drives(self) -> list[tuple[str, float]]:
+        """Rank temporally integrated pressure with deterministic tie breaks."""
+        return sorted(self.temporal_urgencies().items(), key=lambda item: (-item[1], item[0]))
+
     def ranked_drives(self) -> list[tuple[str, float]]:
         """Rank conflict-adjusted urgency, with stable name-based tie breaks."""
         return sorted(
@@ -264,7 +289,7 @@ class MotivationSystem:
     @classmethod
     def from_snapshot(cls, data: Mapping[str, object]) -> "MotivationSystem":
         schema = data.get("schema_version")
-        if schema not in (1, 2, cls.SNAPSHOT_SCHEMA):
+        if schema not in (1, 2, 3, cls.SNAPSHOT_SCHEMA):
             raise ValueError("unsupported motivation snapshot schema")
         timestep = data.get("timestep")
         if isinstance(timestep, bool) or not isinstance(timestep, int) or timestep < 0:
