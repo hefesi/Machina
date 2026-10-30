@@ -53,6 +53,18 @@ class MotivationSystemTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             system.autonomy_adjustments(gain=0.5)
 
+
+    def test_aggregate_chemical_pressure_tracks_mean_drive_urgency(self):
+        system = MotivationSystem([
+            MotivationalDrive("curiosity", level=1.0, priority=1.0),
+            MotivationalDrive("stability", level=0.0, priority=1.0),
+        ])
+        self.assertAlmostEqual(0.5, system.chemical_pressure)
+        system.step({"stability": 1.0})
+        self.assertLess(system.chemical_pressure, 0.5)
+        self.assertGreaterEqual(system.chemical_pressure, 0.0)
+        self.assertLessEqual(system.chemical_pressure, 1.0)
+
     def test_snapshot_round_trip_preserves_future_dynamics(self):
         system = self.make_system()
         system.step({"curiosity": 0.4})
