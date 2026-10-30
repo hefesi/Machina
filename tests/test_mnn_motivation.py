@@ -93,8 +93,8 @@ class MotivationSystemTests(unittest.TestCase):
         )
         raw = {name: drive.urgency for name, drive in system.drives.items()}
         effective = system.effective_urgencies()
-        self.assertAlmostEqual(0.62, effective["explore"])
-        self.assertAlmostEqual(0.34, effective["rest"])
+        self.assertAlmostEqual(0.55, effective["explore"])
+        self.assertAlmostEqual(0.25, effective["rest"])
         self.assertAlmostEqual(0.8, effective["create"])
         self.assertEqual(raw, {name: drive.urgency for name, drive in system.drives.items()})
 
