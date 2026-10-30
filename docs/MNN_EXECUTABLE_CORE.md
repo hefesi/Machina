@@ -206,3 +206,36 @@ organism snapshot. This is an integration primitive, not yet evidence that
 memory improves decisions or generalization. The next experiment is a
 controlled task where memory-guided and no-memory conditions are compared on
 held-out examples.
+
+
+## Outcome-based contextual memory feedback (experimental)
+
+The organism now exposes `evaluate_memory_guidance(...)` to record whether
+specific retrieved fragments were useful in an explicitly named task context.
+The caller supplies boolean outcomes; the organism does not infer usefulness
+from neural activation, prediction error, or a successful-looking response.
+Feedback is restricted to fragment IDs present in the corresponding
+`MemoryGuidance` evidence set.
+
+The operation delegates to FragmentMemory's context-specific feedback ledger.
+Positive and negative labels adjust a bounded relevance score for that context
+without changing the fragment's global importance or other task contexts.
+A stable `operation_id` makes retries idempotent, and the feedback history is
+auditable. Example:
+
+```python
+scores, applied = organism.evaluate_memory_guidance(
+    guidance,
+    {guidance.evidence_ids[0]: True},
+    context="route-planning",
+    operation_id="route-planning-eval-0001",
+)
+```
+
+This closes a minimal feedback loop: retrieve evidence, expose it to an
+explicit neural input, evaluate its usefulness externally, and update
+context-specific retrieval relevance. It does not yet establish that this
+feedback improves decisions. That claim requires controlled, held-out
+experiments with fixed datasets, repeated seeds, and retrieval/no-retrieval
+baselines. The feedback label must come from a defined evaluator or outcome,
+not from the model's own unsupported assertion that a memory was useful.
