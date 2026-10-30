@@ -45,6 +45,7 @@ from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit,
 from .mnn_action_learning import MNNActionLearner
 from .mnn_agent import MNNLearningAgent
 from .mnn_concept_review import ConceptReview, MNNConceptReviewer
+from .mnn_knowledge_lifecycle import MNNKnowledgeLifecycle, MNNKnowledgeLifecycleResult
 from .mnn_concept_advisor import ConceptRecommendation, MNNConceptAdvisor
 from .mnn_concepts import ConceptHypothesis, MNNConceptBuilder
 from .mnn_contextual_outcome_policy import MNNContextualOutcomePolicy
@@ -150,6 +151,8 @@ __all__ = [
     "MNNConceptBuilder",
     "ConceptReview",
     "MNNConceptReviewer",
+    "MNNKnowledgeLifecycle",
+    "MNNKnowledgeLifecycleResult",
     "ConceptRecommendation",
     "MNNConceptAdvisor",
     "MNNContextualOutcomePolicy",
