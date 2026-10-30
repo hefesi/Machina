@@ -106,7 +106,6 @@ class MNNStrategyEventBridge:
             data=data,
             source_refs=evidence_ids,
             epistemic_status=EpistemicStatus.INFERRED,
-            confidence=expected,
             artifact_id=artifact_id,
         )
         return self.store.append("strategy.proposal.recorded", artifact)
