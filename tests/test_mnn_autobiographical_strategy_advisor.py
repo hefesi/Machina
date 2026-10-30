@@ -100,6 +100,34 @@ class MNNAutobiographicalStrategyAdvisorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.advisor.review("motor maintenance", current_action="unknown")
 
+
+    def test_malformed_untrusted_action_is_ignored_without_crashing(self):
+        self.store.create_cycle("cycle-malformed")
+        artifact = Artifact.create(
+            ContractKind.STRATEGY_OUTCOME,
+            cycle_id="cycle-malformed",
+            producer="test",
+            data={
+                "proposal_id": "proposal-malformed",
+                "operation_id": "operation-malformed",
+                "action": ["not", "an", "action"],
+                "context": "motor maintenance",
+                "expected_reward": 0.5,
+                "observed_reward": 1.0,
+                "prediction_error": 0.5,
+                "execution_confirmed": True,
+                "evidence_ids": [],
+            },
+            epistemic_status=EpistemicStatus.OBSERVED,
+        )
+        self.store.append("strategy.outcome.recorded", artifact)
+        self.projector.project()
+        result = self.advisor.review("motor maintenance", current_action="baseline")
+        self.assertEqual("candidate", result["status"])
+        self.assertEqual(1, result["ignored_records"]["unknown_action"])
+        with self.assertRaises(ValueError):
+            self.advisor.review("motor maintenance", current_action=["baseline"])
+
     def test_requires_multiple_distinct_cycles_and_variability_samples(self):
         advisor = MNNAutobiographicalStrategyAdvisor(
             MNNAutobiographicalRecall(self.memory),
