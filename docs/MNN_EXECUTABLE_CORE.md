@@ -681,3 +681,30 @@ with EventStore("machina-events.sqlite3") as journal:
 ```
 
 This is an operational autobiography: a verifiable account of recorded changes and their causal links. Missing events remain missing; the projection does not invent motives, feelings, memories, or continuity between unrecorded periods. It is not evidence of phenomenal consciousness.
+
+
+## Tracking transformations of the operational Self
+
+`SelfTransformationTracker` compares two `SelfModel` snapshots and records the actual differences in the append-only `EventStore` as a `model_update` artifact (`self.transformed`). It captures changes to beliefs, capability estimates, known limitations, and resource state, alongside the triggering event and evidence references.
+
+No event is written when the snapshots are operationally identical. A transformation record is marked epistemically as `inferred`: the journal proves that the stored representation changed, but does not by itself prove that the new belief is true. Evidence references are retained for later inspection. The tracker never modifies either snapshot.
+
+Example:
+
+```python
+from machina import EventStore, SelfModel, SelfTransformationTracker
+
+before = SelfModel.from_snapshot(previous_snapshot)
+after = SelfModel.from_snapshot(current_snapshot)
+
+with EventStore("machina-events.sqlite3") as journal:
+    tracker = SelfTransformationTracker(journal)
+    result = tracker.record(
+        before, after,
+        cycle_id="cycle-205",
+        trigger="evaluated outcome changed capability estimate",
+        evidence_refs=["goal-outcome:205", "evaluation:205"],
+    )
+```
+
+The transformation history links autobiographical events to changes in the current self-description. It remains an operational account, not proof of subjective identity or consciousness.
