@@ -13,7 +13,7 @@ from .event_store import EventStore, IntegrityError
 from .fragment_memory import FragmentMemory, MemoryFragment
 from .goal_store import PersistentGoalStore
 from .mnn import Connection, MNN, Unit
-from .mnn_organism import MNNOrganism, MemoryGuidance, OrganismStep
+from .mnn_organism import (DecisionAssessment, DecisionOption, MNNOrganism, MemoryGuidance, OrganismStep)
 from .mnn_adapter import MNNCognitionAdapter
 from .self_model import SelfModel
 from .mnn_reward import RewardModulator
@@ -63,6 +63,8 @@ __all__ = [
     "MNN",
     "MNNOrganism",
     "MemoryGuidance",
+    "DecisionOption",
+    "DecisionAssessment",
     "OrganismStep",
     "MNNCognitionAdapter",
     "SelfModel",
