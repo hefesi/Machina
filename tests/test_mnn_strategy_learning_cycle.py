@@ -7,6 +7,8 @@ from machina.mnn import Connection, MNN, Unit
 from machina.mnn_organism import MNNOrganism
 from machina.mnn_knowledge_use_feedback import MNNKnowledgeUseFeedback
 from machina.mnn_strategy_decision_advisor import MNNStrategyDecisionAdvisor
+from machina.mnn_strategy_context_memory import MNNStrategyContextMemory
+from machina.mnn_strategy_evaluation import MNNStrategyExperimentEvaluator
 from machina.mnn_strategy_feedback import MNNStrategyFeedbackAdapter
 from machina.mnn_strategy_learning_cycle import MNNStrategyLearningCycle
 
@@ -31,11 +33,8 @@ class StrategyLearningCycleTests(unittest.TestCase):
         self.organism = MNNOrganism(
             "cycle-test", network=network, learning_rate=0.2
         )
-        # Inject a deterministic advisor to test the facade delegation contract.
-        class StubAdvisor:
-            def propose(inner, context, campaign_ids, **kwargs):
-                return dict(self.proposal)
-        self.advisor = StubAdvisor()
+        evaluator = MNNStrategyExperimentEvaluator(self.memory, ["baseline", "candidate"])
+        self.advisor = MNNStrategyDecisionAdvisor(MNNStrategyContextMemory(evaluator))
         self.cycle = MNNStrategyLearningCycle(
             self.advisor,
             MNNStrategyFeedbackAdapter(),
@@ -44,7 +43,8 @@ class StrategyLearningCycleTests(unittest.TestCase):
 
     def test_proposal_delegates_without_executing(self):
         result = self.cycle.propose("workload A", ["campaign-1"])
-        self.assertEqual(self.proposal, result)
+        self.assertEqual("abstain", result["status"])
+        self.assertIsNone(result["action"])
         self.assertEqual(0, self.organism.network.timestep)
 
     def test_strategy_outcome_requires_confirmation_and_updates_organism(self):
