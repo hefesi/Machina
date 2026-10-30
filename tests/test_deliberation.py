@@ -64,5 +64,39 @@ class InternalDeliberatorTests(unittest.TestCase):
             store.close()
 
 
+    def test_deliberation_history_survives_restart_and_informs_next_cycle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "goals.sqlite3"
+            first_store = PersistentGoalStore(path)
+            first_deliberator = InternalDeliberator(AutonomyController(), first_store)
+            first = first_deliberator.deliberate(
+                AutonomyContext(unresolved_questions=3, cycles_since_reflection=4)
+            )
+            self.assertIsNotNone(first.history_record_id)
+            self.assertIsNone(first.previous_goal_id)
+            first_store.close()
+
+            reopened_store = PersistentGoalStore(path)
+            second_deliberator = InternalDeliberator(AutonomyController(), reopened_store)
+            second = second_deliberator.deliberate(
+                AutonomyContext(unresolved_questions=3, cycles_since_reflection=4)
+            )
+            self.assertEqual(first.selected_goal.goal_id, second.previous_goal_id)
+            history = reopened_store.recent_deliberations(5)
+            self.assertEqual(2, len(history))
+            self.assertEqual(first.selected_goal.goal_id, history[1]["selected_goal_id"])
+            self.assertEqual(second.selected_goal.goal_id, history[0]["selected_goal_id"])
+            self.assertTrue(history[0]["alternatives"])
+            reopened_store.close()
+
+    def test_deliberation_history_validates_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            with self.assertRaises(ValueError):
+                store.recent_deliberations(0)
+            store.close()
+
+
+
 if __name__ == "__main__":
     unittest.main()
