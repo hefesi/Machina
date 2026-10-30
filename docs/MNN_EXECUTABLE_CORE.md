@@ -428,3 +428,18 @@ A arbitragem alimenta `ranked_drives()`, `autonomy_adjustments()` e `chemical_pr
 O snapshot da motivação passou para schema 2 e inclui conflitos e ganho de arbitragem. O carregador continua aceitando schema 1, que restaura drives sem conflitos. Testes cobrem simetria, independência de ordem, limites, validação, persistência e compatibilidade retroativa.
 
 Este mecanismo é uma hipótese computacional simples de competição entre prioridades, não um modelo completo de motivação biológica. O próximo passo de validação é comparar decisões com e sem conflitos em tarefas controladas, incluindo casos em que a inibição ajuda, prejudica ou deve ser ignorada.
+
+
+### Cooperação entre drives motivacionais (experimental)
+
+Além de conflitos, `MotivationSystem` agora aceita relações positivas simétricas por `MotivationalCooperation(first, second, strength)`. A intensidade é limitada a [0, 1]. Uma mesma dupla não pode ter simultaneamente uma relação de conflito e de cooperação, evitando que a interpretação do vínculo dependa da ordem de registro.
+
+A urgência efetiva é calculada em duas fases, sempre a partir das urgências brutas:
+1. cada drive recebe um reforço limitado, proporcional à média ponderada da urgência de seus parceiros cooperativos e ao `cooperation_gain`;
+2. a pressão dos concorrentes explicitamente conectados é subtraída usando `conflict_gain`.
+
+O valor final é limitado a [0, 1]. As urgências brutas e os níveis dos drives não são alterados por essas relações. Cooperação não significa que uma necessidade foi satisfeita: significa apenas que a atividade computacional associada a um drive pode aumentar a prioridade efetiva de outro.
+
+`ranked_drives()`, `autonomy_adjustments()` e `chemical_pressure` consomem a urgência efetiva, de modo que cooperação e competição podem influenciar a escolha de objetivos e a modulação química virtual. A regra é determinística e independente da ordem de registro. O snapshot passa ao schema 3, incluindo relações cooperativas e seu ganho; schemas 1 e 2 continuam aceitos.
+
+Os testes verificam reforço positivo, simetria, limites, conflito/cooperação mutuamente exclusivos, persistência e compatibilidade retroativa. Isso ainda é uma regra de acoplamento linear simplificada. Não representa sinergia biológica nem demonstra motivação subjetiva. A validação seguinte deve comparar tarefas com relações desativadas, cooperativas e competitivas, medindo qualidade da decisão, estabilidade e efeitos colaterais.
