@@ -661,3 +661,23 @@ updated = bridge.update_capability(
 ```
 
 This creates a measurable feedback path from past outcomes to a revisable self-description. It is a functional self-model, not evidence that the system experiences itself subjectively.
+
+
+## Operational autobiography and causal timeline
+
+`SelfAutobiography` provides a read-only chronological projection over the append-only `EventStore`. It reconstructs event order, cognitive cycle, event type, producer, epistemic status, confidence, source references, input references, causation links, and the original artifact payload. Its `describe()` view adds counts by event type and cycle while preserving the complete timeline.
+
+The journal remains the source of truth; the autobiography does not duplicate or rewrite event history. Filters can select event types or a cycle, and a bounded timeline can return the most recent records. The projection can be regenerated after restart from the same event database.
+
+Example:
+
+```python
+from machina import EventStore, SelfAutobiography
+
+with EventStore("machina-events.sqlite3") as journal:
+    autobiography = SelfAutobiography(journal)
+    account = autobiography.describe()
+    recent_history = autobiography.timeline(limit=100)
+```
+
+This is an operational autobiography: a verifiable account of recorded changes and their causal links. Missing events remain missing; the projection does not invent motives, feelings, memories, or continuity between unrecorded periods. It is not evidence of phenomenal consciousness.
