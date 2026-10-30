@@ -92,5 +92,49 @@ class PersistentGoalStoreTests(unittest.TestCase):
             store.close()
 
 
+    def test_progress_and_priority_are_explicit_and_persisted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "goals.sqlite3"
+            store = PersistentGoalStore(path)
+            store.register(candidate())
+            updated = store.update_progress(
+                "reflect", 0.4, priority=0.9, evidence="Two of five checks passed"
+            )
+            self.assertEqual(0.4, updated["progress"])
+            self.assertEqual(0.9, updated["priority"])
+            store.close()
+
+            reopened = PersistentGoalStore(path)
+            restored = reopened.list_goals()[0]
+            self.assertEqual(0.4, restored["progress"])
+            self.assertEqual(0.9, restored["priority"])
+            self.assertIn("Two of five checks passed", restored["evidence"])
+            reopened.close()
+
+    def test_progress_requires_valid_value_and_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            store.register(candidate())
+            for value in (-0.1, 1.1, float("nan"), True):
+                with self.assertRaises(ValueError):
+                    store.update_progress("reflect", value, evidence="measurement")
+            with self.assertRaises(ValueError):
+                store.update_progress("reflect", 0.5, evidence=" ")
+            with self.assertRaises(ValueError):
+                store.update_progress("reflect", 0.5, priority=1.1, evidence="measurement")
+            store.close()
+
+    def test_progress_can_be_revised_when_new_evidence_changes_estimate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            store.register(candidate())
+            store.update_progress("reflect", 0.7, evidence="Initial estimate")
+            revised = store.update_progress("reflect", 0.3, evidence="A prior result was invalidated")
+            self.assertEqual(0.3, revised["progress"])
+            self.assertIn("Initial estimate", revised["evidence"])
+            self.assertIn("invalidated", revised["evidence"])
+            store.close()
+
+
 if __name__ == "__main__":
     unittest.main()
