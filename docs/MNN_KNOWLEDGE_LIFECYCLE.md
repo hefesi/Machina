@@ -80,7 +80,6 @@ Reward is deliberately not translated automatically into per-fragment
 usefulness. A high-reward action does not prove every cited source was useful,
 and a low-reward action does not prove every source was irrelevant.
 
-
 ## Coordinated strategy learning cycle (v0.3)
 
 `MNNStrategyLearningCycle` provides one explicit entry point for the existing
@@ -103,7 +102,6 @@ do not share a commit boundary. Callers should persist snapshots and reconcile
 the two feedback operations independently after failures. No method executes
 the proposed external action or changes the advisor's policy automatically.
 
-
 ## Persistent strategy outcome journal (v0.4)
 
 `MNNStrategyOutcomeJournal` stores strategy proposals and outcomes as separate
@@ -111,6 +109,11 @@ SQLite-backed memory fragments. A proposal records its context, evidence IDs,
 and caller-supplied expected reward; it is explicitly marked as not executed.
 An outcome is accepted only after explicit execution confirmation and an exact
 match between the proposed and executed action.
+
+Evidence IDs must be a sequence of unique, non-empty strings. They are trimmed
+and persisted in the proposal; malformed strings, duplicate IDs, and empty
+entries are rejected before any fragment is written. Proposal status is also
+validated as a string so malformed values fail with a domain validation error.
 
 The journal records the prediction error as:
 
@@ -120,7 +123,10 @@ Both rewards must be normalized to [0, 1] by the caller. This difference is a
 descriptive learning signal, not a causal estimate or proof that the strategy
 caused the result. Stable proposal and operation IDs make sequential retries
 idempotent and reject reuse with changed payloads. Records survive reopening
-the same FragmentMemory database.
+the same FragmentMemory database. The current read-then-add idempotency check
+is intended for sequential retries; concurrent writers should serialize access
+to a shared journal until a database-level uniqueness/transaction boundary is
+added for the complete operation.
 
 The journal does not automatically execute actions, change policies, update
 the organism, or provide a distributed transaction across independent stores.
