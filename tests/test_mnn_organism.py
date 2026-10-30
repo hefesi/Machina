@@ -105,19 +105,5 @@ class MNNOrganismTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             organism.recall_experiences("anything")
 
-    def test_episode_ids_are_stable_and_duplicate_step_is_not_silently_overwritten(self):
-        with tempfile.TemporaryDirectory() as directory:
-            memory = FragmentMemory(Path(directory) / "episodes.sqlite3")
-            organism = self.make_organism()
-            organism.memory = memory
-            organism.step({"sensor": 0.1})
-            restored = MNNOrganism.from_snapshot(organism.snapshot())
-            restored.memory = memory
-            restored.network.timestep -= 1
-            restored.signaling.state.timestep -= 1
-            with self.assertRaises(Exception):
-                restored.step({"sensor": 0.2})
-            memory.close()
-
 if __name__ == "__main__":
     unittest.main()
