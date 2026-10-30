@@ -1009,3 +1009,18 @@ weights. It is a conservative heuristic, not a calibrated confidence interval,
 hypothesis test, or statistical-significance claim. Set the multiplier to
 0.0 only when intentionally disabling this additional guard. A recommendation
 remains advisory; action execution and outcome observation stay with the caller.
+
+
+## Longitudinal strategy memory with uncertainty checks
+
+MNNStrategyExperimentEvaluator.evaluate_over_time now evaluates early-versus-late
+strategy advantage with a separate variance estimate and standard-error guard
+for each window. A temporal advantage is classified as emerged, persisted or
+reversed only when it exceeds both the configured reward margin and the
+configured noise threshold. Otherwise the evaluator returns no_clear_change.
+
+The report retains early/late evidence IDs, sample variances, difference
+standard errors and noise thresholds. This reduces overinterpretation of a
+small set of volatile outcomes; it is still a descriptive heuristic, not a
+significance test or causal explanation. The evaluator is read-only and does
+not automatically switch strategies.
