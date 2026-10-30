@@ -504,3 +504,47 @@ A `PersistentGoalStore` agora mantém uma tabela append-only `deliberation_histo
 O `InternalDeliberator` consulta as três deliberações anteriores antes de escolher novamente. Os objetivos recentemente selecionados entram na política de repetição já existente do controlador, com penalidade explícita e limitada; não são proibidos. O resultado também informa `previous_goal_id` e `history_record_id`, permitindo identificar continuidade ou mudança de foco.
 
 Isso cria memória do próprio processo decisório, distinta da memória episódica de experiências e do estado de progresso do objetivo. O histórico preserva o que foi considerado e por quê; não presume que o objetivo anterior foi concluído, que a decisão foi correta ou que existe uma experiência subjetiva contínua. A continuidade é operacional e verificável.
+
+
+## Evidence-based goal self-review (experimental)
+
+The new `GoalReviewer` compares an evaluator-supplied progress measurement with
+the currently persisted goal record. It returns an immutable `GoalReview`
+containing prior and observed progress, the delta, prior and proposed
+priority, evidence, and an advisory recommendation:
+
+- `continue` when measured progress increased;
+- `revise` when progress regressed or the goal already needs revision;
+- `reassess` when progress is unchanged.
+
+Review is side-effect free. A recommendation never changes goal status by
+itself. The caller must explicitly apply the review. Applying without an
+outcome records the measured progress and optional priority; applying with an
+explicit evaluator outcome (`success`, `failure`, or `skip`) delegates to
+the existing lifecycle transition policy. Thus a successful cognitive cycle
+is not silently treated as goal success, and repeated failures only flag
+revision according to the configured threshold.
+
+Example:
+
+```python
+from machina import GoalReviewer
+
+reviewer = GoalReviewer(goal_store)
+review = reviewer.review(
+    "investigate_open_questions",
+    observed_progress=0.4,
+    evidence="Evaluator verified two of five milestones.",
+    proposed_priority=0.7,
+)
+print(review.to_dict())  # inspect before committing
+updated = reviewer.apply(review)  # persist measured progress
+# Or provide explicit outcome feedback:
+# updated = reviewer.apply(review, outcome="failure")
+```
+
+This creates a review-and-feedback boundary, not autonomous self-judgment:
+progress, evidence, priority changes, and outcome labels must come from an
+external evaluator or a separately validated process. The recommendation is
+a transparent rule over measurements, not an understanding of why a goal
+matters. It does not establish subjective agency or free will.
