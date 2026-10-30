@@ -168,3 +168,47 @@ This is a lexical retrieval baseline, not semantic understanding. It does not in
 A recommendation requires the configured minimum number of distinct cognitive cycles for every compared action and at least two cycle-level samples per action so sample variability can be estimated. Multiple outcomes within one cycle are averaged first, giving each cycle equal weight. The observed mean difference must clear both a minimum reward margin and a configurable variance-based noise guard. The result includes source event IDs and per-action outcome/cycle counts.
 
 This is an observational comparison, not a causal estimate or statistical significance test. It never executes a candidate, modifies policy, or treats one high reward as proof. Insufficient or ambiguous evidence produces an inconclusive result rather than a recommendation.
+
+## Reversible long-term plasticity proposals (v0.9)
+
+`MNNPlasticityController` introduces a separate proposal/apply/rollback lifecycle
+for long-term Hebbian weight changes.
+
+```python
+from machina import MNNPlasticityController
+
+plasticity = MNNPlasticityController()
+proposal = plasticity.propose_hebbian(
+    network,
+    proposal_id="plasticity-cycle-42",
+    learning_rate=0.05,
+    reward=0.8,
+    max_delta=0.02,
+)
+# Inspect proposal.deltas and its evidence/context in the caller's audit log.
+# Applying is a separate explicit action:
+plasticity.apply(network, proposal)
+# Roll back only if those exact applied weights have not since changed:
+plasticity.rollback(network, proposal.proposal_id)
+```
+
+Proposal generation does not mutate the network. Each delta is bounded by
+`max_delta`, each final weight is clamped to the network's configured weight
+limit, and disabled edges are left unchanged. Application checks a fingerprint
+of the complete edge topology and the exact base weights for all selected
+connections before changing any weight. A stale proposal is rejected before
+any partial update.
+
+Rollback is conditional: it restores the original values only while every
+affected edge still has exactly the proposed value. If later learning or an
+external edit changed an affected weight, rollback refuses to overwrite it.
+The controller snapshot stores both base and proposed weights so this guard can
+be restored after restart when persisted together with the network snapshot.
+
+This controller is deliberately not automatically wired to strategy review.
+A caller must inspect the proposal and explicitly call `apply`. The controller
+is in-memory and does not itself append EventStore records; production
+integration should persist proposal, approval, application and rollback events
+in the authoritative event journal. The current Hebbian proposal is a bounded
+engineering mechanism, not proof that an edge is causally useful or that a
+strategy caused a reward.
