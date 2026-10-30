@@ -53,6 +53,7 @@ from .mnn_strategy_experiment import MNNStrategyExperimentLog
 from .mnn_strategy_evaluation import MNNStrategyExperimentEvaluator
 from .mnn_strategy_context_memory import MNNStrategyContextMemory
 from .mnn_strategy_decision_advisor import MNNStrategyDecisionAdvisor
+from .mnn_strategy_feedback import MNNStrategyFeedbackAdapter, StrategyFeedback, StrategyLearningResult
 
 __all__ = [
     "Artifact",
@@ -147,5 +148,8 @@ __all__ = [
     "MNNStrategyExperimentEvaluator",
     "MNNStrategyContextMemory",
     "MNNStrategyDecisionAdvisor",
+    "MNNStrategyFeedbackAdapter",
+    "StrategyFeedback",
+    "StrategyLearningResult",
     "MNNExperienceCycle",
 ]
