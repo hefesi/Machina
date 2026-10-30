@@ -159,6 +159,9 @@ class MNNOrganismTests(unittest.TestCase):
                 "prediction error", target_unit="memory_context"
             )
             fragment_id = guidance.evidence_ids[0]
+            contextual_before = organism.prepare_memory_guidance(
+                "prediction error", target_unit="memory_context", context="task-a"
+            )
             before = memory.context_importance(fragment_id, "task-a")
             result, applied = organism.evaluate_memory_guidance(
                 guidance, {fragment_id: True},
@@ -168,6 +171,10 @@ class MNNOrganismTests(unittest.TestCase):
             self.assertTrue(applied)
             self.assertAlmostEqual(before + 0.15, result[fragment_id])
             self.assertAlmostEqual(before + 0.15, memory.context_importance(fragment_id, "task-a"))
+            contextual_after = organism.prepare_memory_guidance(
+                "prediction error", target_unit="memory_context", context="task-a"
+            )
+            self.assertGreater(contextual_after.signal, contextual_before.signal)
             repeated, applied_again = organism.evaluate_memory_guidance(
                 guidance, {fragment_id: True},
                 context="task-a", operation_id="evaluation-001",
