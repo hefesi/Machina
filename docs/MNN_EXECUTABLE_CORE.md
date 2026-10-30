@@ -440,7 +440,7 @@ A urgência efetiva é calculada em duas fases, sempre a partir das urgências b
 
 O valor final é limitado a [0, 1]. As urgências brutas e os níveis dos drives não são alterados por essas relações. Cooperação não significa que uma necessidade foi satisfeita: significa apenas que a atividade computacional associada a um drive pode aumentar a prioridade efetiva de outro.
 
-`ranked_drives()`, `autonomy_adjustments()` e `chemical_pressure` consomem a urgência efetiva, de modo que cooperação e competição podem influenciar a escolha de objetivos e a modulação química virtual. A regra é determinística e independente da ordem de registro. O snapshot passa ao schema 3, incluindo relações cooperativas e seu ganho; schemas 1 e 2 continuam aceitos.
+`ranked_drives()`, `autonomy_adjustments()` e `chemical_pressure` consomem a urgência efetiva, de modo que cooperação e competição podem influenciar a escolha de objetivos e a modulação química virtual. A regra é determinística e independente da ordem de registro. O snapshot passou ao schema 3 para registrar cooperação e ao schema 4 para persistir a pressão temporal; schemas 1, 2 e 3 continuam aceitos.
 
 Os testes verificam reforço positivo, simetria, limites, conflito/cooperação mutuamente exclusivos, persistência e compatibilidade retroativa. Isso ainda é uma regra de acoplamento linear simplificada. Não representa sinergia biológica nem demonstra motivação subjetiva. A validação seguinte deve comparar tarefas com relações desativadas, cooperativas e competitivas, medindo qualidade da decisão, estabilidade e efeitos colaterais.
 
