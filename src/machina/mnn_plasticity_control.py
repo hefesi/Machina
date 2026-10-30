@@ -135,7 +135,10 @@ class MNNPlasticityController:
                 raise ValueError(f"proposed weight for {edge_id} is outside network bounds")
         for edge_id, value in proposal.proposed_weights.items():
             network.connections[edge_id].weight = value
-        self._applied[proposal.proposal_id] = dict(proposal.base_weights)
+        self._applied[proposal.proposal_id] = {
+            "base": dict(proposal.base_weights),
+            "proposed": dict(proposal.proposed_weights),
+        }
         return dict(proposal.deltas)
 
     def rollback(self, network: MNN, proposal_id: str) -> dict[str, float]:
@@ -144,15 +147,17 @@ class MNNPlasticityController:
             raise ValueError("network must be an MNN")
         if not isinstance(proposal_id, str) or proposal_id not in self._applied:
             raise ValueError("proposal is not applied or is unknown")
-        original = self._applied[proposal_id]
-        for edge_id, base_weight in original.items():
+        record = self._applied[proposal_id]
+        original = record["base"]
+        proposed = record["proposed"]
+        for edge_id, proposed_weight in proposed.items():
             if edge_id not in network.connections:
                 raise ValueError(f"connection {edge_id} no longer exists")
-            if network.connections[edge_id].weight == base_weight:
+            if network.connections[edge_id].weight != proposed_weight:
                 raise ValueError("applied weights no longer match; refusing unsafe rollback")
         changes = {
-            edge_id: base_weight - network.connections[edge_id].weight
-            for edge_id, base_weight in original.items()
+            edge_id: original[edge_id] - network.connections[edge_id].weight
+            for edge_id in original
         }
         for edge_id, base_weight in original.items():
             network.connections[edge_id].weight = base_weight
@@ -163,7 +168,10 @@ class MNNPlasticityController:
         return {
             "schema_version": self.schema_version,
             "applied": {
-                key: dict(sorted(value.items()))
+                key: {
+                    "base": dict(sorted(value["base"].items())),
+                    "proposed": dict(sorted(value["proposed"].items())),
+                }
                 for key, value in sorted(self._applied.items())
             },
         }
@@ -180,11 +188,16 @@ class MNNPlasticityController:
         for proposal_id, weights in applied.items():
             if not isinstance(proposal_id, str) or not proposal_id or not isinstance(weights, Mapping):
                 raise ValueError("invalid applied proposal record")
-            normalized = {}
-            for edge_id, weight in weights.items():
-                if not isinstance(edge_id, str) or not edge_id:
-                    raise ValueError("invalid connection ID in applied proposal")
-                normalized[edge_id] = _finite(weight, f"restored weight for {edge_id}")
+            if not isinstance(weights.get("base"), Mapping) or not isinstance(weights.get("proposed"), Mapping):
+                raise ValueError("applied proposal must contain base and proposed weights")
+            if set(weights["base"]) != set(weights["proposed"]):
+                raise ValueError("base and proposed connection IDs must match")
+            normalized = {"base": {}, "proposed": {}}
+            for kind in ("base", "proposed"):
+                for edge_id, weight in weights[kind].items():
+                    if not isinstance(edge_id, str) or not edge_id:
+                        raise ValueError("invalid connection ID in applied proposal")
+                    normalized[kind][edge_id] = _finite(weight, f"restored {kind} weight for {edge_id}")
             restored[proposal_id] = normalized
         controller._applied = restored
         return controller
