@@ -100,6 +100,10 @@ class GoalConstraintTests(unittest.TestCase):
             "review", "publish", "supports", strength=.3,
             evidence="Review improves publication quality.",
         )
+        self.store.add_goal_relation(
+            "explore", "publish", "conflicts",
+            evidence="Exploration and publication compete for the same deadline.",
+        )
         schedule = self.resolver.schedule(
             ["publish", "review", "explore"],
             utilities={"publish": .8, "review": .2, "explore": .7},
