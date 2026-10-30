@@ -136,5 +136,29 @@ class PersistentGoalStoreTests(unittest.TestCase):
             store.close()
 
 
+    def test_ranked_open_goals_use_priority_and_keep_paused_goals_out(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            store.register(candidate("low"))
+            store.register(GoalCandidate("high", "High priority", "curiosity", .8, .9, .8, .2, .05))
+            store.update_progress("low", 0.2, priority=0.3, evidence="low priority")
+            store.update_progress("high", 0.1, priority=0.9, evidence="high priority")
+            store.record_outcome("low", "skip", "Pause pending information")
+            ranked = store.ranked_open_goals()
+            self.assertEqual(["high"], [goal["goal_id"] for goal in ranked])
+            store.resume("low")
+            ranked = store.ranked_open_goals()
+            self.assertEqual(["high", "low"], [goal["goal_id"] for goal in ranked])
+            store.close()
+
+    def test_ranked_open_goals_validates_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            for invalid in (0, -1, True, 1.5):
+                with self.assertRaises(ValueError):
+                    store.ranked_open_goals(invalid)
+            store.close()
+
+
 if __name__ == "__main__":
     unittest.main()
