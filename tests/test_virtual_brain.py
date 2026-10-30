@@ -220,7 +220,7 @@ class VirtualBrainLoopTests(unittest.TestCase):
         brain = VirtualBrain(self.database_path, internal_deliberator=deliberator)
         proposal = HomeostaticProposal(
             cycle_id="self-cycle-12",
-            adjustments={"investigate_open_questions": 0.12},
+            adjustments={"error_recovery": 0.12},
             deviations={"prediction_error": 0.4},
             persistence={"prediction_error": 3},
             evidence_refs=("step:12",),
@@ -228,12 +228,14 @@ class VirtualBrainLoopTests(unittest.TestCase):
         )
         result = brain.run_deliberated_cycle(
             "Elevated internal prediction error.",
-            AutonomyContext(unresolved_questions=2),
+            AutonomyContext(failed_cycles=1),
             homeostatic_proposal=proposal,
         )
         trace = next(event.artifact for event in result.events if event.event_type == "goal.deliberated")
         self.assertEqual("self-cycle-12", trace.data["homeostatic_regulation"]["cycle_id"])
         self.assertEqual(["step:12"], trace.data["homeostatic_regulation"]["evidence_refs"])
+        failure_option = next(item for item in trace.data["deliberation"]["autonomy"]["alternatives"] if item["goal"]["drive"] == "error_recovery")
+        self.assertAlmostEqual(0.12, failure_option["score"]["feedback_adjustment"])
         self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
         brain.close()
         goal_store.close()
