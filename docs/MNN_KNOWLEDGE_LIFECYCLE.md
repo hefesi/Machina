@@ -130,3 +130,12 @@ added for the complete operation.
 
 The journal does not automatically execute actions, change policies, update
 the organism, or provide a distributed transaction across independent stores.
+
+
+## VirtualBrain strategy event integration (v0.5)
+
+VirtualBrain exposes MNNStrategyEventBridge through its strategy_events attribute. The bridge writes proposal and confirmed-outcome artifacts directly to the append-only EventStore. It does not dual-write to FragmentMemory, so the EventStore remains the authoritative causal journal for these events.
+
+Proposal events preserve status, action, context, expected reward and evidence IDs, and are always marked as not executed. Outcome events require explicit execution confirmation, an exact action match and a normalized observed reward. The outcome artifact references its proposal and the event records the proposal as its cause. Both events participate in the EventStore hash chain.
+
+Stable proposal and operation IDs support sequential retries and reject changed payloads. Concurrent callers using the same IDs must be serialized. The bridge does not execute actions, infer execution from a proposal, or automatically update FragmentMemory or organism weights.
