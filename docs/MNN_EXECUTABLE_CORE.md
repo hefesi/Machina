@@ -1161,3 +1161,18 @@ decide se uma revisão é epistemicamente adequada. O chamador fornece a
 evidência e autoriza explicitamente a aplicação. O controle de versão protege
 contra sobrescrita concorrente; não substitui avaliação de qualidade da
 informação.
+
+
+### Contexto autobiográfico como proveniência
+
+A pipeline também oferece `propose_from_autobiographical_context()`. Ela recebe
+resultados explícitos de `SelfAutobiographicalRecall.recall()`, coleta apenas
+as referências de evidência e os IDs dos episódios que já estão ligados aos
+eventos de transformação, e exige que o `evidence_id` informado esteja entre
+essas referências. A proposta registra o conjunto em `context_refs`.
+
+Essa integração conecta memória episódica/autobiográfica à revisão de memória
+sem converter similaridade lexical em verdade. A recuperação serve para
+contextualizar e rastrear a origem; não julga a confiabilidade da lembrança,
+não confirma causalidade e não aplica revisão automaticamente. A avaliação
+epistêmica continua sendo responsabilidade de um avaliador externo explícito.
