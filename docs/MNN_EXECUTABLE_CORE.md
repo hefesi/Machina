@@ -979,3 +979,33 @@ This component is descriptive and read-only. It does not infer that a
 transformation caused a later outcome, update capability estimates, or
 automatically alter goal priorities. Sample size and explicit provenance must
 be considered before any future learning policy consumes these assessments.
+
+
+## Uncertainty-aware contextual outcome recommendations
+
+MNNContextualOutcomePolicy now reports weighted reward estimates, effective
+sample sizes and standard errors for each configured action. Its default
+noise_guard_multiplier=1.0 requires the estimated advantage over the runner-up
+to exceed both the configured reward margin and the combined standard-error
+guard. When variability is too large, it abstains with
+reward_difference_not_larger_than_noise_guard.
+
+```python
+from machina import MNNContextualOutcomePolicy
+
+policy = MNNContextualOutcomePolicy(
+    memory,
+    actions=("reflect", "explore"),
+    min_samples_per_action=3,
+    min_reward_margin=0.1,
+    noise_guard_multiplier=1.0,
+)
+recommendation = policy.recommend("uncertain reasoning task")
+```
+
+The uncertainty guard uses a weighted descriptive variance and effective
+sample size, accounting for context-overlap, confidence and optional recency
+weights. It is a conservative heuristic, not a calibrated confidence interval,
+hypothesis test, or statistical-significance claim. Set the multiplier to
+0.0 only when intentionally disabling this additional guard. A recommendation
+remains advisory; action execution and outcome observation stay with the caller.
