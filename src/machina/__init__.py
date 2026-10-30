@@ -13,6 +13,7 @@ from .event_store import EventStore, IntegrityError
 from .fragment_memory import FragmentMemory, MemoryFragment
 from .mnn_memory_reconsolidation import MemoryRevisionProposal, MNNMemoryReconsolidationPipeline
 from .mnn_memory_conflict import MemoryConflictReview, MNNMemoryConflictReviewer
+from .mnn_concept_relations import ConceptRelation, MNNConceptRelationStore
 from .goal_store import PersistentGoalStore
 from .goal_review import GoalReview, GoalReviewer
 from .goal_constraints import GoalConflictResolver, GoalConstraintAssessment, GoalSchedule
@@ -98,6 +99,8 @@ __all__ = [
     "MNNMemoryReconsolidationPipeline",
     "MemoryConflictReview",
     "MNNMemoryConflictReviewer",
+    "ConceptRelation",
+    "MNNConceptRelationStore",
     "DuplicateKnowledgeError",
     "KnowledgeDocument",
     "KnowledgeHit",
