@@ -23,6 +23,7 @@ from .mnn_organism import (DecisionAssessment, DecisionOption, MNNOrganism, Memo
 from .mnn_adapter import MNNCognitionAdapter
 from .self_model import SelfModel
 from .self_state_dynamics import SelfStateDynamicsAnalyzer, SelfStateTransition
+from .self_history_influence import SelfHistoryInfluence, SelfHistoryInfluenceAdapter, SelfHistoryRule
 from .self_model_learning import SelfModelLearningBridge
 from .self_autobiography import SelfAutobiography
 from .self_transformation import SelfTransformationTracker
@@ -99,6 +100,9 @@ __all__ = [
     "SelfModel",
     "SelfStateDynamicsAnalyzer",
     "SelfStateTransition",
+    "SelfHistoryInfluence",
+    "SelfHistoryInfluenceAdapter",
+    "SelfHistoryRule",
     "SelfModelLearningBridge",
     "SelfAutobiography",
     "SelfTransformationTracker",
