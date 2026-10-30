@@ -548,3 +548,18 @@ progress, evidence, priority changes, and outcome labels must come from an
 external evaluator or a separately validated process. The recommendation is
 a transparent rule over measurements, not an understanding of why a goal
 matters. It does not establish subjective agency or free will.
+
+
+### Concorrência e validade temporal das revisões
+
+Uma revisão agora fica vinculada ao identificador exato do registro de objetivo
+e ao progresso observado quando foi criada. Ao aplicar a revisão, o
+armazenamento verifica ambos. Se outro avaliador já tiver atualizado o
+objetivo, ou se o registro tiver sido concluído e substituído por uma nova
+instância, a aplicação é rejeitada e exige uma nova avaliação.
+
+Essa proteção evita que uma recomendação antiga sobrescreva evidência mais
+recente ou seja aplicada acidentalmente a uma nova instância com o mesmo
+`goal_id`. O mecanismo é uma verificação otimista de concorrência; ele não
+resolve conflitos semânticos entre avaliadores, mas impede uma classe
+importante de corrupção temporal do estado.
