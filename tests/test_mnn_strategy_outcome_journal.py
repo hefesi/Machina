@@ -28,7 +28,7 @@ class StrategyOutcomeJournalTests(unittest.TestCase):
             "p-1", execution_confirmed=True, executed_action="candidate",
             observed_reward=0.9, operation_id="o-1",
         )
-        self.assertEqual(0.2, outcome.metadata["prediction_error"])
+        self.assertAlmostEqual(0.2, outcome.metadata["prediction_error"])
         self.assertEqual(proposal.id, outcome.related_ids[0])
 
     def test_abstention_can_be_recorded_but_cannot_receive_outcome(self):
