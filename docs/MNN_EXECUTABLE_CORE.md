@@ -726,3 +726,22 @@ write to the journal and can be rebuilt from the append-only EventStore.
 This adds traceability between experiences and operational self-change. It
 does not establish subjective experience, autobiographical consciousness, or
 phenomenal identity.
+
+## Explicit autobiographical influence on neural activity (experimental)
+
+`SelfInfluenceAdapter` converts recorded SelfModel change statuses into
+bounded signed neural input proposals. The caller must explicitly map a
+SelfModel field path (for example, `capability_estimates.reasoning`) to an
+existing MNN unit. An isolated observation contributes a small positive
+signal, repeated recorded reinforcement contributes a larger signal, and a
+recorded reversal contributes a negative signal. Values are bounded and
+averaged when several mapped transformations exist.
+
+`prepare()` is read-only and returns neural inputs together with evidence
+references, source paths, and transformation event IDs. The caller may inspect
+the proposal and explicitly pass `influence.neural_inputs` to
+`MNNOrganism.step(inputs=...)`. The adapter never advances the neural clock,
+chooses mappings, or executes actions. The numeric encoding is an experimental
+control convention, not a claim that the mapped field has a universal
+psychological meaning. Controlled experiments must compare mapped influence
+against a no-influence baseline.
