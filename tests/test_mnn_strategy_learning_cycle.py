@@ -24,19 +24,14 @@ class StrategyLearningCycleTests(unittest.TestCase):
             "status": "proposed", "action": "candidate",
             "context": "workload A", "evidence_ids": [self.evidence.id],
         }
+        network = MNN()
+        network.add_unit(Unit("sensor", activation="identity"))
+        network.add_unit(Unit("output", activation="identity"))
+        network.add_connection(Connection("sensor-output", "sensor", "output", 0.5))
         self.organism = MNNOrganism(
-            "cycle-test",
-            network=MNN(units=[
-                Unit("sensor", activation="identity"),
-                Unit("output", activation="identity"),
-            ], connections=[
-                Connection("sensor-output", "sensor", "output", 0.5)
-            ]),
-            learning_rate=0.2,
+            "cycle-test", network=network, learning_rate=0.2
         )
-        advisor = MNNStrategyDecisionAdvisor.__new__(MNNStrategyDecisionAdvisor)
-        # A real advisor is not needed to test the delegation contract; inject
-        # a tiny deterministic object implementing the same public method.
+        # Inject a deterministic advisor to test the facade delegation contract.
         class StubAdvisor:
             def propose(inner, context, campaign_ids, **kwargs):
                 return dict(self.proposal)
@@ -50,7 +45,7 @@ class StrategyLearningCycleTests(unittest.TestCase):
     def test_proposal_delegates_without_executing(self):
         result = self.cycle.propose("workload A", ["campaign-1"])
         self.assertEqual(self.proposal, result)
-        self.assertEqual(0, self.organism.timestep)
+        self.assertEqual(0, self.organism.network.timestep)
 
     def test_strategy_outcome_requires_confirmation_and_updates_organism(self):
         with self.assertRaises(ValueError):
