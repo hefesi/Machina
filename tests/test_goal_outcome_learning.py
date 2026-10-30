@@ -27,6 +27,12 @@ class GoalOutcomeLearningTests(unittest.TestCase):
         self.assertGreater(after["predicted_outcome"], before["predicted_outcome"])
         self.assertEqual(1, after["observations"])
 
+    def test_estimates_can_be_passed_to_goal_scheduler(self):
+        self.learner.observe("research", 1.0, evidence="Research delivered.")
+        estimates = self.learner.utility_estimates(["research", "deployment"])
+        self.assertGreater(estimates["research"], estimates["deployment"])
+        self.assertEqual({"research", "deployment"}, set(estimates))
+
     def test_prediction_is_specific_to_goal_type(self):
         self.learner.observe("research", 1.0, evidence="Research succeeded.")
         self.assertGreater(
