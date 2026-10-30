@@ -102,3 +102,25 @@ This facade is not a distributed transaction: organism state and SQLite memory
 do not share a commit boundary. Callers should persist snapshots and reconcile
 the two feedback operations independently after failures. No method executes
 the proposed external action or changes the advisor's policy automatically.
+
+
+## Persistent strategy outcome journal (v0.4)
+
+`MNNStrategyOutcomeJournal` stores strategy proposals and outcomes as separate
+SQLite-backed memory fragments. A proposal records its context, evidence IDs,
+and caller-supplied expected reward; it is explicitly marked as not executed.
+An outcome is accepted only after explicit execution confirmation and an exact
+match between the proposed and executed action.
+
+The journal records the prediction error as:
+
+`prediction_error = observed_reward - expected_reward`
+
+Both rewards must be normalized to [0, 1] by the caller. This difference is a
+descriptive learning signal, not a causal estimate or proof that the strategy
+caused the result. Stable proposal and operation IDs make sequential retries
+idempotent and reject reuse with changed payloads. Records survive reopening
+the same FragmentMemory database.
+
+The journal does not automatically execute actions, change policies, update
+the organism, or provide a distributed transaction across independent stores.
