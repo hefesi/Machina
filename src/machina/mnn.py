@@ -156,8 +156,23 @@ class MNN:
             del self.connections[edge_id]
         return removed
 
-    def step(self, inputs: Mapping[str, float] | None = None) -> dict[str, float]:
+    def step(
+        self,
+        inputs: Mapping[str, float] | None = None,
+        *,
+        connection_gains: Mapping[str, float] | None = None,
+    ) -> dict[str, float]:
+        """Advance one synchronous step, optionally scaling edge transmission."""
         inputs = inputs or {}
+        connection_gains = connection_gains or {}
+        unknown_gains = set(connection_gains) - self.connections.keys()
+        if unknown_gains:
+            raise ValueError(f"unknown connection gain IDs: {sorted(unknown_gains)}")
+        validated_gains = {
+            key: _finite(value, f"connection gain {key}") for key, value in connection_gains.items()
+        }
+        if any(value < 0.0 for value in validated_gains.values()):
+            raise ValueError("connection gains cannot be negative")
         unknown = set(inputs) - self.units.keys()
         if unknown:
             raise ValueError(f"unknown input units: {sorted(unknown)}")
@@ -166,7 +181,7 @@ class MNN:
         totals = {key: unit.bias for key, unit in self.units.items()}
         for edge in self.connections.values():
             if edge.enabled:
-                totals[edge.target] += previous[edge.source] * edge.weight
+                totals[edge.target] += previous[edge.source] * edge.weight * validated_gains.get(edge.id, 1.0)
         next_states = dict(previous)
         for key, value in input_values.items():
             next_states[key] = value

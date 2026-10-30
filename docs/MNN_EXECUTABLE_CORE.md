@@ -1040,3 +1040,70 @@ atual. Isso descreve uma mudança entre campanhas, não demonstra recuperação
 causal da estratégia nem mudança no ambiente. Campanhas inconclusivas não são
 convertidas em conclusões, e evidências brutas nunca são combinadas entre
 contextos. A camada não altera políticas ou executa ações.
+
+
+## Proposta contextual de ação
+
+`MNNStrategyDecisionAdvisor` conecta a memória contextual à etapa de decisão.
+Recebe um contexto e uma sequência explícita de campanhas, solicita a revisão
+independente dessas campanhas e só propõe uma ação quando há vantagem
+consistente da ação candidata ou da ação atual segundo os limites configurados.
+
+A proposta inclui campanhas, contagem de campanhas conclusivas, concordância e
+identificadores das evidências. Em resultados mistos, contextos incompatíveis
+ou evidência insuficiente, o componente se abstém. A proposta é consultiva:
+`executed` permanece falso, nenhuma política é alterada e a execução depende
+de um componente externo autorizado. A concordância observacional não prova
+causalidade nem significância estatística.
+
+
+## Aprendizagem a partir de resultados de estratégia confirmados
+
+`MNNStrategyFeedbackAdapter` fecha o caminho entre proposta, execução externa
+confirmada e aprendizagem do organismo. O adaptador exige uma proposta
+acionável, confirmação explícita de execução e correspondência exata entre a
+ação proposta e a ação executada. Uma abstenção, uma ação diferente ou a falta
+de confirmação não avançam o organismo.
+
+Após a validação, o resultado observado é convertido em `ChemicalEvent` e
+encaminhado a `MNNOrganism.step`. Com uma taxa de aprendizagem positiva, a
+dinâmica química existente modula a plasticidade Hebbiana da rede. O adaptador
+não executa a ação externa, não escolhe a recompensa e não normaliza escalas
+arbitrárias: o chamador deve fornecer recompensa e características no
+intervalo [0, 1]. O evento é um sinal computacional de aprendizagem, não uma
+medida de prazer ou experiência subjetiva.
+
+
+## Consolidação sináptica baseada em evidências
+
+`MNNSynapticConsolidator` acrescenta uma camada lenta e explícita sobre os
+pesos da MNN. O chamador registra quais conexões participaram de um
+reforço confirmado, associando cada operação a um identificador idempotente
+e a uma evidência. A estabilidade é uma contagem normalizada de reforços
+registrados; não é uma probabilidade de utilidade nem uma inferência sobre
+valor biológico.
+
+A operação `apply_decay` é sempre explícita. Conexões com estabilidade alta
+podem ser protegidas, enquanto conexões com pouca evidência sofrem redução
+proporcional limitada. O mecanismo não remove conexões, não interpreta
+inatividade como inutilidade e não é executado automaticamente em cada ciclo.
+A política e o histórico de evidências podem ser salvos e restaurados por
+snapshot. Essa etapa fornece um experimento controlado para estudar retenção
+e esquecimento sem destruir dados ou estruturas silenciosamente.
+
+
+## Plasticidade sináptica de curto prazo
+
+`MNNShortTermPlasticity` introduz dinâmica rápida por conexão, separada dos
+pesos duradouros. Cada aresta mantém utilização e recursos disponíveis:
+atividade pré-sináptica pode elevar temporariamente a utilização e consumir
+recursos; em ciclos posteriores, a utilização relaxa e os recursos se
+recuperam. O ganho resultante escala apenas a transmissão daquele passo.
+
+`MNN.step` aceita agora `connection_gains` opcionais. Sem esse argumento,
+o comportamento anterior permanece inalterado. O módulo de plasticidade
+mantém seu próprio snapshot, exige correspondência exata entre a topologia
+salva e a rede e falha explicitamente se conexões forem adicionadas ou
+removidas sem reconciliação. Os ganhos transitórios não sobrescrevem os pesos
+de longo prazo, que continuam sob controle dos mecanismos de aprendizagem
+existentes.
