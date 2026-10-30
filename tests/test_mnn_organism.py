@@ -18,8 +18,10 @@ class MNNOrganismTests(unittest.TestCase):
         network.add_unit(Unit("sensor", activation="identity"))
         network.add_unit(Unit("dopamine", activation="identity"))
         network.add_unit(Unit("integrator", activation="tanh"))
+        network.add_unit(Unit("memory_context", activation="identity"))
         network.add_connection(Connection("sensor-integrator", "sensor", "integrator", 0.4))
         network.add_connection(Connection("dopamine-integrator", "dopamine", "integrator", 0.2))
+        network.add_connection(Connection("memory-integrator", "memory_context", "integrator", 0.3))
         return MNNOrganism(
             "machina-test",
             network,
@@ -98,6 +100,53 @@ class MNNOrganismTests(unittest.TestCase):
             self.assertEqual(2, reopened.count())
             self.assertEqual(2, len(reopened.recall("MNN organism experience")))
             reopened.close()
+
+
+    def test_memory_guidance_is_explicit_and_reaches_neural_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            memory = FragmentMemory(Path(directory) / "episodes.sqlite3")
+            organism = self.make_organism()
+            organism.memory = memory
+            organism.step({"sensor": 0.6}, ChemicalEvent(reward=0.8))
+            before = organism.snapshot()
+            guidance = organism.prepare_memory_guidance(
+                "prediction error", target_unit="memory_context"
+            )
+            self.assertTrue(guidance.evidence_ids)
+            self.assertGreater(guidance.signal, 0.0)
+            self.assertLessEqual(guidance.signal, 1.0)
+            self.assertEqual(before, organism.snapshot())
+            result = organism.step(memory_guidance=guidance)
+            self.assertAlmostEqual(result.neural_state["memory_context"], guidance.signal)
+            self.assertEqual(2, memory.count())
+            memory.close()
+
+    def test_unrelated_memory_query_abstains_with_zero_signal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            memory = FragmentMemory(Path(directory) / "episodes.sqlite3")
+            organism = self.make_organism()
+            organism.memory = memory
+            organism.step({"sensor": 0.6})
+            guidance = organism.prepare_memory_guidance(
+                "volcano astronomy", target_unit="memory_context"
+            )
+            self.assertEqual((), guidance.evidence_ids)
+            self.assertEqual(0.0, guidance.signal)
+            memory.close()
+
+    def test_memory_guidance_rejects_conflicting_or_invalid_routes(self):
+        organism = self.make_organism()
+        with tempfile.TemporaryDirectory() as directory:
+            organism.memory = FragmentMemory(Path(directory) / "episodes.sqlite3")
+            organism.step({"sensor": 0.4})
+            guidance = organism.prepare_memory_guidance(
+                "prediction error", target_unit="memory_context"
+            )
+            with self.assertRaises(ValueError):
+                organism.step({"memory_context": 0.2}, memory_guidance=guidance)
+            with self.assertRaises(ValueError):
+                organism.prepare_memory_guidance("query", target_unit="missing")
+            organism.memory.close()
 
     def test_memory_is_optional_and_recall_requires_attachment(self):
         organism = self.make_organism()
