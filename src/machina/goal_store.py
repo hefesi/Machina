@@ -105,6 +105,8 @@ class PersistentGoalStore:
         *,
         evidence: str,
         priority: float | None = None,
+        record_id: int | None = None,
+        expected_progress: float | None = None,
     ) -> dict[str, Any]:
         """Record measured progress and optional priority for an open goal.
 
@@ -123,13 +125,20 @@ class PersistentGoalStore:
         note = evidence.strip()
         if not note:
             raise ValueError("progress updates require non-empty evidence")
-        row = self._db.execute(
+        query = (
             "SELECT * FROM persistent_goals WHERE goal_id = ? AND status IN "
-            "('active', 'needs_revision') ORDER BY id DESC LIMIT 1",
-            (goal_id,),
-        ).fetchone()
+            "('active', 'needs_revision')"
+        )
+        params: tuple[Any, ...] = (goal_id,)
+        if record_id is not None:
+            query += " AND id = ?"
+            params += (record_id,)
+        query += " ORDER BY id DESC LIMIT 1"
+        row = self._db.execute(query, params).fetchone()
         if row is None:
-            raise ValueError(f"no open persistent goal found for {goal_id!r}")
+            raise ValueError(f"no matching open persistent goal found for {goal_id!r}")
+        if expected_progress is not None and float(row["progress"]) != float(expected_progress):
+            raise ValueError("goal changed since review; create a fresh review")
         combined = row["evidence"] + "\\n" + note if row["evidence"] else note
         if priority is None:
             self._db.execute(
@@ -148,17 +157,27 @@ class PersistentGoalStore:
             "SELECT * FROM persistent_goals WHERE id = ?", (row["id"],)
         ).fetchone())
 
-    def record_outcome(self, goal_id: str, outcome: str, evidence: str = "") -> dict[str, Any]:
+    def record_outcome(
+        self, goal_id: str, outcome: str, evidence: str = "",
+        *, record_id: int | None = None, expected_progress: float | None = None,
+    ) -> dict[str, Any]:
         """Apply explicit feedback; repeated failures flag revision rather than success."""
         if outcome not in self.OUTCOMES:
             raise ValueError("outcome must be success, failure, or skip")
-        row = self._db.execute(
+        query = (
             "SELECT * FROM persistent_goals WHERE goal_id = ? AND status IN "
-            "('active', 'needs_revision') ORDER BY id DESC LIMIT 1",
-            (goal_id,),
-        ).fetchone()
+            "('active', 'needs_revision')"
+        )
+        params: tuple[Any, ...] = (goal_id,)
+        if record_id is not None:
+            query += " AND id = ?"
+            params += (record_id,)
+        query += " ORDER BY id DESC LIMIT 1"
+        row = self._db.execute(query, params).fetchone()
         if row is None:
-            raise ValueError(f"no open persistent goal found for {goal_id!r}")
+            raise ValueError(f"no matching open persistent goal found for {goal_id!r}")
+        if expected_progress is not None and float(row["progress"]) != float(expected_progress):
+            raise ValueError("goal changed since review; create a fresh review")
         failures = row["failure_count"] + (1 if outcome == "failure" else 0)
         if outcome == "success":
             status = "completed"
