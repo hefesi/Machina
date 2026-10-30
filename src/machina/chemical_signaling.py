@@ -76,6 +76,7 @@ class ChemicalEvent:
     effort: float = 0.0
     progress: float = 0.0
     risk: float = 0.0
+    motivational_pressure: float = 0.0
 
     def __post_init__(self) -> None:
         for name, value in asdict(self).items():
@@ -120,8 +121,8 @@ class ChemicalSignaling:
         gain = p.production_gain
         targets = {
             "dopamine": self._clamp(0.5 + 0.5 * prediction_error),
-            "acetylcholine": self._clamp(0.65 * event.novelty + 0.35 * event.uncertainty),
-            "noradrenaline": self._clamp(0.6 * event.uncertainty + 0.4 * event.risk),
+            "acetylcholine": self._clamp(0.55 * event.novelty + 0.25 * event.uncertainty + 0.20 * event.motivational_pressure),
+            "noradrenaline": self._clamp(0.5 * event.uncertainty + 0.3 * event.risk + 0.2 * event.motivational_pressure),
             "serotonin": self._clamp(0.6 * (1.0 - event.risk) + 0.4 * event.progress),
         }
         decays = {
@@ -138,7 +139,7 @@ class ChemicalSignaling:
 
         exploration = self._clamp(
             0.50 * s.acetylcholine + 0.35 * event.uncertainty
-            + 0.15 * event.novelty - 0.25 * event.risk
+            + 0.15 * event.novelty + 0.20 * event.motivational_pressure - 0.25 * event.risk
         )
         plasticity = self._clamp(0.25 + 0.5 * abs(prediction_error) + 0.25 * s.acetylcholine)
         attention = self._clamp(0.4 + 0.4 * s.acetylcholine + 0.2 * s.noradrenaline)
