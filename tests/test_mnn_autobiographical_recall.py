@@ -46,7 +46,7 @@ class MNNAutobiographicalRecallTests(unittest.TestCase):
         self.assertEqual(self.event.artifact.id, episode.artifact_id)
         self.assertEqual(self.event.sequence, episode.sequence)
         self.assertEqual("perception.observed", episode.event_type)
-        self.assertEqual("overheating", episode.artifact["data"]["content"])
+        self.assertEqual("robot detected overheating in motor assembly", episode.artifact["data"]["content"])
 
     def test_excludes_non_event_fragments_even_when_they_match(self):
         self.memory.add(
