@@ -1176,3 +1176,24 @@ sem converter similaridade lexical em verdade. A recuperação serve para
 contextualizar e rastrear a origem; não julga a confiabilidade da lembrança,
 não confirma causalidade e não aplica revisão automaticamente. A avaliação
 epistêmica continua sendo responsabilidade de um avaliador externo explícito.
+
+
+## Orientador de aprendizado autobiográfico
+
+`MNNAutobiographicalLearningAdvisor` transforma as avaliações explícitas de
+`SelfAutobiographicalEvaluator` em sinais de revisão. Para cada transformação,
+classifica os resultados como `insufficient_evidence`,
+`candidate_for_reinforcement`, `monitor_calibration`,
+`review_or_revise` ou `continue_observation`.
+
+A classificação considera tamanho mínimo da amostra, média de resultados e,
+quando disponível, erro absoluto médio de previsão. Limiares são configuráveis.
+Uma tendência positiva só vira candidata a reforço quando há amostra suficiente
+e calibração dentro do limite. Resultado positivo sem calibração pede
+monitoramento; resultado negativo pede revisão, não reversão automática.
+
+O orientador é deliberadamente sem efeitos colaterais: não altera pesos
+sinápticos, SelfModel, objetivos ou memória. Ele preserva os IDs de evidência
+para que uma etapa posterior possa inspecionar os registros originais. As
+médias são descrições de episódios vinculados, não estimativas causais nem
+garantias de desempenho futuro.
