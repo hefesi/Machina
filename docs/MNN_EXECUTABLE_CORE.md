@@ -477,3 +477,12 @@ A migração adiciona as colunas sem apagar objetivos de bancos SQLite existente
 ### Priorização de objetivos persistentes
 
 `PersistentGoalStore.ranked_open_goals()` expõe uma fila determinística de objetivos acionáveis. A ordenação considera prioridade explícita (maior primeiro), estado (ativos antes dos que exigem revisão) e progresso (menor primeiro, favorecendo objetivos ainda incompletos); a ordem de criação desempata. Objetivos pausados ficam fora da fila até uma retomada explícita. A fila não executa objetivos nem decide sozinha abandonar ou concluir nenhum deles.
+
+
+### Ciclo de deliberação interna
+
+O módulo `machina.deliberation` introduz `InternalDeliberator`, que reúne propostas geradas pelo contexto e pela pressão motivacional com os objetivos abertos recuperados da `PersistentGoalStore`. Todos passam pela mesma política explícita de pontuação e limite de risco do `AutonomyController`.
+
+Quando uma proposta coincide com um objetivo já aberto, a representação persistente prevalece: progresso e prioridade registrados são convertidos em entradas explícitas da política, evitando duplicar a mesma instância lógica. Um objetivo novo só é persistido depois de ser selecionado. O resultado `DeliberationDecision` registra número do ciclo, origem (novo ou persistente), identificador da instância, alternativas, componentes de pontuação e justificativa.
+
+O deliberador não executa o objetivo, não altera seu estado de ciclo de vida e não o considera concluído. Sucesso, falha, pausa, revisão e abandono continuam dependendo de evidência e operações explícitas. O ciclo é determinístico e auditável; não constitui demonstração de consciência fenomenal, desejo sentido ou livre-arbítrio filosófico.
