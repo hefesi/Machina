@@ -486,3 +486,12 @@ O módulo `machina.deliberation` introduz `InternalDeliberator`, que reúne prop
 Quando uma proposta coincide com um objetivo já aberto, a representação persistente prevalece: progresso e prioridade registrados são convertidos em entradas explícitas da política, evitando duplicar a mesma instância lógica. Um objetivo novo só é persistido depois de ser selecionado. O resultado `DeliberationDecision` registra número do ciclo, origem (novo ou persistente), identificador da instância, alternativas, componentes de pontuação e justificativa.
 
 O deliberador não executa o objetivo, não altera seu estado de ciclo de vida e não o considera concluído. Sucesso, falha, pausa, revisão e abandono continuam dependendo de evidência e operações explícitas. O ciclo é determinístico e auditável; não constitui demonstração de consciência fenomenal, desejo sentido ou livre-arbítrio filosófico.
+
+
+### Deliberação conectada ao ciclo do Virtual Brain
+
+O `VirtualBrain` pode receber um `InternalDeliberator` explicitamente configurado e executar `run_deliberated_cycle(observation, context, ...)`. Antes de iniciar a cognição, o deliberador escolhe um objetivo interno elegível e garante sua persistência. O cérebro então inicia o ciclo usando a descrição desse objetivo como foco operacional.
+
+A escolha é registrada no diário append-only como evento `goal.deliberated`, ligado causalmente ao objetivo ativado. O registro contém o identificador lógico do objetivo, a instância persistente, a origem da proposta e o relatório completo da deliberação, incluindo alternativas e componentes de pontuação. Assim, a decisão pode ser inspecionada depois de reiniciar o processo e integra a trilha causal do ciclo.
+
+A integração é opt-in: sem um deliberador configurado, o comportamento anterior do `VirtualBrain` permanece inalterado. A seleção não autoriza ações externas por si só; o ciclo posterior continua sujeito aos contratos e políticas existentes do executor. O evento adicional não substitui a auditoria do ciclo nem transforma uma decisão operacional em evidência de experiência subjetiva.
