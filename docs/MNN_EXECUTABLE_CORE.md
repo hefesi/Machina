@@ -1124,3 +1124,40 @@ reutilização com outra revisão. O mecanismo não decide sozinho se a nova
 evidência é verdadeira ou suficiente: essa avaliação continua pertencendo ao
 componente chamador. Reconsolidação, portanto, é uma capacidade de atualização
 auditável, não uma garantia de correção da memória.
+
+
+## Propostas versionadas de reconsolidação de memória
+
+`MNNMemoryReconsolidationPipeline` separa a preparação de uma revisão de sua
+aplicação. `propose()` lê a versão atual sem registrar acesso e cria uma
+proposta imutável contendo o conteúdo-base, o novo conteúdo, a referência de
+evidência e a confiança opcional. Criar a proposta não altera a memória.
+
+`apply()` exige um identificador de operação e usa comparação-e-troca
+(compare-and-swap): a revisão só é aplicada se o conteúdo atual ainda for
+exatamente aquele que a proposta avaliou. Se outra revisão tiver sido aplicada
+nesse intervalo, a proposta antiga é rejeitada em vez de sobrescrever a versão
+mais recente. A transação preserva o histórico anterior e continua idempotente
+para tentativas repetidas com o mesmo identificador e payload.
+
+```python
+from machina import MNNMemoryReconsolidationPipeline
+
+pipeline = MNNMemoryReconsolidationPipeline()
+proposal = pipeline.propose(
+    memory, "fragment-42",
+    revised_content="Interpretação revisada após nova observação",
+    evidence_id="observation:cycle-108",
+    confidence=0.82,
+)
+# A proposta ainda não altera a memória.
+current, revision, applied = pipeline.apply(
+    memory, proposal, operation_id="reconsolidation-cycle-108",
+)
+```
+
+O pipeline não recupera evidências externas, não avalia sua veracidade e não
+decide se uma revisão é epistemicamente adequada. O chamador fornece a
+evidência e autoriza explicitamente a aplicação. O controle de versão protege
+contra sobrescrita concorrente; não substitui avaliação de qualidade da
+informação.
