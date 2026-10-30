@@ -415,3 +415,16 @@ This is a synchronized software experiment, not a biological homeostasis
 model. Fulfillment remains an explicit observation supplied by the caller;
 neither neural activation nor chemical concentration silently declares a
 need satisfied.
+
+
+### Arbitragem de conflitos motivacionais (experimental)
+
+A `MotivationSystem` agora permite registrar conflitos simétricos entre pares de drives por meio de `MotivationalConflict(first, second, strength)`. A intensidade fica limitada a [0, 1]. Referências desconhecidas, auto-conflitos e arestas duplicadas são rejeitados.
+
+A urgência bruta de cada drive continua preservada como déficit interno. Para priorização, o método `effective_urgencies()` calcula uma urgência efetiva: para cada drive, obtém a média ponderada das urgências dos concorrentes conectados e subtrai uma inibição proporcional ao `conflict_gain`. O resultado é limitado a [0, 1]. A regra é simétrica e independente da ordem em que drives e conflitos foram registrados. Drives sem conflitos mantêm sua urgência original.
+
+A arbitragem alimenta `ranked_drives()`, `autonomy_adjustments()` e `chemical_pressure`. Assim, uma necessidade concorrente pode reduzir a influência de outra na seleção de objetivos e na modulação química virtual, sem apagar seu déficit nem declarar qualquer necessidade satisfeita. A regra não escolhe automaticamente um vencedor: conflitos equilibrados podem reduzir ambas as urgências.
+
+O snapshot da motivação passou para schema 2 e inclui conflitos e ganho de arbitragem. O carregador continua aceitando schema 1, que restaura drives sem conflitos. Testes cobrem simetria, independência de ordem, limites, validação, persistência e compatibilidade retroativa.
+
+Este mecanismo é uma hipótese computacional simples de competição entre prioridades, não um modelo completo de motivação biológica. O próximo passo de validação é comparar decisões com e sem conflitos em tarefas controladas, incluindo casos em que a inibição ajuda, prejudica ou deve ser ignorada.
