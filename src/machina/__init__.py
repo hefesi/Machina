@@ -25,7 +25,7 @@ from .self_model import SelfModel
 from .self_state_dynamics import SelfStateDynamicsAnalyzer, SelfStateTransition
 from .self_history_influence import SelfHistoryInfluence, SelfHistoryInfluenceAdapter, SelfHistoryRule
 from .self_autobiographical_recall import SelfAutobiographicalMatch, SelfAutobiographicalRecall
-from .self_autobiographical_evaluation import SelfAutobiographicalAssessment, SelfAutobiographicalEvaluation, SelfAutobiographicalEvaluator
+from .self_autobiographical_evaluation import SelfExperienceAssessment, SelfAutobiographicalEvaluation, SelfAutobiographicalEvaluator
 from .self_model_learning import SelfModelLearningBridge
 from .self_autobiography import SelfAutobiography
 from .self_transformation import SelfTransformationTracker
