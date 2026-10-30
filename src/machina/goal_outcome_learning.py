@@ -79,6 +79,16 @@ class GoalOutcomeLearner:
             "observations": int(row["n"]),
         }
 
+    def utility_estimates(self, goal_types: list[str] | tuple[str, ...]) -> dict[str, float]:
+        """Provide posterior means in the utility format accepted by the scheduler."""
+        labels = [self._label(item, "goal_type") for item in goal_types]
+        if not labels or len(set(labels)) != len(labels):
+            raise ValueError("goal_types must contain unique non-empty labels")
+        return {
+            label: float(self.predict(label)["predicted_outcome"])
+            for label in labels
+        }
+
     def observe(
         self,
         goal_type: str,
