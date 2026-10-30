@@ -6,6 +6,7 @@ selection ledger. It does not infer success from a completed cognitive cycle.
 from __future__ import annotations
 
 import sqlite3
+import json
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +53,19 @@ class PersistentGoalStore:
             self._db.execute("ALTER TABLE persistent_goals ADD COLUMN priority REAL NOT NULL DEFAULT 0.5")
         self._db.execute(
             "CREATE INDEX IF NOT EXISTS idx_persistent_goals_status ON persistent_goals(status, id)"
+        )
+        self._db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS deliberation_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                selected_goal_id TEXT,
+                selected_source TEXT,
+                rationale TEXT NOT NULL,
+                alternatives_json TEXT NOT NULL,
+                context_json TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
         )
         self._db.commit()
 
@@ -247,6 +261,54 @@ class PersistentGoalStore:
             (limit,),
         ).fetchall()
         return [self._as_dict(row) for row in rows]
+
+    def record_deliberation(
+        self,
+        *,
+        selected_goal_id: str | None,
+        selected_source: str | None,
+        rationale: str,
+        alternatives: list[dict[str, Any]],
+        context: dict[str, Any],
+    ) -> int:
+        """Persist one deliberation and its evidence for continuity across restarts."""
+        if selected_goal_id is not None and (not isinstance(selected_goal_id, str) or not selected_goal_id.strip()):
+            raise ValueError("selected_goal_id must be a non-empty string or None")
+        if selected_source not in {None, "generated", "persistent"}:
+            raise ValueError("selected_source must be generated, persistent, or None")
+        if not isinstance(rationale, str) or not rationale.strip():
+            raise ValueError("rationale must be non-empty")
+        if not isinstance(alternatives, list) or not isinstance(context, dict):
+            raise ValueError("alternatives and context must be a list and dictionary")
+        cursor = self._db.execute(
+            "INSERT INTO deliberation_history "
+            "(selected_goal_id, selected_source, rationale, alternatives_json, context_json) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (
+                selected_goal_id,
+                selected_source,
+                rationale,
+                json.dumps(alternatives, ensure_ascii=False, sort_keys=True),
+                json.dumps(context, ensure_ascii=False, sort_keys=True),
+            ),
+        )
+        self._db.commit()
+        return int(cursor.lastrowid)
+
+    def recent_deliberations(self, limit: int = 10) -> list[dict[str, Any]]:
+        """Return newest deliberations with decoded, inspectable evidence."""
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive integer")
+        rows = self._db.execute(
+            "SELECT * FROM deliberation_history ORDER BY id DESC LIMIT ?", (limit,)
+        ).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["alternatives"] = json.loads(item.pop("alternatives_json"))
+            item["context"] = json.loads(item.pop("context_json"))
+            result.append(item)
+        return result
 
     def summary(self) -> dict[str, int]:
         rows = self._db.execute(
