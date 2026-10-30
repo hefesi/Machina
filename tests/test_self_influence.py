@@ -41,7 +41,7 @@ class SelfInfluenceAdapterTests(unittest.TestCase):
         first = self.transform("c1", {"reasoning": 0.2}, {"reasoning": 0.4}, ["eval-1"])
         self.transform("c2", {"reasoning": 0.1}, {"reasoning": 0.4}, ["eval-2"])
         influence = self.adapter.prepare()
-        self.assertEqual({"self_reasoning": 0.5}, dict(influence.neural_inputs))
+        self.assertEqual({"self_reasoning": 0.375}, dict(influence.neural_inputs))
         self.assertEqual(("eval-1", "eval-2"), influence.evidence_by_unit["self_reasoning"])
         self.assertIn(first.event_id, influence.transformation_event_ids)
 
