@@ -49,9 +49,10 @@ class MNNMemoryReconsolidationPipeline:
             or not 0.0 <= float(confidence) <= 1.0
         ):
             raise ValueError("confidence must be between 0 and 1")
-        normalized_refs = tuple(sorted(set(context_refs)))
-        if not all(isinstance(ref, str) and ref.strip() for ref in normalized_refs):
+        raw_refs = tuple(context_refs)
+        if not all(isinstance(ref, str) and ref.strip() for ref in raw_refs):
             raise ValueError("context_refs must contain non-empty strings")
+        normalized_refs = tuple(sorted(set(raw_refs)))
         current = memory.get(fragment_id, record_access=False)
         return MemoryRevisionProposal(
             fragment_id=fragment_id,
