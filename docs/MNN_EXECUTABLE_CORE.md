@@ -1197,3 +1197,30 @@ sinápticos, SelfModel, objetivos ou memória. Ele preserva os IDs de evidência
 para que uma etapa posterior possa inspecionar os registros originais. As
 médias são descrições de episódios vinculados, não estimativas causais nem
 garantias de desempenho futuro.
+
+
+## Integração explícita entre autobiografia e consolidação sináptica
+
+`MNNAutobiographicalConsolidationAdapter` fecha um caminho controlado entre
+avaliação autobiográfica e registro de evidência sináptica:
+
+1. `SelfAutobiographicalEvaluator` resume resultados explicitamente vinculados
+   a transformações do Self.
+2. `MNNAutobiographicalLearningAdvisor` classifica o resumo. Só uma amostra
+   mínima com resultados positivos e erro de previsão dentro do limite pode
+   gerar `candidate_for_reinforcement`.
+3. Um responsável externo revisa o sinal, aprova explicitamente e mapeia os
+   caminhos alterados para IDs concretos de conexões MNN.
+4. O adaptador valida a aprovação e a proveniência do ID de evidência e chama
+   `MNNSynapticConsolidator.record_reinforcement`.
+
+O adaptador não descobre sozinho quais conexões causaram uma transformação:
+o mapeamento de caminhos do Self para conexões é uma decisão explícita do
+integrador. A operação registra contagem e proveniência, mas não muda pesos;
+decay e qualquer outra alteração sináptica continuam sendo operações
+separadas e explícitas. Repetir o mesmo `operation_id` não duplica o registro.
+
+Esse circuito permite investigar se consequências autobiográficas podem
+informar a persistência de estruturas neurais, sem confundir correlação com
+causalidade, recomendação com aprovação ou consolidação de evidência com
+fortalecimento biológico. Não demonstra memória fenomenal nem consciência.
