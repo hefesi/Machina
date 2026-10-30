@@ -1055,3 +1055,20 @@ ou evidência insuficiente, o componente se abstém. A proposta é consultiva:
 `executed` permanece falso, nenhuma política é alterada e a execução depende
 de um componente externo autorizado. A concordância observacional não prova
 causalidade nem significância estatística.
+
+
+## Aprendizagem a partir de resultados de estratégia confirmados
+
+`MNNStrategyFeedbackAdapter` fecha o caminho entre proposta, execução externa
+confirmada e aprendizagem do organismo. O adaptador exige uma proposta
+acionável, confirmação explícita de execução e correspondência exata entre a
+ação proposta e a ação executada. Uma abstenção, uma ação diferente ou a falta
+de confirmação não avançam o organismo.
+
+Após a validação, o resultado observado é convertido em `ChemicalEvent` e
+encaminhado a `MNNOrganism.step`. Com uma taxa de aprendizagem positiva, a
+dinâmica química existente modula a plasticidade Hebbiana da rede. O adaptador
+não executa a ação externa, não escolhe a recompensa e não normaliza escalas
+arbitrárias: o chamador deve fornecer recompensa e características no
+intervalo [0, 1]. O evento é um sinal computacional de aprendizagem, não uma
+medida de prazer ou experiência subjetiva.
