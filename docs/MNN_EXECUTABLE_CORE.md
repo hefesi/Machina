@@ -925,3 +925,30 @@ integration boundaries: they do not mutate SelfModel history or infer that a
 persistent operational state is a stable personality trait. This mechanism
 allows recorded history to affect future goal ranking under explicit policy,
 while keeping the causal trail inspectable.
+
+
+## Searchable autobiographical recall
+
+`SelfAutobiographicalRecall` retrieves prior `self.transformed` records using
+an explainable lexical-overlap baseline. Each result preserves the journal
+event ID, cycle, sequence, changed SelfModel paths, durability classification,
+evidence references, and only those experience records connected by explicit
+causation or artifact references.
+
+```python
+from machina import (
+    SelfAutobiography, SelfExperienceIntegrator, SelfAutobiographicalRecall,
+)
+
+autobiography = SelfAutobiography(brain.store)
+integrator = SelfExperienceIntegrator(autobiography)
+recall = SelfAutobiographicalRecall(integrator)
+matches = recall.recall("python reasoning successful test", limit=5)
+```
+
+The score is the fraction of query terms found in the indexed transformation
+and explicitly linked experience content. This is lexical retrieval, not
+semantic understanding. No link is inferred from temporal proximity alone,
+and an empty result is valid. The projection is read-only and does not
+change goal scores or execute actions. A later policy may explicitly consume
+these matches, but must retain their evidence and uncertainty.
