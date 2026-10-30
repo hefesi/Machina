@@ -708,3 +708,21 @@ with EventStore("machina-events.sqlite3") as journal:
 ```
 
 The transformation history links autobiographical events to changes in the current self-description. It remains an operational account, not proof of subjective identity or consciousness.
+
+## Autobiographical experience integration (experimental)
+
+`SelfExperienceIntegrator` builds a read-only projection that connects
+recorded experience/evaluation events with `self.transformed` events. It
+accepts only explicit journal causation IDs or artifact references when
+creating links; temporal proximity alone is not treated as causality.
+
+For each changed SelfModel field, the projection compares later transformation
+records and labels the change `reinforced`, `reversed`, or `observed_once`.
+A repeated value is evidence of repeated recording, not proof of uninterrupted
+persistence between observations. A single observation is never promoted to
+"persistent" merely because no later record exists. The projection does not
+write to the journal and can be rebuilt from the append-only EventStore.
+
+This adds traceability between experiences and operational self-change. It
+does not establish subjective experience, autobiographical consciousness, or
+phenomenal identity.
