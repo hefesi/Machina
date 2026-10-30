@@ -830,3 +830,34 @@ The regulator requires evidence-backed `observed` telemetry, rejects duplicate c
 ### Homeostasis-to-deliberation coupling
 
 `VirtualBrain.run_deliberated_cycle(..., homeostatic_proposal=proposal)` can now receive an explicitly assessed `HomeostaticProposal`. Its bounded drive adjustments are combined with caller-provided adjustments (sum clamped to the controller's ±0.3 input bound) before goal ranking. The complete proposal—including source cycle, deviations, persistence counts, evidence references, and rationale—is stored in the `goal.deliberated` journal artifact. The brain does not assess telemetry or create the proposal itself: the caller must run the regulator, inspect its output, and explicitly pass it to the next deliberation cycle. This creates a traceable feedback path from persistent internal deviation to goal-selection bias, not an autonomous closed-loop guarantee or evidence of felt needs.
+
+
+## Evidence-gated homeostatic adaptation
+
+`HomeostaticFeedbackLearner` evaluates correction outcomes separately from
+the regulator. An evaluator must explicitly report whether an intervention
+improved the target, identify the rule and deviation direction, and provide an
+evidence reference plus a unique observation ID. The learner maintains a
+Beta-Bernoulli estimate per rule/direction and maps its posterior mean to a
+bounded gain scale (default 0.5–1.5; neutral prior = 1.0).
+
+```python
+from machina import HomeostaticFeedbackLearner
+
+feedback = HomeostaticFeedbackLearner(regulator.rules)
+feedback.observe(
+    "prediction_error", "above",
+    improved=True,
+    evidence_ref="evaluation:cycle-42",
+    observation_id="evaluation-42",
+)
+adapted_proposal = feedback.adapt(regulator.assess())
+```
+
+The adapted proposal is a new immutable value; the original proposal and rule
+configuration are unchanged. Repeated observation IDs are idempotent, while
+conflicting reuse is rejected. Snapshots preserve evidence-linked feedback.
+This is bounded calibration from explicit evaluator labels—not autonomous
+proof that an intervention helped, and not a model of biological learning or
+felt relief. The caller remains responsible for evaluating outcomes and
+deciding whether to pass an adapted proposal into deliberation.
