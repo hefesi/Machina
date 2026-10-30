@@ -1072,3 +1072,21 @@ não executa a ação externa, não escolhe a recompensa e não normaliza escala
 arbitrárias: o chamador deve fornecer recompensa e características no
 intervalo [0, 1]. O evento é um sinal computacional de aprendizagem, não uma
 medida de prazer ou experiência subjetiva.
+
+
+## Consolidação sináptica baseada em evidências
+
+`MNNSynapticConsolidator` acrescenta uma camada lenta e explícita sobre os
+pesos da MNN. O chamador registra quais conexões participaram de um
+reforço confirmado, associando cada operação a um identificador idempotente
+e a uma evidência. A estabilidade é uma contagem normalizada de reforços
+registrados; não é uma probabilidade de utilidade nem uma inferência sobre
+valor biológico.
+
+A operação `apply_decay` é sempre explícita. Conexões com estabilidade alta
+podem ser protegidas, enquanto conexões com pouca evidência sofrem redução
+proporcional limitada. O mecanismo não remove conexões, não interpreta
+inatividade como inutilidade e não é executado automaticamente em cada ciclo.
+A política e o histórico de evidências podem ser salvos e restaurados por
+snapshot. Essa etapa fornece um experimento controlado para estudar retenção
+e esquecimento sem destruir dados ou estruturas silenciosamente.
