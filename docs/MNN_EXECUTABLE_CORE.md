@@ -380,3 +380,38 @@ caller controls update order: evaluate current drive urgency, advance chemical
 signaling with that pressure, then apply explicitly observed fulfillment to
 the motivation system. This prevents the chemical layer from silently
 declaring a drive satisfied.
+
+
+### Synchronized motivation inside `MNNOrganism`
+
+The organism can now receive an optional `MotivationSystem`. When attached,
+its clock must match the neural and chemical clocks. Each call to
+`MNNOrganism.step(..., fulfillment=...)` performs the following sequence:
+
+1. Validate all fulfillment observations without changing state.
+2. Read the current mean motivational urgency and inject it into the
+   `ChemicalEvent.motivational_pressure` field.
+3. Advance chemical signaling and route configured chemical concentrations
+   into the MNN.
+4. Advance the neural network and apply optional reward-modulated plasticity.
+5. Apply the explicitly supplied fulfillment observations to motivational
+   drives, advancing their clock once.
+6. Record the integrated transition and its resulting motivational urgencies
+   in continuity history and, when attached, episodic memory.
+
+The caller-provided `motivational_pressure` is replaced by the attached
+motivation system's measured pressure so the integrated path has one
+authoritative source. If no motivation system is attached, the prior organism
+behavior remains unchanged and `OrganismStep.motivation_urgencies` is empty.
+
+Organism snapshots now use schema 2 and include the optional motivation
+snapshot. The loader continues to accept schema 1 snapshots, restoring them
+without a motivation subsystem. The motivation store remains in-memory state
+captured by the organism snapshot; episodic SQLite memory remains a separate
+persistence domain and must be reopened and attached by the caller after
+restoration.
+
+This is a synchronized software experiment, not a biological homeostasis
+model. Fulfillment remains an explicit observation supplied by the caller;
+neither neural activation nor chemical concentration silently declares a
+need satisfied.
