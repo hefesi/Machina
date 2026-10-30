@@ -765,3 +765,24 @@ experimental path: recorded Self changes can be routed into explicitly mapped
 MNN inputs, and the resulting neural telemetry can be recorded back into the
 operational SelfModel. It is not an autonomous feedback loop: orchestration,
 mapping, timing, and evidence provenance remain explicit caller decisions.
+
+## Explicit internal self-regulation proposals (experimental)
+
+`SelfRegulationController` compares selected observed MNN telemetry with
+caller-defined target values and creates bounded adjustments for named
+motivational/goal-selection drives. The initial supported metrics are
+prediction error, exploration drive, and attention gain. The caller explicitly
+maps each metric to a drive and defines the target profile.
+
+`propose()` returns a `RegulationProposal` with signed adjustments, metric
+errors, rationale, cycle ID, and source evidence references. Adjustments are
+clamped (maximum magnitude 0.15 by default) and can be passed to an existing
+autonomy decision interface by the caller. Missing or unknown telemetry is
+ignored rather than guessed.
+
+The controller is deliberately proposal-only: it does not change MotivationSystem,
+SelfModel, MNN weights, or execute actions. Its target values are experimental
+policy assumptions, not biologically validated homeostatic setpoints. In
+particular, reducing prediction error is not always desirable; experiments
+must test target profiles against task performance and avoid suppressing
+useful novelty or exploration.
