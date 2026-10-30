@@ -490,32 +490,58 @@ class MNNStrategyExperimentEvaluator:
             samples.sort(key=lambda entry: (entry[0], entry[2]))
             early = samples[:window_size]
             late = samples[-window_size:]
+            def summarize_window(window: list[tuple[str, float, str]]) -> tuple[float, float]:
+                values = [value for _, value, _ in window]
+                mean = sum(values) / len(values)
+                variance = sum((value - mean) ** 2 for value in values) / (len(values) - 1)
+                return mean, max(0.0, variance)
+
+            early_mean, early_variance = summarize_window(early)
+            late_mean, late_variance = summarize_window(late)
             windows[action] = {
-                "early_mean": sum(value for _, value, _ in early) / window_size,
-                "late_mean": sum(value for _, value, _ in late) / window_size,
+                "early_mean": early_mean,
+                "late_mean": late_mean,
+                "early_variance": early_variance,
+                "late_variance": late_variance,
                 "early_evidence_ids": [fragment_id for _, _, fragment_id in early],
                 "late_evidence_ids": [fragment_id for _, _, fragment_id in late],
             }
 
         early_advantage = windows[candidate_action]["early_mean"] - windows[current_action]["early_mean"]
         late_advantage = windows[candidate_action]["late_mean"] - windows[current_action]["late_mean"]
-        early_positive = early_advantage >= self.min_reward_margin
-        late_positive = late_advantage >= self.min_reward_margin
+        early_error = math.sqrt(
+            (windows[candidate_action]["early_variance"] + windows[current_action]["early_variance"])
+            / window_size
+        )
+        late_error = math.sqrt(
+            (windows[candidate_action]["late_variance"] + windows[current_action]["late_variance"])
+            / window_size
+        )
+        early_threshold = self.noise_guard_multiplier * early_error
+        late_threshold = self.noise_guard_multiplier * late_error
+        early_positive = early_advantage >= self.min_reward_margin and early_advantage > early_threshold
+        late_positive = late_advantage >= self.min_reward_margin and late_advantage > late_threshold
+        early_negative = early_advantage <= -self.min_reward_margin and -early_advantage > early_threshold
+        late_negative = late_advantage <= -self.min_reward_margin and -late_advantage > late_threshold
         if early_positive and late_positive:
-            status, reason = "advantage_persisted", "candidate_advantage_meets_margin_in_both_windows"
+            status, reason = "advantage_persisted", "candidate_advantage_meets_margin_and_noise_guard_in_both_windows"
         elif not early_positive and late_positive:
-            status, reason = "advantage_emerged", "candidate_advantage_meets_margin_only_in_late_window"
-        elif early_positive and late_advantage <= -self.min_reward_margin:
-            status, reason = "advantage_reversed", "candidate_advantage_reversed_beyond_margin"
+            status, reason = "advantage_emerged", "candidate_advantage_meets_margin_and_noise_guard_only_in_late_window"
+        elif early_positive and late_negative:
+            status, reason = "advantage_reversed", "candidate_advantage_reversed_beyond_margin_and_noise_guard"
         else:
-            status, reason = "no_clear_change", "advantage_not_consistent_across_windows"
+            status, reason = "no_clear_change", "advantage_not_consistent_or_not_larger_than_noise_guard"
         return self._result(
             status, campaign_id, reason=reason,
             current_action=current_action, candidate_action=candidate_action,
             sample_counts=counts, window_size=window_size,
             early_advantage=early_advantage, late_advantage=late_advantage,
+            early_difference_standard_error=early_error,
+            late_difference_standard_error=late_error,
+            early_noise_threshold=early_threshold,
+            late_noise_threshold=late_threshold,
             change_in_advantage=late_advantage - early_advantage,
             action_windows=windows, causal_claim=False,
             statistical_significance_claim=False,
-            method="chronological-early-versus-late-window-mean-comparison",
+            method="chronological-early-versus-late-window-margin-and-noise-guard",
         )
