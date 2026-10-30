@@ -159,3 +159,12 @@ The projector is explicit and opt-in. It does not execute actions, infer new fac
 Each returned episode carries the source event ID, sequence, cycle, event type, hash, causation reference, artifact identity, epistemic status and decoded artifact. The recall layer checks the projection version and artifact identity before returning a record.
 
 This is a lexical retrieval baseline, not semantic understanding. It does not infer that a remembered event caused a later outcome, that a strategy was successful, or that a reward value proves usefulness. Contextual relevance may adjust retrieval ranking through the existing memory mechanism, without changing global importance.
+
+
+## Autobiographical strategy review (v0.8)
+
+`MNNAutobiographicalStrategyAdvisor` compares strategy outcomes from replayed EventStore episodes for one exact normalized context. It considers only `strategy.outcome.recorded` events with explicit `execution_confirmed=True`, a configured action, and a finite observed reward within [0, 1]. Proposals, unconfirmed records, other event types and other contexts do not count as outcomes.
+
+A recommendation requires the configured minimum number of distinct cognitive cycles for every compared action and at least two observations per action so sample variability can be estimated. The observed mean difference must clear both a minimum reward margin and a configurable variance-based noise guard. The result includes source event IDs and per-action sample/cycle counts.
+
+This is an observational comparison, not a causal estimate or statistical significance test. It never executes a candidate, modifies policy, or treats one high reward as proof. Insufficient or ambiguous evidence produces an inconclusive result rather than a recommendation.
