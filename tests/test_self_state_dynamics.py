@@ -34,7 +34,7 @@ class SelfStateDynamicsAnalyzerTests(unittest.TestCase):
     def test_ignores_unobserved_samples(self):
         history = [self.snapshot("c1", 0.2), self.snapshot("c2", None, "unknown"), self.snapshot("c3", 0.7)]
         result = SelfStateDynamicsAnalyzer().analyze(history, "internal.metric")
-        self.assertEqual("changed", result.status)
+        self.assertEqual("persistent_since_change", result.status)
         self.assertEqual(2, result.observations)
 
     def test_requires_distinct_cycles_and_evidence(self):
