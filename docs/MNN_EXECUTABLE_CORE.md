@@ -282,3 +282,35 @@ utilities and usefulness labels need external ground truth. The next
 validation must measure held-out task outcomes against a no-memory baseline,
 including negative feedback, misleading memories, and cases where recalling
 an experience should not change the decision.
+
+
+## Persistent homeostatic motivation (experimental)
+
+The module `machina.mnn_motivation` introduces explicit, persistent drive
+variables. Each `MotivationalDrive` has a current deficit level, a setpoint,
+a priority, a recovery rate, and a fulfillment sensitivity. On each logical
+step, an unmet drive recovers toward its setpoint; an externally recorded
+fulfillment outcome reduces its deficit. The `MotivationSystem` ranks drives
+by priority-weighted urgency and supports versioned snapshots.
+
+```python
+from machina import MotivationalDrive, MotivationSystem
+
+motivation = MotivationSystem([
+    MotivationalDrive("curiosity", level=0.8, setpoint=0.8, priority=0.7),
+    MotivationalDrive("stability", level=0.6, setpoint=0.6, priority=1.0),
+])
+print(motivation.ranked_drives())
+motivation.step({"stability": 1.0})
+```
+
+Fulfillment is explicit input from an evaluator or environment; the system
+does not declare its own actions successful. A drive is a computational
+deficit variable, not a biological need or felt desire. Priority-weighted
+urgency is a control signal, not evidence of intrinsic subjective motivation.
+
+This first primitive is intentionally separate from `MNNOrganism` so that
+its dynamics can be tested before coupling it to neural activity, chemical
+signaling, persistent goals, and action selection. The next integration
+experiment should test whether changing drive deficits causes measurable,
+adaptive differences in goal selection without destabilizing the system.
