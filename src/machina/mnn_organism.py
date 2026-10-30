@@ -217,6 +217,44 @@ class MNNOrganism:
             evidence_scores=dict(scores),
         )
 
+    def evaluate_memory_guidance(
+        self,
+        guidance: MemoryGuidance,
+        outcomes: Mapping[str, bool],
+        *,
+        context: str,
+        operation_id: str,
+        strength: float = 0.10,
+    ) -> tuple[dict[str, float], bool]:
+        """Feed externally evaluated usefulness back into context-specific memory.
+
+        Only evidence cited by this guidance can be updated. The evaluator must
+        supply explicit boolean labels; this method never infers success from
+        activation magnitude or reward prediction error. operation_id makes
+        retries idempotent in FragmentMemory.
+        """
+        if self.memory is None:
+            raise RuntimeError("no FragmentMemory is attached to this organism")
+        if not isinstance(guidance, MemoryGuidance):
+            raise ValueError("guidance must be a MemoryGuidance instance")
+        if not isinstance(outcomes, Mapping) or not outcomes:
+            raise ValueError("outcomes must be a non-empty mapping")
+        unknown = set(outcomes) - set(guidance.evidence_ids)
+        if unknown:
+            raise ValueError(f"feedback references fragments outside this guidance: {sorted(unknown)}")
+        if not isinstance(context, str) or not context.strip():
+            raise ValueError("context must be a non-empty string")
+        if not isinstance(operation_id, str) or not operation_id.strip():
+            raise ValueError("operation_id must be a non-empty string")
+        if any(not isinstance(value, bool) for value in outcomes.values()):
+            raise ValueError("every outcome must be boolean")
+        return self.memory.apply_context_feedback_batch(
+            outcomes,
+            context=context,
+            operation_id=operation_id,
+            strength=strength,
+        )
+
     def snapshot(self) -> dict:
         """Return a JSON-compatible snapshot of the complete integrated state."""
         return {
