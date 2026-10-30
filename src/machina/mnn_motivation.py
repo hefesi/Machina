@@ -75,17 +75,37 @@ class MotivationalConflict:
         object.__setattr__(self, "strength", _bounded("conflict strength", self.strength))
 
 
+@dataclass(frozen=True)
+class MotivationalCooperation:
+    """Symmetric positive coupling between two distinct motivational drives."""
+
+    first: str
+    second: str
+    strength: float = 0.5
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.first, str) or not self.first.strip():
+            raise ValueError("cooperation first drive must be non-empty")
+        if not isinstance(self.second, str) or not self.second.strip():
+            raise ValueError("cooperation second drive must be non-empty")
+        if self.first == self.second:
+            raise ValueError("a drive cannot cooperate with itself")
+        object.__setattr__(self, "strength", _bounded("cooperation strength", self.strength))
+
+
 class MotivationSystem:
     """Deterministic drive ledger with explicit, bounded conflict arbitration."""
 
-    SNAPSHOT_SCHEMA = 2
+    SNAPSHOT_SCHEMA = 3
 
     def __init__(
         self,
         drives: list[MotivationalDrive] | None = None,
         conflicts: list[MotivationalConflict] | None = None,
         *,
+        cooperations: list[MotivationalCooperation] | None = None,
         conflict_gain: float = 0.5,
+        cooperation_gain: float = 0.25,
     ) -> None:
         self.drives: dict[str, MotivationalDrive] = {}
         self.conflicts: dict[tuple[str, str], MotivationalConflict] = {}
@@ -95,6 +115,8 @@ class MotivationSystem:
             self.add_drive(drive)
         for conflict in conflicts or []:
             self.add_conflict(conflict)
+        for cooperation in cooperations or []:
+            self.add_cooperation(cooperation)
 
     def add_drive(self, drive: MotivationalDrive) -> None:
         if not isinstance(drive, MotivationalDrive):
@@ -112,7 +134,22 @@ class MotivationSystem:
         key = tuple(sorted((conflict.first, conflict.second)))
         if key in self.conflicts:
             raise ValueError(f"duplicate motivational conflict: {key}")
+        if key in self.cooperations:
+            raise ValueError(f"drive pair already has a cooperation relation: {key}")
         self.conflicts[key] = conflict
+
+    def add_cooperation(self, cooperation: MotivationalCooperation) -> None:
+        """Register one symmetric positive coupling edge."""
+        if not isinstance(cooperation, MotivationalCooperation):
+            raise ValueError("cooperation must be a MotivationalCooperation")
+        if cooperation.first not in self.drives or cooperation.second not in self.drives:
+            raise ValueError("cooperation references an unknown motivational drive")
+        key = tuple(sorted((cooperation.first, cooperation.second)))
+        if key in self.cooperations:
+            raise ValueError(f"duplicate motivational cooperation: {key}")
+        if key in self.conflicts:
+            raise ValueError(f"drive pair already has a conflict relation: {key}")
+        self.cooperations[key] = cooperation
 
     def validate_fulfillment(
         self, fulfillment: Mapping[str, float] | None = None
@@ -138,8 +175,9 @@ class MotivationSystem:
     def effective_urgencies(self, *, gain: float | None = None) -> dict[str, float]:
         """Return urgency after symmetric, order-independent competition.
 
-        Each drive is inhibited by the weighted mean urgency of its explicitly
-        connected competitors. The raw drive deficit is never overwritten.
+        Cooperative partners contribute a bounded positive boost first;
+        competing partners then contribute bounded inhibition. The raw drive
+        deficit is never overwritten.
         """
         selected_gain = self.conflict_gain if gain is None else _bounded("gain", gain)
         opponents: dict[str, list[tuple[float, float]]] = {
@@ -152,16 +190,31 @@ class MotivationSystem:
                 opponents[conflict.first].append((conflict.strength, second))
                 opponents[conflict.second].append((conflict.strength, first))
 
+        partners: dict[str, list[tuple[float, float]]] = {
+            name: [] for name in self.drives
+        }
+        for relation in self.cooperations.values():
+            first = self.drives[relation.first].urgency
+            second = self.drives[relation.second].urgency
+            if relation.strength:
+                partners[relation.first].append((relation.strength, second))
+                partners[relation.second].append((relation.strength, first))
+
         result: dict[str, float] = {}
         for name, drive in self.drives.items():
-            links = opponents[name]
-            if not links:
-                result[name] = drive.urgency
-                continue
-            total_weight = sum(weight for weight, _ in links)
-            competing_pressure = sum(weight * urgency for weight, urgency in links) / total_weight
-            inhibition = selected_gain * competing_pressure
-            result[name] = max(0.0, min(1.0, drive.urgency - inhibition))
+            cooperative_links = partners[name]
+            boost = 0.0
+            if cooperative_links:
+                total_weight = sum(weight for weight, _ in cooperative_links)
+                partner_pressure = sum(weight * urgency for weight, urgency in cooperative_links) / total_weight
+                boost = self.cooperation_gain * partner_pressure
+            conflict_links = opponents[name]
+            inhibition = 0.0
+            if conflict_links:
+                total_weight = sum(weight for weight, _ in conflict_links)
+                competing_pressure = sum(weight * urgency for weight, urgency in conflict_links) / total_weight
+                inhibition = selected_gain * competing_pressure
+            result[name] = max(0.0, min(1.0, drive.urgency + boost - inhibition))
         return result
 
     def ranked_drives(self) -> list[tuple[str, float]]:
@@ -199,12 +252,17 @@ class MotivationSystem:
                 for item in self.conflicts.values()
             ],
             "conflict_gain": self.conflict_gain,
+            "cooperations": [
+                {"first": item.first, "second": item.second, "strength": item.strength}
+                for item in self.cooperations.values()
+            ],
+            "cooperation_gain": self.cooperation_gain,
         }
 
     @classmethod
     def from_snapshot(cls, data: Mapping[str, object]) -> "MotivationSystem":
         schema = data.get("schema_version")
-        if schema not in (1, cls.SNAPSHOT_SCHEMA):
+        if schema not in (1, 2, cls.SNAPSHOT_SCHEMA):
             raise ValueError("unsupported motivation snapshot schema")
         timestep = data.get("timestep")
         if isinstance(timestep, bool) or not isinstance(timestep, int) or timestep < 0:
@@ -217,10 +275,16 @@ class MotivationSystem:
         if not isinstance(raw_conflicts, list):
             raise ValueError("motivation conflicts must be a list")
         conflicts = [MotivationalConflict(**item) for item in raw_conflicts]
+        raw_cooperations = data.get("cooperations", [])
+        if not isinstance(raw_cooperations, list):
+            raise ValueError("motivation cooperations must be a list")
+        cooperations = [MotivationalCooperation(**item) for item in raw_cooperations]
         system = cls(
             drives,
             conflicts,
+            cooperations=cooperations,
             conflict_gain=data.get("conflict_gain", 0.5),
+            cooperation_gain=data.get("cooperation_gain", 0.25),
         )
         system.timestep = timestep
         return system
