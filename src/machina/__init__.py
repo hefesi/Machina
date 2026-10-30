@@ -52,6 +52,7 @@ from .mnn_strategy_review import MNNStrategyReviewer
 from .mnn_strategy_experiment import MNNStrategyExperimentLog
 from .mnn_strategy_evaluation import MNNStrategyExperimentEvaluator
 from .mnn_strategy_context_memory import MNNStrategyContextMemory
+from .mnn_strategy_decision_advisor import MNNStrategyDecisionAdvisor
 
 __all__ = [
     "Artifact",
@@ -145,5 +146,6 @@ __all__ = [
     "MNNStrategyExperimentLog",
     "MNNStrategyExperimentEvaluator",
     "MNNStrategyContextMemory",
+    "MNNStrategyDecisionAdvisor",
     "MNNExperienceCycle",
 ]
