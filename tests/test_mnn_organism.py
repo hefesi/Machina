@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import tempfile
 import unittest
+from pathlib import Path
 
 from machina.chemical_signaling import ChemicalEvent
 from machina.mnn import Connection, MNN, Unit
 from machina.mnn_organism import MNNOrganism
+from machina.fragment_memory import FragmentMemory
 from machina.self_continuity import SelfContinuity
 
 
@@ -74,6 +77,47 @@ class MNNOrganismTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MNNOrganism("a", chemical_inputs={"dopamine": "missing"})
 
+
+    def test_transitions_are_archived_as_episodic_memory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "episodes.sqlite3"
+            memory = FragmentMemory(path)
+            organism = self.make_organism()
+            organism.memory = memory
+            first = organism.step({"sensor": 0.5}, ChemicalEvent(reward=0.8))
+            second = organism.step({"sensor": 0.2}, ChemicalEvent(reward=0.1))
+            self.assertEqual(2, memory.count())
+            recalled = organism.recall_experiences("prediction error", limit=5)
+            self.assertEqual(2, len(recalled))
+            self.assertEqual(
+                {first.timestep, second.timestep},
+                {item.metadata["timestep"] for item in recalled},
+            )
+            memory.close()
+            reopened = FragmentMemory(path)
+            self.assertEqual(2, reopened.count())
+            self.assertEqual(2, len(reopened.recall("MNN organism experience")))
+            reopened.close()
+
+    def test_memory_is_optional_and_recall_requires_attachment(self):
+        organism = self.make_organism()
+        organism.step({"sensor": 0.1})
+        with self.assertRaises(RuntimeError):
+            organism.recall_experiences("anything")
+
+    def test_episode_ids_are_stable_and_duplicate_step_is_not_silently_overwritten(self):
+        with tempfile.TemporaryDirectory() as directory:
+            memory = FragmentMemory(Path(directory) / "episodes.sqlite3")
+            organism = self.make_organism()
+            organism.memory = memory
+            organism.step({"sensor": 0.1})
+            restored = MNNOrganism.from_snapshot(organism.snapshot())
+            restored.memory = memory
+            restored.network.timestep -= 1
+            restored.signaling.state.timestep -= 1
+            with self.assertRaises(Exception):
+                restored.step({"sensor": 0.2})
+            memory.close()
 
 if __name__ == "__main__":
     unittest.main()
