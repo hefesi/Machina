@@ -80,5 +80,49 @@ class MNNMemoryReconsolidationPipelineTests(unittest.TestCase):
             self.pipeline.apply(self.memory, second, operation_id="shared-op")
 
 
+    def test_autobiographical_context_must_contain_the_declared_evidence(self):
+        from types import SimpleNamespace
+
+        match = SimpleNamespace(
+            evidence_refs=("evidence:cycle-4",),
+            experience_records=({"event_id": "experience:event-8"},),
+        )
+        proposal = self.pipeline.propose_from_autobiographical_context(
+            self.memory, "memory-1",
+            revised_content="Updated using a prior experience",
+            evidence_id="experience:event-8",
+            autobiographical_matches=(match,),
+        )
+        self.assertEqual(
+            ("evidence:cycle-4", "experience:event-8"),
+            proposal.context_refs,
+        )
+        self.assertEqual(
+            "Initial understanding",
+            self.memory.get("memory-1", record_access=False).content,
+        )
+
+    def test_autobiographical_recall_is_not_accepted_as_unlinked_evidence(self):
+        from types import SimpleNamespace
+
+        match = SimpleNamespace(evidence_refs=("evidence:real",), experience_records=())
+        with self.assertRaisesRegex(ValueError, "must match an explicit evidence"):
+            self.pipeline.propose_from_autobiographical_context(
+                self.memory, "memory-1",
+                revised_content="Unsupported update",
+                evidence_id="evidence:invented",
+                autobiographical_matches=(match,),
+            )
+
+    def test_empty_autobiographical_context_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "must not be empty"):
+            self.pipeline.propose_from_autobiographical_context(
+                self.memory, "memory-1",
+                revised_content="Unsupported update",
+                evidence_id="evidence:1",
+                autobiographical_matches=(),
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
