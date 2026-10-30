@@ -1,6 +1,10 @@
 import unittest
 
-from machina.mnn_motivation import MotivationalDrive, MotivationSystem
+from machina.mnn_motivation import (
+    MotivationalConflict,
+    MotivationalDrive,
+    MotivationSystem,
+)
 
 
 class MotivationSystemTests(unittest.TestCase):
@@ -39,7 +43,6 @@ class MotivationSystemTests(unittest.TestCase):
             system.step({"curiosity": float("nan")})
         self.assertEqual(before, system.snapshot())
 
-
     def test_urgency_maps_to_bounded_autonomy_goal_feedback(self):
         system = MotivationSystem([
             MotivationalDrive("curiosity", level=1.0, priority=1.0),
@@ -52,7 +55,6 @@ class MotivationSystemTests(unittest.TestCase):
         self.assertAlmostEqual(0.0, adjustments["neutral"])
         with self.assertRaises(ValueError):
             system.autonomy_adjustments(gain=0.5)
-
 
     def test_aggregate_chemical_pressure_tracks_mean_drive_urgency(self):
         system = MotivationSystem([
@@ -78,6 +80,63 @@ class MotivationSystemTests(unittest.TestCase):
             MotivationSystem([MotivationalDrive("same"), MotivationalDrive("same")])
         with self.assertRaises(ValueError):
             MotivationalDrive("bad", priority=-1)
+
+    def test_conflict_inhibits_competing_drive_without_mutating_raw_deficit(self):
+        system = MotivationSystem(
+            [
+                MotivationalDrive("explore", level=0.9),
+                MotivationalDrive("rest", level=0.7),
+                MotivationalDrive("create", level=0.8),
+            ],
+            [MotivationalConflict("explore", "rest", strength=0.8)],
+            conflict_gain=0.5,
+        )
+        raw = {name: drive.urgency for name, drive in system.drives.items()}
+        effective = system.effective_urgencies()
+        self.assertAlmostEqual(0.62, effective["explore"])
+        self.assertAlmostEqual(0.34, effective["rest"])
+        self.assertAlmostEqual(0.8, effective["create"])
+        self.assertEqual(raw, {name: drive.urgency for name, drive in system.drives.items()})
+
+    def test_conflict_arbitration_is_independent_of_registration_order(self):
+        drives = [
+            MotivationalDrive("a", level=0.9),
+            MotivationalDrive("b", level=0.7),
+            MotivationalDrive("c", level=0.4),
+        ]
+        first = MotivationSystem(
+            drives,
+            [MotivationalConflict("a", "b", 0.8), MotivationalConflict("a", "c", 0.2)],
+        )
+        second = MotivationSystem(
+            list(reversed([MotivationalDrive("a", level=0.9), MotivationalDrive("b", level=0.7), MotivationalDrive("c", level=0.4)])),
+            [MotivationalConflict("a", "c", 0.2), MotivationalConflict("a", "b", 0.8)],
+        )
+        self.assertEqual(first.effective_urgencies(), second.effective_urgencies())
+
+    def test_conflicts_validate_references_duplicates_and_self_edges(self):
+        with self.assertRaises(ValueError):
+            MotivationalConflict("same", "same")
+        system = self.make_system()
+        with self.assertRaises(ValueError):
+            system.add_conflict(MotivationalConflict("curiosity", "missing"))
+        system.add_conflict(MotivationalConflict("curiosity", "stability"))
+        with self.assertRaises(ValueError):
+            system.add_conflict(MotivationalConflict("stability", "curiosity"))
+
+    def test_conflicts_persist_and_legacy_schema_one_remains_readable(self):
+        system = MotivationSystem(
+            [MotivationalDrive("a", level=0.8), MotivationalDrive("b", level=0.6)],
+            [MotivationalConflict("a", "b", 0.7)],
+        )
+        restored = MotivationSystem.from_snapshot(system.snapshot())
+        self.assertEqual(system.snapshot(), restored.snapshot())
+        legacy = {
+            "schema_version": 1,
+            "timestep": 2,
+            "drives": [MotivationalDrive("legacy", level=0.4).snapshot()],
+        }
+        self.assertEqual(0.4, MotivationSystem.from_snapshot(legacy).effective_urgencies()["legacy"])
 
 
 if __name__ == "__main__":
