@@ -887,3 +887,41 @@ subsequent eligible checkpoints in the supplied history. `recurrent` means
 the current value appeared more than once after another value intervened.
 This analysis is read-only and does not update the SelfModel, infer identity,
 or establish subjective continuity.
+
+
+## Self-history influence on deliberation
+
+`SelfHistoryInfluenceAdapter` converts longitudinal `SelfStateTransition`
+results into bounded drive adjustments using explicit caller-authored
+`SelfHistoryRule` mappings. A mapping may distinguish `stable`,
+`persistent_since_change`, `recurrent`, `reverted`, and `changed`.
+Unmapped properties/statuses produce no influence. Combined adjustments are
+clamped to the configured maximum (at most ±0.3).
+
+```python
+from machina import (
+    SelfHistoryInfluenceAdapter, SelfHistoryRule, SelfStateDynamicsAnalyzer,
+)
+
+transitions = SelfStateDynamicsAnalyzer().analyze_all(self_snapshot_history)
+adapter = SelfHistoryInfluenceAdapter([
+    SelfHistoryRule("internal.mnn.prediction_error", {
+        "persistent_since_change": {"error_recovery": 0.08},
+        "reverted": {"review_strategy": 0.05},
+    })
+])
+influence = adapter.prepare(transitions)
+brain.run_deliberated_cycle(
+    observation, autonomy_context,
+    self_history_influence=influence,
+)
+```
+
+`VirtualBrain` combines this feedback with other caller-supplied drive
+adjustments before deliberation and records the complete transition summaries,
+evidence references, rationale, and adjustment mapping in the
+`goal.deliberated` journal artifact. The adapter and brain are proposal /
+integration boundaries: they do not mutate SelfModel history or infer that a
+persistent operational state is a stable personality trait. This mechanism
+allows recorded history to affect future goal ranking under explicit policy,
+while keeping the causal trail inspectable.
