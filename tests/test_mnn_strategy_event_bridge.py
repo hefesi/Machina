@@ -115,6 +115,25 @@ class MNNStrategyEventBridgeTests(unittest.TestCase):
                 observed_reward=0.7, operation_id="operation-abstain",
             )
 
+    def test_cycle_identifiers_are_normalized_before_store_access(self):
+        proposal = self.bridge.record_proposal(
+            f" {self.cycle_id} ", self.proposal,
+            expected_reward=0.6, proposal_id="proposal-normalized-cycle",
+        )
+        self.assertEqual(self.cycle_id, proposal.cycle_id)
+        outcome = self.bridge.record_outcome(
+            f" {self.cycle_id} ", "proposal-normalized-cycle",
+            execution_confirmed=True, executed_action="candidate-A",
+            observed_reward=0.7, operation_id="operation-normalized-cycle",
+        )
+        self.assertEqual(self.cycle_id, outcome.cycle_id)
+        with self.assertRaises(ValueError):
+            self.bridge.record_outcome(
+                "   ", "proposal-normalized-cycle",
+                execution_confirmed=True, executed_action="candidate-A",
+                observed_reward=0.7, operation_id="operation-invalid-cycle",
+            )
+
     def test_malformed_evidence_is_rejected_before_append(self):
         for evidence_ids in ("evidence-1", ["", "evidence-2"], ["evidence-1", "evidence-1"]):
             with self.subTest(evidence_ids=evidence_ids):
