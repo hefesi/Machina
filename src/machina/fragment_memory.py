@@ -459,6 +459,7 @@ class FragmentMemory:
         evidence_id: str,
         operation_id: str,
         confidence: float | None = None,
+        expected_content: str | None = None,
     ) -> tuple[MemoryFragment, dict[str, Any], bool]:
         """Revise a retrieved memory while preserving an append-only prior version.
 
@@ -471,12 +472,15 @@ class FragmentMemory:
                 raise ValueError(f"{name} must be a non-empty string")
         if not isinstance(revised_content, str) or not revised_content.strip():
             raise ValueError("revised_content must be a non-empty string")
+        if expected_content is not None and (not isinstance(expected_content, str) or not expected_content.strip()):
+            raise ValueError("expected_content must be a non-empty string when provided")
         next_confidence = None if confidence is None else _score(confidence, "confidence")
         payload = _json({
             "fragment_id": fragment_id,
             "revised_content": revised_content,
             "evidence_id": evidence_id,
             "confidence": next_confidence,
+            "expected_content": expected_content,
         })
         self._db.execute("BEGIN IMMEDIATE")
         try:
@@ -505,6 +509,8 @@ class FragmentMemory:
             if row is None:
                 raise KeyError(f"unknown memory fragment: {fragment_id}")
             prior_content = str(row["content"])
+            if expected_content is not None and prior_content != expected_content:
+                raise ValueError("stale memory revision proposal: current content no longer matches expected_content")
             prior_confidence = float(row["confidence"])
             revised_confidence = prior_confidence if next_confidence is None else next_confidence
             now = _now()
