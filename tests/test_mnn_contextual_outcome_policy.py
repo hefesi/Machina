@@ -142,11 +142,12 @@ class MNNContextualOutcomePolicyTests(unittest.TestCase):
         before_count = self.memory.count()
         all_history = MNNContextualOutcomePolicy(
             self.memory, ["left", "right"], min_samples_per_action=2,
-            min_reward_margin=0.1,
+            min_reward_margin=0.1, noise_guard_multiplier=0.0,
         ).recommend("quiet morning")
         recency = MNNContextualOutcomePolicy(
             self.memory, ["left", "right"], min_samples_per_action=2,
             min_reward_margin=0.1, recency_half_life_decisions=1.0,
+            noise_guard_multiplier=0.0,
         ).recommend("quiet morning")
 
         self.assertEqual(all_history["status"], "recommended")
@@ -174,6 +175,43 @@ class MNNContextualOutcomePolicyTests(unittest.TestCase):
                     MNNContextualOutcomePolicy(
                         self.memory, ["left", "right"],
                         recency_half_life_decisions=value,
+                    )
+
+
+    def test_noise_guard_abstains_when_reward_difference_is_within_variability(self):
+        for index, reward in enumerate((0.0, 1.0, 0.0, 1.0)):
+            self.add_outcome(f"left-noisy-{index}", "left", reward)
+        for index, reward in enumerate((0.2, 1.2, 0.2, 1.2)):
+            self.add_outcome(f"right-noisy-{index}", "right", reward)
+        result = MNNContextualOutcomePolicy(
+            self.memory, ["left", "right"], min_samples_per_action=2,
+            min_reward_margin=0.1, noise_guard_multiplier=1.0,
+        ).recommend("quiet morning")
+        self.assertEqual("abstain", result["status"])
+        self.assertEqual("reward_difference_not_larger_than_noise_guard", result["reason"])
+        self.assertGreater(result["difference_standard_error"], result["reward_margin"])
+        self.assertEqual(4.0, result["effective_sample_sizes"]["left"])
+
+    def test_noise_guard_allows_stable_advantage(self):
+        for index, reward in enumerate((0.9, 1.0, 0.95, 0.9)):
+            self.add_outcome(f"left-stable-{index}", "left", reward)
+        for index, reward in enumerate((0.0, 0.1, 0.05, 0.0)):
+            self.add_outcome(f"right-stable-{index}", "right", reward)
+        result = MNNContextualOutcomePolicy(
+            self.memory, ["left", "right"], min_samples_per_action=3,
+            min_reward_margin=0.1,
+        ).recommend("quiet morning")
+        self.assertEqual("recommended", result["status"])
+        self.assertGreater(result["reward_margin"], result["noise_threshold"])
+        self.assertIn("standard_errors", result)
+
+    def test_validates_noise_guard_multiplier(self):
+        for value in (-1, float("inf"), float("nan"), True):
+            with self.subTest(value=value):
+                with self.assertRaises(ValueError):
+                    MNNContextualOutcomePolicy(
+                        self.memory, ["left", "right"],
+                        noise_guard_multiplier=value,
                     )
 
     def test_validates_configuration_and_query(self):
