@@ -563,3 +563,16 @@ recente ou seja aplicada acidentalmente a uma nova instância com o mesmo
 `goal_id`. O mecanismo é uma verificação otimista de concorrência; ele não
 resolve conflitos semânticos entre avaliadores, mas impede uma classe
 importante de corrupção temporal do estado.
+
+## Explicit goal constraints and resource competition (experimental)
+
+`PersistentGoalStore` can persist evidence-backed relations between goal types:
+- `conflicts`: two goals are not jointly compatible;
+- `requires`: the source goal depends on the target goal;
+- `supports`: one goal supports another, retained as explicit relation data.
+
+`GoalConflictResolver` evaluates a proposed set of goal IDs against those relations and caller-supplied resource costs and limits. It returns an inspectable assessment (`co_select`, `prioritize_one`, `needs_dependency`, or `defer_or_reallocate`) with the conflicts, missing dependencies, resource totals, and rationale.
+
+Resource costs and limits are supplied by the caller; the resolver does not pretend to measure compute, time, money, or other resources itself. Relations are explicit evidence, not inferred from similar descriptions. The assessment is advisory and never pauses, abandons, completes, or executes a goal. `supports` relations are preserved for future prioritization work but do not yet change scoring.
+
+This is a first constraint-evaluation layer, not yet a global scheduler. A later step should define resource reservation, multi-goal scheduling, and explicit application of a reviewed proposal, with concurrency checks and a complete audit trail.
