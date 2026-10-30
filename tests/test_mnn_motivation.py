@@ -39,6 +39,20 @@ class MotivationSystemTests(unittest.TestCase):
             system.step({"curiosity": float("nan")})
         self.assertEqual(before, system.snapshot())
 
+
+    def test_urgency_maps_to_bounded_autonomy_goal_feedback(self):
+        system = MotivationSystem([
+            MotivationalDrive("curiosity", level=1.0, priority=1.0),
+            MotivationalDrive("stability", level=0.0, priority=1.0),
+            MotivationalDrive("neutral", level=0.5, priority=1.0),
+        ])
+        adjustments = system.autonomy_adjustments()
+        self.assertAlmostEqual(0.15, adjustments["curiosity"])
+        self.assertAlmostEqual(-0.15, adjustments["stability"])
+        self.assertAlmostEqual(0.0, adjustments["neutral"])
+        with self.assertRaises(ValueError):
+            system.autonomy_adjustments(gain=0.5)
+
     def test_snapshot_round_trip_preserves_future_dynamics(self):
         system = self.make_system()
         system.step({"curiosity": 0.4})
