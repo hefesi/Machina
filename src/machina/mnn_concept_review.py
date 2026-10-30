@@ -12,6 +12,7 @@ from typing import Literal
 
 from .fragment_memory import FragmentMemory, MemoryFragment
 from .mnn_concepts import ConceptHypothesis, MNNConceptBuilder
+from .mnn_concept_relations import MNNConceptRelationStore
 
 RevisionState = Literal["current", "conflicted", "stale", "unverified"]
 
@@ -25,6 +26,9 @@ class ConceptReview:
     missing_evidence_ids: tuple[str, ...]
     current_status: str | None
     explanation: str
+    explicit_relation_ids: tuple[str, ...] = ()
+    related_concept_ids: tuple[str, ...] = ()
+    relation_evidence_ids: tuple[str, ...] = ()
 
 
 class MNNConceptReviewer:
@@ -35,6 +39,7 @@ class MNNConceptReviewer:
     def __init__(self, memory: FragmentMemory, *, min_support: int = 2) -> None:
         self.memory = memory
         self.builder = MNNConceptBuilder(memory, min_support=min_support)
+        self.relations = MNNConceptRelationStore(memory)
 
     def review(self) -> list[ConceptReview]:
         """Return review state for every stored concept without mutating records."""
@@ -64,9 +69,24 @@ class MNNConceptReviewer:
             current = set(hypothesis.evidence_ids)
             added = tuple(sorted(current - previous))
             missing = tuple(sorted(previous - current))
-            if hypothesis.status == "conflicted":
+            explicit_relations = self.relations.for_concept(concept.id)
+            contradictions = tuple(
+                relation for relation in explicit_relations
+                if relation.relationship == "contradicts"
+            )
+            relation_ids = tuple(sorted(relation.relation_id for relation in contradictions))
+            related_ids = tuple(sorted({
+                relation.target_concept_id if relation.source_concept_id == concept.id
+                else relation.source_concept_id
+                for relation in contradictions
+            }))
+            relation_evidence = tuple(sorted({
+                evidence_id for relation in contradictions
+                for evidence_id in relation.evidence_ids
+            }))
+            if hypothesis.status == "conflicted" or contradictions:
                 state: RevisionState = "conflicted"
-                explanation = "Current evidence contains explicit supporting and contradicting polarity."
+                explanation = "Current evidence or an explicit persisted concept relation records a contradiction."
             elif added or missing:
                 state = "stale"
                 explanation = "The evidence set changed; this concept is an older snapshot and should be refreshed before use."
@@ -81,6 +101,9 @@ class MNNConceptReviewer:
                 missing_evidence_ids=missing,
                 current_status=hypothesis.status,
                 explanation=explanation,
+                explicit_relation_ids=relation_ids,
+                related_concept_ids=related_ids,
+                relation_evidence_ids=relation_evidence,
             ))
         reviews.sort(key=lambda item: (item.state, item.concept.id))
         return reviews
