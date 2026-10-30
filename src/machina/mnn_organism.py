@@ -10,6 +10,8 @@ from dataclasses import dataclass
 import math
 from typing import Mapping
 
+from .fragment_memory import FragmentMemory, MemoryFragment
+
 from .chemical_signaling import ChemicalEvent, ChemicalSignaling
 from .mnn import MNN
 from .self_continuity import SelfContinuity
@@ -41,6 +43,7 @@ class MNNOrganism:
         *,
         chemical_inputs: Mapping[str, str] | None = None,
         learning_rate: float = 0.0,
+        memory: FragmentMemory | None = None,
     ) -> None:
         if not agent_id or not agent_id.strip():
             raise ValueError("agent_id must be non-empty")
@@ -64,6 +67,7 @@ class MNNOrganism:
             if unit_id not in self.network.units:
                 raise ValueError(f"chemical input unit does not exist: {unit_id}")
         self.learning_rate = float(learning_rate)
+        self.memory = memory
 
     @property
     def timestep(self) -> int:
@@ -102,6 +106,30 @@ class MNNOrganism:
             "mnn_organism",
             reason=f"timestep={self.timestep}; prediction_error={chemical.prediction_error:.8f}",
         )
+        if self.memory is not None:
+            self.memory.add(
+                content=(
+                    f"MNN organism {self.agent_id} timestep {self.timestep} "
+                    f"prediction error {chemical.prediction_error:.8f}"
+                ),
+                kind="episode",
+                source_uri=f"machina://{self.agent_id}/experience/{self.timestep}",
+                importance=min(1.0, abs(chemical.prediction_error)),
+                confidence=1.0,
+                tags=("mnn", "experience", "integrated-state"),
+                metadata={
+                    "agent_id": self.agent_id,
+                    "timestep": self.timestep,
+                    "neural_state": dict(neural_state),
+                    "chemical_state": dict(chemical.concentrations),
+                    "prediction_error": chemical.prediction_error,
+                    "exploration_drive": chemical.exploration_drive,
+                    "plasticity_gain": chemical.plasticity_gain,
+                    "attention_gain": chemical.attention_gain,
+                    "weight_changes": dict(weight_changes),
+                },
+                fragment_id=f"mnn-episode-{self.agent_id}-{self.timestep}",
+            )
         return OrganismStep(
             timestep=self.timestep,
             neural_state=dict(neural_state),
@@ -112,6 +140,14 @@ class MNNOrganism:
             attention_gain=chemical.attention_gain,
             weight_changes=dict(weight_changes),
         )
+
+    def recall_experiences(
+        self, query: str, *, limit: int = 5, context: str | None = None
+    ) -> list[MemoryFragment]:
+        """Retrieve prior episodes from the attached persistent fragment archive."""
+        if self.memory is None:
+            raise RuntimeError("no FragmentMemory is attached to this organism")
+        return self.memory.recall(query, limit=limit, context=context)
 
     def snapshot(self) -> dict:
         """Return a JSON-compatible snapshot of the complete integrated state."""
