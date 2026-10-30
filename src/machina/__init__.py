@@ -63,6 +63,7 @@ from .mnn_strategy_decision_advisor import MNNStrategyDecisionAdvisor
 from .mnn_strategy_feedback import MNNStrategyFeedbackAdapter, StrategyFeedback, StrategyLearningResult
 from .mnn_strategy_learning_cycle import MNNStrategyLearningCycle
 from .mnn_strategy_outcome_journal import MNNStrategyOutcomeJournal
+from .mnn_strategy_event_bridge import MNNStrategyEventBridge
 from .mnn_synaptic_consolidation import MNNSynapticConsolidator
 from .mnn_short_term_plasticity import MNNShortTermPlasticity
 
@@ -172,6 +173,7 @@ __all__ = [
     "MNNStrategyFeedbackAdapter",
     "MNNStrategyLearningCycle",
     "MNNStrategyOutcomeJournal",
+    "MNNStrategyEventBridge",
     "StrategyFeedback",
     "StrategyLearningResult",
     "MNNSynapticConsolidator",
