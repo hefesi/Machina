@@ -70,6 +70,7 @@ from .mnn_autobiographical_strategy_advisor import MNNAutobiographicalStrategyAd
 from .mnn_synaptic_consolidation import MNNSynapticConsolidator
 from .mnn_short_term_plasticity import MNNShortTermPlasticity
 from .mnn_plasticity_control import MNNPlasticityController, MNNPlasticityProposal
+from .mnn_experience_plasticity_advisor import MNNExperiencePlasticityAdvisor, MNNExperiencePlasticityProposal
 
 __all__ = [
     "Artifact",
@@ -189,6 +190,8 @@ __all__ = [
     "MNNShortTermPlasticity",
     "MNNPlasticityController",
     "MNNPlasticityProposal",
+    "MNNExperiencePlasticityAdvisor",
+    "MNNExperiencePlasticityProposal",
     "MNNExperienceCycle",
     "AutobiographicalLearningSignal",
     "MNNAutobiographicalLearningAdvisor",
