@@ -29,6 +29,7 @@ class MNNContextualOutcomePolicy:
         min_reward_margin: float = 0.1,
         min_context_overlap: float = 0.6,
         recency_half_life_decisions: float | None = None,
+        noise_guard_multiplier: float = 1.0,
     ) -> None:
         if not isinstance(memory, FragmentMemory):
             raise ValueError("memory must be a FragmentMemory")
@@ -57,6 +58,14 @@ class MNNContextualOutcomePolicy:
             or not 0 < min_context_overlap <= 1
         ):
             raise ValueError("min_context_overlap must be in (0, 1]")
+        if (
+            isinstance(noise_guard_multiplier, bool)
+            or not isinstance(noise_guard_multiplier, (int, float))
+            or not math.isfinite(noise_guard_multiplier)
+            or noise_guard_multiplier < 0
+        ):
+            raise ValueError("noise_guard_multiplier must be finite and non-negative")
+        self.noise_guard_multiplier = float(noise_guard_multiplier)
         self.memory = memory
         self.actions = names
         self.min_samples_per_action = min_samples_per_action
@@ -154,25 +163,51 @@ class MNNContextualOutcomePolicy:
                 missing_actions=insufficient,
             )
 
-        estimates = {
-            action: sum(reward * weight for reward, weight, _ in samples[action])
-            / sum(weight for _, weight, _ in samples[action])
-            for action in self.actions
-        }
+        estimates: dict[str, float] = {}
+        standard_errors: dict[str, float] = {}
+        effective_sample_sizes: dict[str, float] = {}
+        for action in self.actions:
+            values = samples[action]
+            total_weight = sum(weight for _, weight, _ in values)
+            mean = sum(reward * weight for reward, weight, _ in values) / total_weight
+            squared_weight = sum(weight * weight for _, weight, _ in values)
+            effective_n = total_weight * total_weight / squared_weight
+            variance = sum(weight * (reward - mean) ** 2 for reward, weight, _ in values) / total_weight
+            estimates[action] = mean
+            effective_sample_sizes[action] = effective_n
+            standard_errors[action] = math.sqrt(variance / effective_n) if effective_n > 0 else 0.0
         ranked = sorted(
             self.actions,
             key=lambda action: (-estimates[action], self.actions.index(action)),
         )
         best, runner_up = ranked[:2]
         margin = estimates[best] - estimates[runner_up]
+        difference_error = math.sqrt(
+            standard_errors[best] ** 2 + standard_errors[runner_up] ** 2
+        )
+        noise_threshold = self.noise_guard_multiplier * difference_error
+        common = {
+            "sample_counts": counts,
+            "evidence_ids": evidence_ids,
+            "estimated_rewards": estimates,
+            "standard_errors": standard_errors,
+            "effective_sample_sizes": effective_sample_sizes,
+            "reward_margin": margin,
+            "difference_standard_error": difference_error,
+            "noise_threshold": noise_threshold,
+            "noise_guard_multiplier": self.noise_guard_multiplier,
+        }
         if margin < self.min_reward_margin:
             return self._abstain(
                 context,
                 "reward_estimates_too_close",
-                sample_counts=counts,
-                evidence_ids=evidence_ids,
-                estimated_rewards=estimates,
-                reward_margin=margin,
+                **common,
+            )
+        if self.noise_guard_multiplier > 0 and margin <= noise_threshold:
+            return self._abstain(
+                context,
+                "reward_difference_not_larger_than_noise_guard",
+                **common,
             )
         return {
             "status": "recommended",
@@ -182,8 +217,7 @@ class MNNContextualOutcomePolicy:
             "estimated_rewards": estimates,
             "estimated_reward": estimates[best],
             "reward_margin": margin,
-            "sample_counts": counts,
-            "evidence_ids": evidence_ids,
+            **common,
             "minimum_samples_per_action": self.min_samples_per_action,
             "minimum_reward_margin": self.min_reward_margin,
             "minimum_context_overlap": self.min_context_overlap,
@@ -191,8 +225,10 @@ class MNNContextualOutcomePolicy:
             "latest_decision_index": latest_decision,
             "interpretation": (
                 "Confidence- and lexical-overlap-weighted recorded rewards; optionally "
-                "discounted exponentially by decision age. Observational association, "
-                "not a causal guarantee."
+                "discounted exponentially by decision age. The optional uncertainty "
+                "guard can force abstention when the estimated advantage is small "
+                "relative to sampling variability. Observational association, not "
+                "a causal guarantee or statistical significance test."
             ),
         }
 
