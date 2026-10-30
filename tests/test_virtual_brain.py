@@ -4,7 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from machina import IntegrityError, VirtualBrain
+from machina import (
+    AutonomyContext, AutonomyController, IntegrityError, InternalDeliberator,
+    PersistentGoalStore, VirtualBrain,
+)
 
 
 class FailingExecutor:
@@ -180,6 +183,40 @@ class VirtualBrainLoopTests(unittest.TestCase):
         # recomputed chain as well.
         brain.store.verify_integrity()
         brain.close()
+
+
+    def test_deliberated_cycle_journals_selection_and_completes(self) -> None:
+        goal_store = PersistentGoalStore(
+            Path(self.temporary_directory.name) / "internal-goals.sqlite"
+        )
+        deliberator = InternalDeliberator(AutonomyController(), goal_store)
+        brain = VirtualBrain(
+            self.database_path,
+            internal_deliberator=deliberator,
+        )
+        result = brain.run_deliberated_cycle(
+            "Internal state: several unresolved questions.",
+            AutonomyContext(unresolved_questions=2, cycles_since_reflection=4),
+        )
+        self.assertEqual("completed", result.status)
+        trace = next(
+            event.artifact for event in result.events
+            if event.event_type == "goal.deliberated"
+        )
+        self.assertIn("deliberation", trace.data)
+        self.assertIn("internal_goal_id", trace.data)
+        self.assertEqual("internal_deliberator", trace.producer)
+        self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+        self.assertEqual(1, goal_store.summary()["active"])
+        brain.close()
+        goal_store.close()
+
+    def test_deliberated_cycle_requires_explicit_configuration(self) -> None:
+        brain = VirtualBrain(self.database_path)
+        with self.assertRaises(RuntimeError):
+            brain.run_deliberated_cycle("state", AutonomyContext())
+        brain.close()
+
 
 
 if __name__ == "__main__":
