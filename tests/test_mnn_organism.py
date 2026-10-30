@@ -7,6 +7,7 @@ from pathlib import Path
 
 from machina.chemical_signaling import ChemicalEvent
 from machina.mnn import Connection, MNN, Unit
+from machina.mnn_motivation import MotivationSystem, MotivationalDrive
 from machina.mnn_organism import DecisionOption, MNNOrganism
 from machina.fragment_memory import FragmentMemory
 from machina.self_continuity import SelfContinuity
@@ -40,6 +41,66 @@ class MNNOrganismTests(unittest.TestCase):
         self.assertEqual(organism.signaling.state.timestep, 1)
         self.assertEqual(len(organism.continuity.event_history), 1)
         self.assertIn("dopamine", result.neural_state)
+
+
+    def test_motivation_is_coupled_to_chemistry_and_advances_with_organism(self):
+        motivation = MotivationSystem([
+            MotivationalDrive("curiosity", level=0.9, setpoint=0.9),
+            MotivationalDrive("stability", level=0.7, setpoint=0.7),
+        ])
+        organism = MNNOrganism(
+            "motivated-test",
+            motivation=motivation,
+            chemical_inputs={"acetylcholine": "sensor"},
+        )
+        result = organism.step(fulfillment={"curiosity": 1.0})
+        self.assertEqual(1, result.timestep)
+        self.assertEqual(1, motivation.timestep)
+        self.assertLess(result.motivation_urgencies["curiosity"], 0.9)
+        self.assertGreater(result.chemical_state["acetylcholine"], 0.0)
+        self.assertAlmostEqual(
+            result.chemical_state["acetylcholine"],
+            result.neural_state["sensor"],
+        )
+
+    def test_motivation_snapshot_round_trip_preserves_future_integrated_cycles(self):
+        organism = MNNOrganism(
+            "motivated-snapshot",
+            motivation=MotivationSystem([
+                MotivationalDrive("curiosity", level=0.8, setpoint=0.8)
+            ]),
+        )
+        organism.step(event=ChemicalEvent(novelty=0.4), fulfillment={"curiosity": 0.2})
+        snapshot = json.loads(json.dumps(organism.snapshot()))
+        restored = MNNOrganism.from_snapshot(snapshot)
+        self.assertEqual(snapshot, restored.snapshot())
+        next_a = organism.step(event=ChemicalEvent(reward=0.7), fulfillment={"curiosity": 0.6})
+        next_b = restored.step(event=ChemicalEvent(reward=0.7), fulfillment={"curiosity": 0.6})
+        self.assertEqual(next_a, next_b)
+        self.assertEqual(organism.snapshot(), restored.snapshot())
+
+    def test_invalid_motivation_feedback_does_not_advance_any_organism_state(self):
+        organism = MNNOrganism(
+            "motivated-validation",
+            motivation=MotivationSystem([MotivationalDrive("curiosity")]),
+        )
+        before = organism.snapshot()
+        with self.assertRaises(ValueError):
+            organism.step(fulfillment={"unknown-drive": 1.0})
+        self.assertEqual(before, organism.snapshot())
+
+    def test_motivation_clock_must_match_existing_organism_clock(self):
+        network = MNN()
+        network.timestep = 1
+        with self.assertRaises(ValueError):
+            MNNOrganism(
+                "clock-mismatch",
+                network=network,
+                signaling=__import__("machina.chemical_signaling", fromlist=["ChemicalSignaling"]).ChemicalSignaling(
+                    state=__import__("machina.chemical_signaling", fromlist=["ChemicalState"]).ChemicalState(timestep=1)
+                ),
+                motivation=MotivationSystem([MotivationalDrive("curiosity")]),
+            )
 
     def test_chemical_modulation_reaches_configured_neural_unit(self):
         organism = self.make_organism()
