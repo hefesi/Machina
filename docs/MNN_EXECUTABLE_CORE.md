@@ -495,3 +495,12 @@ O `VirtualBrain` pode receber um `InternalDeliberator` explicitamente configurad
 A escolha é registrada no diário append-only como evento `goal.deliberated`, ligado causalmente ao objetivo ativado. O registro contém o identificador lógico do objetivo, a instância persistente, a origem da proposta e o relatório completo da deliberação, incluindo alternativas e componentes de pontuação. Assim, a decisão pode ser inspecionada depois de reiniciar o processo e integra a trilha causal do ciclo.
 
 A integração é opt-in: sem um deliberador configurado, o comportamento anterior do `VirtualBrain` permanece inalterado. A seleção não autoriza ações externas por si só; o ciclo posterior continua sujeito aos contratos e políticas existentes do executor. O evento adicional não substitui a auditoria do ciclo nem transforma uma decisão operacional em evidência de experiência subjetiva.
+
+
+### Continuidade deliberativa entre reinicializações
+
+A `PersistentGoalStore` agora mantém uma tabela append-only `deliberation_history`, separada do ciclo de vida dos objetivos. Cada deliberação registra objetivo selecionado (ou ausência de seleção), origem, justificativa, alternativas com pontuações e um retrato dos sinais contextuais usados. `recent_deliberations()` recupera esses registros em ordem cronológica inversa, inclusive depois de fechar e reabrir o armazenamento.
+
+O `InternalDeliberator` consulta as três deliberações anteriores antes de escolher novamente. Os objetivos recentemente selecionados entram na política de repetição já existente do controlador, com penalidade explícita e limitada; não são proibidos. O resultado também informa `previous_goal_id` e `history_record_id`, permitindo identificar continuidade ou mudança de foco.
+
+Isso cria memória do próprio processo decisório, distinta da memória episódica de experiências e do estado de progresso do objetivo. O histórico preserva o que foi considerado e por quê; não presume que o objetivo anterior foi concluído, que a decisão foi correta ou que existe uma experiência subjetiva contínua. A continuidade é operacional e verificável.
