@@ -1107,3 +1107,20 @@ salva e a rede e falha explicitamente se conexões forem adicionadas ou
 removidas sem reconciliação. Os ganhos transitórios não sobrescrevem os pesos
 de longo prazo, que continuam sob controle dos mecanismos de aprendizagem
 existentes.
+
+
+## Reconsolidação de memórias com histórico de versões
+
+A operação `FragmentMemory.reconsolidate` permite revisar o conteúdo de uma
+memória existente quando o chamador apresenta uma nova evidência identificada.
+Antes de atualizar o registro corrente, o sistema grava conteúdo e confiança
+anteriores em um histórico append-only. A nova versão passa a ser a versão
+corrente, mas a interpretação anterior permanece consultável por
+`revision_history`.
+
+Cada revisão exige `evidence_id` e `operation_id`. O identificador da
+operação impede aplicação duplicada em tentativas repetidas e rejeita sua
+reutilização com outra revisão. O mecanismo não decide sozinho se a nova
+evidência é verdadeira ou suficiente: essa avaliação continua pertencendo ao
+componente chamador. Reconsolidação, portanto, é uma capacidade de atualização
+auditável, não uma garantia de correção da memória.
