@@ -13,10 +13,10 @@ class MNNConceptRelationStoreTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temp_dir = tempfile.TemporaryDirectory()
         self.memory = FragmentMemory(Path(self.temp_dir.name) / "relations.sqlite3")
-        self.memory.add("Evidence A", fragment_id="evidence-a", tags=("a",))
-        self.memory.add("Evidence B", fragment_id="evidence-b", tags=("b",))
-        self.memory.add("Concept A", kind="concept", fragment_id="concept-a")
-        self.memory.add("Concept B", kind="concept", fragment_id="concept-b")
+        self.memory.add("Evidence A", source_uri="test://evidence-a", fragment_id="evidence-a", tags=("a",))
+        self.memory.add("Evidence B", source_uri="test://evidence-b", fragment_id="evidence-b", tags=("b",))
+        self.memory.add("Concept A", kind="concept", source_uri="test://concept-a", fragment_id="concept-a")
+        self.memory.add("Concept B", kind="concept", source_uri="test://concept-b", fragment_id="concept-b")
         self.store = MNNConceptRelationStore(self.memory)
 
     def tearDown(self) -> None:
