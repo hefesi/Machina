@@ -76,10 +76,10 @@ class SelfStateDynamicsAnalyzer:
                 seen_values.append(value)
         if current == initial:
             status = "reverted" if len(seen_values) > 1 else "stable"
-        elif values.count(current) > 1:
-            status = "recurrent"
         elif all(value == current for value in values[1:]):
             status = "persistent_since_change"
+        elif values.count(current) > 1:
+            status = "recurrent"
         else:
             status = "changed"
         return SelfStateTransition(
