@@ -349,3 +349,34 @@ filters. The motivational state is still a separate persistence domain and
 must be snapshotted/restored by its owner. Tests verify that changing drive
 urgency changes goal ranking while retaining the controller's risk and
 external-action restrictions.
+
+
+### Internal motivation as a chemical-signaling input
+
+`MotivationSystem.chemical_pressure` computes the mean urgency across its
+configured drives (zero when no drives exist). A caller can pass that scalar
+into `ChemicalEvent.motivational_pressure` on the next chemical transition:
+
+```python
+from machina import ChemicalEvent, ChemicalSignaling, MotivationSystem
+
+pressure = motivation.chemical_pressure
+chemical_update = ChemicalSignaling().step(
+    ChemicalEvent(
+        novelty=0.2,
+        uncertainty=0.3,
+        risk=0.1,
+        motivational_pressure=pressure,
+    )
+)
+```
+
+Motivational pressure contributes to virtual acetylcholine and noradrenaline
+targets and to the exploration-drive calculation. It is an additional internal
+input, not a replacement for externally observed reward, novelty, uncertainty,
+or risk. The mapping is deliberately explicit and inspectable; it is not a
+claim that these neurotransmitters have been biologically reproduced. The
+caller controls update order: evaluate current drive urgency, advance chemical
+signaling with that pressure, then apply explicitly observed fulfillment to
+the motivation system. This prevents the chemical layer from silently
+declaring a drive satisfied.
