@@ -112,6 +112,23 @@ class StrategyExperimentEvaluationTests(unittest.TestCase):
         self.assertEqual("inconclusive", result["status"])
         self.assertEqual("insufficient_temporal_samples", result["reason"])
 
+
+    def test_temporal_review_abstains_when_advantage_is_smaller_than_variability(self):
+        sequence = [
+            ("baseline", 0.0), ("candidate", 1.3),
+            ("baseline", 2.0), ("candidate", 3.3),
+            ("baseline", 0.0), ("candidate", 1.3),
+            ("baseline", 2.0), ("candidate", 3.3),
+        ]
+        for i, (action, reward) in enumerate(sequence):
+            self.trial(f"noisy-temporal-{i}", action, reward, campaign="noisy-temporal")
+        result = self.evaluator.evaluate_over_time("noisy-temporal", window_size=2)
+        self.assertEqual("no_clear_change", result["status"])
+        self.assertGreater(result["early_difference_standard_error"], result["early_advantage"])
+        self.assertGreater(result["late_difference_standard_error"], result["late_advantage"])
+        self.assertIn("early_noise_threshold", result)
+        self.assertFalse(result["causal_claim"])
+
     def test_temporal_window_size_validation(self):
         with self.assertRaises(ValueError):
             self.evaluator.evaluate_over_time("campaign-A", window_size=1)
