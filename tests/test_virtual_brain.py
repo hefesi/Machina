@@ -6,7 +6,7 @@ from pathlib import Path
 
 from machina import (
     AutonomyContext, AutonomyController, IntegrityError, InternalDeliberator,
-    PersistentGoalStore, VirtualBrain,
+    PersistentGoalStore, VirtualBrain, HomeostaticProposal,
 )
 
 
@@ -208,6 +208,33 @@ class VirtualBrainLoopTests(unittest.TestCase):
         self.assertEqual("internal_deliberator", trace.producer)
         self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
         self.assertEqual(1, goal_store.summary()["active"])
+        brain.close()
+        goal_store.close()
+
+
+    def test_homeostatic_proposal_is_journaled_with_deliberation(self) -> None:
+        goal_store = PersistentGoalStore(
+            Path(self.temporary_directory.name) / "homeostatic-goals.sqlite"
+        )
+        deliberator = InternalDeliberator(AutonomyController(), goal_store)
+        brain = VirtualBrain(self.database_path, internal_deliberator=deliberator)
+        proposal = HomeostaticProposal(
+            cycle_id="self-cycle-12",
+            adjustments={"investigate_open_questions": 0.12},
+            deviations={"prediction_error": 0.4},
+            persistence={"prediction_error": 3},
+            evidence_refs=("step:12",),
+            rationale=("prediction error remained above range",),
+        )
+        result = brain.run_deliberated_cycle(
+            "Elevated internal prediction error.",
+            AutonomyContext(unresolved_questions=2),
+            homeostatic_proposal=proposal,
+        )
+        trace = next(event.artifact for event in result.events if event.event_type == "goal.deliberated")
+        self.assertEqual("self-cycle-12", trace.data["homeostatic_regulation"]["cycle_id"])
+        self.assertEqual(["step:12"], trace.data["homeostatic_regulation"]["evidence_refs"])
+        self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
         brain.close()
         goal_store.close()
 
