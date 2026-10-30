@@ -38,6 +38,33 @@ class AutonomyControllerTests(unittest.TestCase):
         scores = {item["goal"]["goal_id"]: item["score"]["total"] for item in decision.alternatives}
         self.assertGreater(scores["explore"], scores["stabilize"])
 
+    def test_sustained_motivational_pressure_generates_internal_goal(self):
+        motivation = MotivationSystem([
+            MotivationalDrive("curiosity", level=0.9, priority=1.0, persistence=0.5),
+            MotivationalDrive("rest", level=0.1, priority=1.0, persistence=0.5),
+        ])
+        decision = self.controller.step(
+            AutonomyContext(memory_count=4),
+            motivation=motivation,
+        )
+        self.assertEqual("sustain_drive:curiosity", decision.selected_goal.goal_id)
+        self.assertIn(
+            "sustain_drive:curiosity",
+            [item["goal"]["goal_id"] for item in decision.alternatives],
+        )
+
+    def test_motivational_goal_generation_ignores_pressure_below_threshold(self):
+        motivation = MotivationSystem([
+            MotivationalDrive("curiosity", level=0.1, priority=1.0),
+        ])
+        goals = self.controller.generate_motivational_goals(motivation)
+        self.assertEqual([], goals)
+
+    def test_motivational_goal_generation_rejects_invalid_threshold(self):
+        motivation = MotivationSystem([MotivationalDrive("curiosity")])
+        with self.assertRaises(ValueError):
+            self.controller.generate_motivational_goals(motivation, threshold=1.1)
+
     def test_failed_cycle_promotes_error_recovery_goal(self):
         decision = self.controller.step(
             AutonomyContext(memory_count=4, failed_cycles=1)
