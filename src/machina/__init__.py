@@ -11,6 +11,7 @@ from .contracts import Artifact, ContractError, ContractKind
 from .chemical_signaling import ChemicalEvent, ChemicalParameters, ChemicalSignaling, ChemicalState, ChemicalUpdate
 from .event_store import EventStore, IntegrityError
 from .fragment_memory import FragmentMemory, MemoryFragment
+from .mnn_memory_reconsolidation import MemoryRevisionProposal, MNNMemoryReconsolidationPipeline
 from .goal_store import PersistentGoalStore
 from .goal_review import GoalReview, GoalReviewer
 from .goal_constraints import GoalConflictResolver, GoalConstraintAssessment, GoalSchedule
@@ -90,6 +91,8 @@ __all__ = [
     "EventStore",
     "FragmentMemory",
     "MemoryFragment",
+    "MemoryRevisionProposal",
+    "MNNMemoryReconsolidationPipeline",
     "DuplicateKnowledgeError",
     "KnowledgeDocument",
     "KnowledgeHit",
