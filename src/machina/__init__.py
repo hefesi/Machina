@@ -29,6 +29,7 @@ from .self_experience_integration import SelfExperienceIntegrator
 from .self_influence import SelfInfluence, SelfInfluenceAdapter
 from .self_observer import MNNStateSelfObserver
 from .self_regulation import RegulationProposal, SelfRegulationController
+from .temporal_regulation import TemporalRegulationFilter
 from .mnn_reward import RewardModulator
 from .planning import HierarchicalPlanner, PersistentPlanStore
 from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit, KnowledgeStore
@@ -102,6 +103,7 @@ __all__ = [
     "MNNStateSelfObserver",
     "RegulationProposal",
     "SelfRegulationController",
+    "TemporalRegulationFilter",
     "RewardModulator",
     "Unit",
     "VirtualBrain",
