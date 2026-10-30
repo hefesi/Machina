@@ -100,5 +100,36 @@ class StrategyOutcomeJournalTests(unittest.TestCase):
         self.assertAlmostEqual(0.2, outcomes[0].metadata["prediction_error"])
 
 
+    def test_invalid_evidence_ids_are_rejected(self):
+        invalid_values = [
+            "evidence-1",
+            ["evidence-1", ""],
+            ["evidence-1", 7],
+            ["evidence-1", "evidence-1"],
+            None,
+        ]
+        for evidence_ids in invalid_values:
+            with self.subTest(evidence_ids=evidence_ids):
+                proposal = dict(self.proposal, evidence_ids=evidence_ids)
+                with self.assertRaises(ValueError):
+                    self.journal.record_proposal(
+                        proposal, expected_reward=0.5, proposal_id="invalid-evidence"
+                    )
+
+    def test_unhashable_status_is_reported_as_validation_error(self):
+        proposal = dict(self.proposal, status=["proposed"])
+        with self.assertRaisesRegex(ValueError, "proposal status"):
+            self.journal.record_proposal(
+                proposal, expected_reward=0.5, proposal_id="invalid-status"
+            )
+
+    def test_evidence_ids_are_normalized_before_persistence(self):
+        proposal = dict(self.proposal, evidence_ids=[" evidence-1 ", "evidence-2"])
+        stored = self.journal.record_proposal(
+            proposal, expected_reward=0.5, proposal_id="normalized-evidence"
+        )
+        self.assertEqual(["evidence-1", "evidence-2"], stored.metadata["evidence_ids"])
+
+
 if __name__ == "__main__":
     unittest.main()
