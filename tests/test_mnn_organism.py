@@ -48,8 +48,11 @@ class MNNOrganismTests(unittest.TestCase):
             MotivationalDrive("curiosity", level=0.9, setpoint=0.9),
             MotivationalDrive("stability", level=0.7, setpoint=0.7),
         ])
+        network = MNN()
+        network.add_unit(Unit("sensor", activation="identity"))
         organism = MNNOrganism(
             "motivated-test",
+            network=network,
             motivation=motivation,
             chemical_inputs={"acetylcholine": "sensor"},
         )
