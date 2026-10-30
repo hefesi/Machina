@@ -228,6 +228,26 @@ class PersistentGoalStore:
             ).fetchall()
         return [self._as_dict(row) for row in rows]
 
+
+    def ranked_open_goals(self, limit: int = 20) -> list[dict[str, Any]]:
+        """List actionable goals by priority, then lower completion, then age.
+
+        Paused goals are excluded: they require an explicit resume operation.
+        Goals needing revision remain visible but rank below active goals at
+        equal priority so unresolved failures do not silently dominate.
+        """
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive integer")
+        rows = self._db.execute(
+            "SELECT * FROM persistent_goals WHERE status IN "
+            "('active', 'needs_revision') "
+            "ORDER BY priority DESC, "
+            "CASE status WHEN 'active' THEN 0 ELSE 1 END ASC, "
+            "progress ASC, id ASC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [self._as_dict(row) for row in rows]
+
     def summary(self) -> dict[str, int]:
         rows = self._db.execute(
             "SELECT status, COUNT(*) AS count FROM persistent_goals GROUP BY status"
