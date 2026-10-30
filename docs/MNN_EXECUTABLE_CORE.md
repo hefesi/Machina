@@ -97,3 +97,55 @@ against stronger and clearly specified baselines.
 ## Enquadramento na hipótese fundamental
 
 O núcleo executável da MNN deve ser entendido como um substrato experimental, não como uma mente completa nem como evidência de consciência. A documentação técnica precisa separar capacidades realmente implementadas, hipóteses ainda não testadas e capacidades que existem apenas como especificação. Relacionar cada experimento à contribuição para a dinâmica integrada e persistente de Machina. Ver [Hipótese Fundamental](00-vision/central-hypothesis.md).
+
+
+## Integrated persistent organism cycle (experimental)
+
+The new `MNNOrganism` coordinator joins three previously separate state
+domains in one logical transition:
+
+1. virtual chemical signaling updates its persistent concentrations and
+   reward-prediction error;
+2. configured chemical outputs can be routed into named MNN units before the
+   synchronous neural transition;
+3. optional reward-modulated Hebbian adaptation uses prediction error and the
+   bounded virtual plasticity gain; and
+4. the functional continuity ledger records the transition under one stable
+   agent identifier.
+
+The coordinator rejects mismatched neural/chemical clocks and identity IDs.
+Its versioned snapshot includes topology, neural activations, chemical
+concentrations, continuity history, routing configuration, and learning rate.
+A restored instance can continue with the same deterministic next transition.
+
+Example:
+
+```python
+from machina import ChemicalEvent, Connection, MNN, MNNOrganism, Unit
+
+network = MNN()
+network.add_unit(Unit("sensor", activation="identity"))
+network.add_unit(Unit("dopamine", activation="identity"))
+network.add_unit(Unit("integrator", activation="tanh"))
+network.add_connection(Connection("sensor-integrator", "sensor", "integrator", 0.4))
+network.add_connection(Connection("dopamine-integrator", "dopamine", "integrator", 0.2))
+
+organism = MNNOrganism(
+    "machina-01",
+    network,
+    chemical_inputs={"dopamine": "dopamine"},
+    learning_rate=0.01,
+)
+state = organism.step(
+    {"sensor": 0.7},
+    ChemicalEvent(reward=0.8, novelty=0.6),
+)
+checkpoint = organism.snapshot()
+```
+
+This is a functional integration milestone, not an autonomous organism, a
+complete cognitive architecture, or evidence of subjective experience. The
+chemical variables are computational control signals, not simulated
+neurotransmitter molecules. The coordinator also does not yet integrate the
+VirtualBrain event journal or semantic/episodic memory repository; those
+remain separate persistence domains and are explicit next integration work.
