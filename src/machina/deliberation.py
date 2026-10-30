@@ -27,6 +27,8 @@ class DeliberationDecision:
     persistent_record_id: int | None
     autonomy: AutonomyDecision
     rationale: str
+    history_record_id: int | None = None
+    previous_goal_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -36,6 +38,8 @@ class DeliberationDecision:
             "persistent_record_id": self.persistent_record_id,
             "autonomy": self.autonomy.to_dict(),
             "rationale": self.rationale,
+            "history_record_id": self.history_record_id,
+            "previous_goal_id": self.previous_goal_id,
             "interpretation": (
                 "A bounded, deterministic operational deliberation record; "
                 "selection is not evidence of subjective experience."
@@ -88,6 +92,9 @@ class InternalDeliberator:
         if isinstance(open_goal_limit, bool) or not isinstance(open_goal_limit, int) or open_goal_limit < 1:
             raise ValueError("open_goal_limit must be a positive integer")
 
+        history = self.goals.recent_deliberations(3)
+        previous_goal_id = history[0]["selected_goal_id"] if history else None
+        historical_goal_ids = [item["selected_goal_id"] for item in history if isinstance(item.get("selected_goal_id"), str)]
         records = self.goals.ranked_open_goals(open_goal_limit)
         persistent_by_goal = {record["goal_id"]: record for record in records}
         candidates = self.controller.generate_goals(context)
@@ -107,7 +114,7 @@ class InternalDeliberator:
         decision = self.controller.choose(
             candidates_by_id.values(),
             drive_adjustments=adjustments,
-            recent_goal_ids=recent_goal_ids,
+            recent_goal_ids=tuple(dict.fromkeys([*recent_goal_ids, *historical_goal_ids])),
         )
         self._cycle += 1
         selected = decision.selected_goal
@@ -132,6 +139,21 @@ class InternalDeliberator:
                 "nas alternativas da decisão."
             )
         )
+        context_snapshot = {
+            "unresolved_questions": context.unresolved_questions,
+            "failed_cycles": context.failed_cycles,
+            "cycles_since_reflection": context.cycles_since_reflection,
+            "cycles_since_memory_review": context.cycles_since_memory_review,
+            "memory_count": context.memory_count,
+            "important_memory_count": context.important_memory_count,
+        }
+        history_record_id = self.goals.record_deliberation(
+            selected_goal_id=selected.goal_id if selected else None,
+            selected_source=source,
+            rationale=rationale,
+            alternatives=list(decision.alternatives),
+            context=context_snapshot,
+        )
         return DeliberationDecision(
             cycle=self._cycle,
             selected_goal=selected,
@@ -139,4 +161,6 @@ class InternalDeliberator:
             persistent_record_id=record_id,
             autonomy=decision,
             rationale=rationale,
+            history_record_id=history_record_id,
+            previous_goal_id=previous_goal_id,
         )
