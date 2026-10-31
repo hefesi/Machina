@@ -245,6 +245,108 @@ class SelfModelLearningBridge:
             "suppressed": suppressed, "execution_performed": False,
         }
 
+    def propose_follow_up_curiosity_goals(
+        self, investigation_store: Any, investigation_id: str,
+        follow_up_mappings: Mapping[str, Mapping[str, Any]], *,
+        allow_repeat: bool = False,
+    ) -> dict[str, Any]:
+        """Turn explicitly recorded unresolved questions into bounded goal proposals.
+
+        Mapping keys must exactly match remaining_unknowns from a closed
+        investigation. The question defaults to that caller-authored unknown;
+        scoring metadata is supplied by the caller. No investigation is
+        started and no external action is performed.
+        """
+        import math
+        import re
+        from .autonomy import GoalCandidate
+        from .curiosity import CuriosityInvestigationStore
+
+        if not isinstance(investigation_store, CuriosityInvestigationStore):
+            raise TypeError("investigation_store must be a CuriosityInvestigationStore")
+        if not isinstance(allow_repeat, bool):
+            raise ValueError("allow_repeat must be a boolean")
+        if not isinstance(follow_up_mappings, Mapping):
+            raise ValueError("follow_up_mappings must be a mapping")
+        investigation = investigation_store.get_investigation(investigation_id)
+        if investigation["status"] != "closed":
+            raise ValueError("follow-up proposals require a closed investigation")
+        remaining = set(investigation["remaining_unknowns"])
+        goals, provenance, suppressed, seen = [], [], [], set()
+        for raw_unknown, spec in follow_up_mappings.items():
+            if not isinstance(raw_unknown, str) or raw_unknown not in remaining:
+                raise ValueError("mapping keys must exactly match recorded remaining_unknowns")
+            if not isinstance(spec, Mapping):
+                raise ValueError("each follow-up mapping must be a mapping")
+            question = spec.get("question", raw_unknown)
+            drive = spec.get("drive", "curiosity")
+            if not isinstance(question, str) or not question.strip():
+                raise ValueError("question must be a non-empty string")
+            if not isinstance(drive, str) or not drive.strip():
+                raise ValueError("drive must be a non-empty string")
+            if not allow_repeat and investigation_store.has_prior_question(investigation["gap_property"], question.strip()):
+                suppressed.append({"remaining_unknown": raw_unknown, "question": question.strip(),
+                                   "reason": "prior_investigation_exists"})
+                continue
+            values = {}
+            for field, default in (("information_gain", 0.5), ("impact", 0.5),
+                                   ("urgency", 0.5), ("estimated_cost", 0.25), ("risk", 0.05)):
+                raw = spec.get(field, default)
+                if isinstance(raw, bool):
+                    raise ValueError(f"{field} must be finite and in [0, 1]")
+                try:
+                    number = float(raw)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"{field} must be finite and in [0, 1]") from exc
+                if not math.isfinite(number) or not 0.0 <= number <= 1.0:
+                    raise ValueError(f"{field} must be finite and in [0, 1]")
+                values[field] = number
+            slug = re.sub(r"[^a-z0-9]+", "-", raw_unknown.casefold()).strip("-") or "unknown"
+            goal_id = "follow_up:" + investigation_id + ":" + slug
+            if goal_id in seen:
+                raise ValueError("duplicate generated follow-up goal_id: " + goal_id)
+            seen.add(goal_id)
+            benefit = values["information_gain"] * values["impact"]
+            goals.append(GoalCandidate(
+                goal_id=goal_id, description=question.strip(), drive=drive.strip(),
+                urgency=values["urgency"], expected_benefit=benefit,
+                confidence=values["information_gain"], estimated_cost=values["estimated_cost"],
+                risk=values["risk"], requires_external_action=False,
+            ))
+            provenance.append({
+                "goal_id": goal_id, "source_investigation_id": investigation_id,
+                "source_outcome": investigation["outcome"], "belief_property": investigation["gap_property"],
+                "remaining_unknown": raw_unknown, "question": question.strip(), **values,
+                "expected_information_value": benefit, "execution_performed": False,
+            })
+        return {
+            "goals": goals, "provenance": provenance, "suppressed": suppressed,
+            "source_investigation_id": investigation_id, "execution_performed": False,
+        }
+
+    def select_follow_up_curiosity_goal(
+        self, controller: Any, investigation_store: Any, investigation_id: str,
+        follow_up_mappings: Mapping[str, Mapping[str, Any]], *,
+        allow_repeat: bool = False, recent_goal_ids: tuple[str, ...] = (),
+    ) -> dict[str, Any]:
+        """Prioritize unresolved follow-up questions through bounded autonomy."""
+        from .autonomy import AutonomyController
+        if not isinstance(controller, AutonomyController):
+            raise TypeError("controller must be an AutonomyController")
+        proposals = self.propose_follow_up_curiosity_goals(
+            investigation_store, investigation_id, follow_up_mappings,
+            allow_repeat=allow_repeat,
+        )
+        decision = controller.choose(proposals["goals"], recent_goal_ids=recent_goal_ids)
+        by_id = {item["goal_id"]: item for item in proposals["provenance"]}
+        selected = decision.selected_goal
+        return {
+            "proposals": proposals, "decision": decision,
+            "selected_goal_id": selected.goal_id if selected else None,
+            "selected_provenance": by_id.get(selected.goal_id) if selected else None,
+            "execution_performed": False,
+        }
+
     def select_curiosity_goal(
         self, controller: Any, gap_mappings: Mapping[str, Mapping[str, Any]], *,
         include_inferred: bool = True, maximum_belief_confidence: float = 0.65,
