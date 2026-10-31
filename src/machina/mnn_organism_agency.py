@@ -7,7 +7,7 @@ from typing import Any
 
 from .components import AgencyPolicy, FirstCandidateAgency
 from .contracts import Artifact
-from .mnn_organism import DecisionOption, MNNOrganism
+from .mnn_organism import DecisionOption, MemoryGuidance, MNNOrganism
 
 
 class MNNOrganismAgencyAdapter:
@@ -54,6 +54,55 @@ class MNNOrganismAgencyAdapter:
         return " ".join(
             part if isinstance(part, str) else str(part)
             for part in parts if part is not None
+        )
+
+    def apply_selected_memory_feedback(
+        self,
+        decision: Mapping[str, Any],
+        outcomes: Mapping[str, bool],
+        *,
+        context: str,
+        operation_id: str,
+        strength: float = 0.10,
+    ) -> tuple[dict[str, float], bool]:
+        """Apply explicit, idempotent feedback only to evidence used by this decision.
+
+        The caller supplies usefulness labels after evaluating the action.
+        This method does not infer memory usefulness from action success, and
+        cannot rate evidence retrieved for an unselected candidate.
+        """
+        if self.organism.memory is None:
+            raise RuntimeError("no FragmentMemory is attached to this organism")
+        if not isinstance(decision, Mapping):
+            raise ValueError("decision must be a mapping")
+        rationale = decision.get("rationale", {})
+        guidance_data = rationale.get("memory_guidance", {}) if isinstance(rationale, Mapping) else {}
+        if not isinstance(guidance_data, Mapping) or guidance_data.get("status") != "applied":
+            raise ValueError("decision has no applied memory guidance")
+        selected_ids = guidance_data.get("selected_evidence_ids", [])
+        if not isinstance(selected_ids, list) or not selected_ids:
+            raise ValueError("decision has no selected memory evidence")
+        if not isinstance(outcomes, Mapping) or not outcomes:
+            raise ValueError("outcomes must be a non-empty mapping")
+        unknown = set(outcomes) - set(selected_ids)
+        if unknown:
+            raise ValueError(
+                "feedback may only rate evidence used by the selected candidate: "
+                + ", ".join(sorted(unknown))
+            )
+        signal_map = guidance_data.get("memory_signals", {})
+        selected_key = guidance_data.get("selected_candidate")
+        signal = signal_map.get(selected_key, 0.0) if isinstance(signal_map, Mapping) else 0.0
+        guidance = MemoryGuidance(
+            query=str(context),
+            target_unit=self.target_unit,
+            signal=float(signal),
+            evidence_ids=tuple(selected_ids),
+            evidence_scores={fragment_id: float(signal) for fragment_id in selected_ids},
+        )
+        return self.organism.evaluate_memory_guidance(
+            guidance, outcomes, context=context,
+            operation_id=operation_id, strength=strength,
         )
 
     def decide(
