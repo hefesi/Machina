@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from machina.autonomy import GoalCandidate
 from machina.goal_outcome_learning import GoalOutcomeLearner
 from machina.self_model import SelfModel
 from machina.self_model_learning import SelfModelLearningBridge
@@ -77,6 +78,72 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "minimum_coverage"):
             self.bridge.update_prediction_calibration("runtime", cycle_id="c1", minimum_coverage=1.5)
 
+
+
+    def _limitation_mapping(self):
+        return {"limited_memory_recall": {
+            "description": "Investigate and improve long-term memory retrieval",
+            "drive": "self_improvement",
+        }}
+
+    def test_observed_limitation_produces_goal_with_evidence_provenance(self):
+        self.model.update(
+            {"limited_memory_recall": "Recall accuracy below target"},
+            cycle_id="cycle-20",
+            evidence_refs={"limited_memory_recall": "benchmark:recall-20"},
+            known_limitations=["limited_memory_recall"],
+        )
+        result = self.bridge.propose_goals_from_limitations(self._limitation_mapping())
+        self.assertEqual(1, len(result["goals"]))
+        self.assertIsInstance(result["goals"][0], GoalCandidate)
+        self.assertEqual("address_limitation:limited-memory-recall", result["goals"][0].goal_id)
+        self.assertFalse(result["goals"][0].requires_external_action)
+        self.assertEqual("observed", result["provenance"][0]["source_status"])
+        self.assertEqual("benchmark:recall-20", result["provenance"][0]["evidence_ref"])
+
+    def test_inferred_limitation_requires_explicit_opt_in_and_confidence(self):
+        self.model.update(
+            {"limited_memory_recall": "Possible recall issue"},
+            cycle_id="cycle-21",
+            evidence_refs={"limited_memory_recall": "audit:recall-21"},
+            statuses={"limited_memory_recall": "inferred"},
+            confidences={"limited_memory_recall": 0.85},
+            known_limitations=["limited_memory_recall"],
+        )
+        mapping = self._limitation_mapping()
+        self.assertEqual([], self.bridge.propose_goals_from_limitations(mapping)["goals"])
+        opted_in = self.bridge.propose_goals_from_limitations(mapping, allow_inferred=True)
+        self.assertEqual(1, len(opted_in["goals"]))
+        self.assertEqual("inferred", opted_in["provenance"][0]["source_status"])
+        self.assertEqual([], self.bridge.propose_goals_from_limitations(
+            mapping, allow_inferred=True, minimum_confidence=0.9
+        )["goals"])
+
+    def test_unknown_stale_and_unregistered_limitations_are_ignored(self):
+        self.model.update(
+            {"unknown_limit": None, "stale_limit": "Old report"},
+            cycle_id="cycle-22",
+            statuses={"unknown_limit": "unknown", "stale_limit": "stale"},
+            known_limitations=["unknown_limit", "stale_limit"],
+        )
+        mappings = {
+            "unknown_limit": {"description": "Investigate unknown", "drive": "curiosity"},
+            "stale_limit": {"description": "Recheck stale", "drive": "verification"},
+            "not_registered": {"description": "Invent a limitation", "drive": "curiosity"},
+        }
+        self.assertEqual([], self.bridge.propose_goals_from_limitations(mappings)["goals"])
+
+    def test_inferred_limitation_without_evidence_is_not_proposed(self):
+        self.model.update(
+            {"limited_memory_recall": "Possible recall issue"},
+            cycle_id="cycle-23",
+            statuses={"limited_memory_recall": "inferred"},
+            confidences={"limited_memory_recall": 0.95},
+            known_limitations=["limited_memory_recall"],
+        )
+        self.assertEqual([], self.bridge.propose_goals_from_limitations(
+            self._limitation_mapping(), allow_inferred=True
+        )["goals"])
 
 if __name__ == "__main__":
     unittest.main()
