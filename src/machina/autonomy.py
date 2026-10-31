@@ -159,8 +159,24 @@ class AutonomyController:
         approved_external_goal_ids: Iterable[str] = (),
         drive_adjustments: dict[str, float] | None = None,
         recent_goal_ids: Iterable[str] = (),
+        commitment_alignment: dict[str, float] | None = None,
+        commitment_weight: float = 0.10,
     ) -> AutonomyDecision:
-        """Choose the highest-scoring eligible goal and retain the rationale."""
+        """Choose an eligible goal with bounded, explicit commitment alignment.
+
+        Alignment values must be supplied by an evidence-aware evaluator for
+        the current persistent commitments. They are never inferred from goal
+        wording here. This keeps the autonomy policy auditable and avoids
+        treating a text match as proof that a goal honors a commitment.
+        """
+        if isinstance(commitment_weight, bool) or not isinstance(commitment_weight, (int, float)) or not math.isfinite(commitment_weight) or not 0.0 <= commitment_weight <= 0.15:
+            raise ValueError("commitment_weight must be finite and within [0, 0.15]")
+        alignments = dict(commitment_alignment or {})
+        for goal_id, alignment in alignments.items():
+            if not isinstance(goal_id, str) or not goal_id.strip():
+                raise ValueError("commitment alignment keys must be non-empty goal IDs")
+            if isinstance(alignment, bool) or not isinstance(alignment, (int, float)) or not math.isfinite(alignment) or not 0.0 <= alignment <= 1.0:
+                raise ValueError("commitment alignment values must be finite and within [0, 1]")
         goals = list(candidates)
         if len({goal.goal_id for goal in goals}) != len(goals):
             raise ValueError("goal_id values must be unique")
@@ -183,7 +199,10 @@ class AutonomyController:
             score["base_total"] = score["total"]
             score["feedback_adjustment"] = feedback
             score["repetition_penalty"] = repetition
-            score["total"] = score["base_total"] + feedback + repetition
+            alignment = float(alignments.get(goal.goal_id, 0.0))
+            score["commitment_alignment"] = alignment
+            score["commitment_adjustment"] = float(commitment_weight) * alignment
+            score["total"] = score["base_total"] + feedback + repetition + score["commitment_adjustment"]
             eligible.append((goal, score))
 
         eligible.sort(key=lambda pair: (-pair[1]["total"], pair[0].goal_id))
@@ -238,6 +257,8 @@ class AutonomyController:
         drive_adjustments: dict[str, float] | None = None,
         recent_goal_ids: Iterable[str] = (),
         motivation: Any | None = None,
+        commitment_alignment: dict[str, float] | None = None,
+        commitment_weight: float = 0.10,
     ) -> AutonomyDecision:
         """Generate and choose a goal from context and sustained internal pressure."""
         candidates = self.generate_goals(context)
@@ -250,6 +271,8 @@ class AutonomyController:
             candidates,
             drive_adjustments=adjustments,
             recent_goal_ids=recent_goal_ids,
+            commitment_alignment=commitment_alignment,
+            commitment_weight=commitment_weight,
         )
 
 

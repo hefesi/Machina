@@ -19,11 +19,16 @@ from .goal_review import GoalReview, GoalReviewer
 from .goal_constraints import GoalConflictResolver, GoalConstraintAssessment, GoalSchedule
 from .adaptive_planning import AdaptivePlanReviewer, PlanRevision
 from .goal_outcome_learning import GoalOutcomeLearner
+from .experience_memory import ExperienceMemoryStore
+from .strategy_self_review import StrategySelfReviewStore
+from .curiosity import CuriosityInvestigationStore
 from .deliberation import DeliberationDecision, InternalDeliberator
 from .mnn import Connection, MNN, Unit
 from .mnn_motivation import MotivationalDrive, MotivationSystem
 from .mnn_organism import (DecisionAssessment, DecisionOption, MNNOrganism, MemoryGuidance, OrganismStep)
 from .mnn_adapter import MNNCognitionAdapter
+from .mnn_organism_adapter import MNNOrganismCognitionAdapter
+from .mnn_organism_agency import MNNOrganismAgencyAdapter
 from .self_model import SelfModel
 from .self_state_dynamics import SelfStateDynamicsAnalyzer, SelfStateTransition
 from .self_history_influence import SelfHistoryInfluence, SelfHistoryInfluenceAdapter, SelfHistoryRule
@@ -83,6 +88,9 @@ __all__ = [
     "AdaptivePlanReviewer",
     "PlanRevision",
     "GoalOutcomeLearner",
+    "ExperienceMemoryStore",
+    "StrategySelfReviewStore",
+    "CuriosityInvestigationStore",
     "DeliberationDecision",
     "InternalDeliberator",
     "HierarchicalPlanner",
@@ -115,6 +123,8 @@ __all__ = [
     "DecisionAssessment",
     "OrganismStep",
     "MNNCognitionAdapter",
+    "MNNOrganismCognitionAdapter",
+    "MNNOrganismAgencyAdapter",
     "SelfModel",
     "SelfStateDynamicsAnalyzer",
     "SelfStateTransition",

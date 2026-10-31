@@ -45,6 +45,7 @@ class ContractKind(StrEnum):
     VALIDATION_RESULT = "validation_result"
     MODEL_UPDATE = "model_update"
     CYCLE_STATUS = "cycle_status"
+    CURIOSITY_RECORD = "curiosity_record"
     FAILURE = "failure"
 
 
@@ -244,6 +245,7 @@ REQUIRED_DATA_FIELDS: dict[str, frozenset[str]] = {
         }
     ),
     ContractKind.CYCLE_STATUS: frozenset({"status", "checkpoint"}),
+    ContractKind.CURIOSITY_RECORD: frozenset({"operation", "investigation_id", "record"}),
     ContractKind.FAILURE: frozenset({"stage", "error_type", "message"}),
 }
 

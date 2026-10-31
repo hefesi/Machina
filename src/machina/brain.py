@@ -25,6 +25,7 @@ from .deliberation import InternalDeliberator
 from .mnn_memory_retrieval_feedback import MNNMemoryRetrievalFeedback
 from .homeostasis import HomeostaticProposal
 from .self_history_influence import SelfHistoryInfluence
+from .curiosity import CuriosityInvestigationStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +72,7 @@ class VirtualBrain:
         learning: LearningEngine | None = None,
         fragment_memory_path: str | Path | None = None,
         internal_deliberator: InternalDeliberator | None = None,
+        curiosity_investigation_path: str | Path | None = None,
     ) -> None:
         self.store = EventStore(storage_path)
         self.cognition = cognition or DeterministicCognition()
@@ -78,6 +80,10 @@ class VirtualBrain:
         self.action_executor = action_executor or AcknowledgeExecutor()
         self.learning = learning or OutcomeLearner()
         self.internal_deliberator = internal_deliberator
+        self.curiosity_store = (
+            CuriosityInvestigationStore(curiosity_investigation_path)
+            if curiosity_investigation_path is not None else None
+        )
         self.memory = MemoryRepository(self.store)
         self.fragment_memory = (
             FragmentMemory(fragment_memory_path)
@@ -88,6 +94,8 @@ class VirtualBrain:
     def close(self) -> None:
         if self.fragment_memory is not None:
             self.fragment_memory.close()
+        if self.curiosity_store is not None:
+            self.curiosity_store.close()
         self.store.close()
 
     def __enter__(self) -> "VirtualBrain":
@@ -294,6 +302,90 @@ class VirtualBrain:
         if result is None:
             raise RuntimeError("deliberated cycle did not reach a terminal state")
         return result
+
+    def _require_curiosity_store(self) -> CuriosityInvestigationStore:
+        if self.curiosity_store is None:
+            raise RuntimeError(
+                "curiosity investigation memory is disabled; provide curiosity_investigation_path"
+            )
+        return self.curiosity_store
+
+    def _journal_curiosity_record(
+        self, cycle_id: str, operation: str, investigation_id: str,
+        record: Mapping[str, Any], *, source_refs: Sequence[str] = (),
+    ) -> StoredEvent:
+        artifact = Artifact.create(
+            ContractKind.CURIOSITY_RECORD,
+            cycle_id=cycle_id,
+            producer="curiosity_investigation_store",
+            data={
+                "operation": operation,
+                "investigation_id": investigation_id,
+                "record": dict(record),
+            },
+            source_refs=source_refs,
+            epistemic_status=EpistemicStatus.UNCERTAIN,
+        )
+        return self.store.append(
+            f"curiosity.{operation}", artifact,
+        )
+
+    def start_curiosity_investigation(
+        self, cycle_id: str, investigation_id: str, *,
+        gap_property: str, question: str, hypothesis: str,
+        selection_reason: str, goal_id: str,
+    ) -> dict[str, Any]:
+        """Start a durable curiosity investigation and mirror it in the brain journal."""
+        self._require_cycle(cycle_id)
+        store = self._require_curiosity_store()
+        record = store.start_investigation(
+            investigation_id, gap_property=gap_property, question=question,
+            hypothesis=hypothesis, selection_reason=selection_reason,
+            cycle_id=cycle_id, goal_id=goal_id,
+        )
+        self._journal_curiosity_record(
+            cycle_id, "investigation_started", investigation_id, record,
+        )
+        return record
+
+    def record_curiosity_evidence(
+        self, cycle_id: str, investigation_id: str, *,
+        evidence_ref: str, finding: str,
+    ) -> dict[str, Any]:
+        """Append caller-supplied evidence and link it to the current brain cycle."""
+        self._require_cycle(cycle_id)
+        store = self._require_curiosity_store()
+        evidence = store.record_evidence(
+            investigation_id, evidence_ref=evidence_ref,
+            finding=finding, cycle_id=cycle_id,
+        )
+        self._journal_curiosity_record(
+            cycle_id, "evidence_recorded", investigation_id, evidence,
+            source_refs=(evidence_ref,),
+        )
+        return evidence
+
+    def close_curiosity_investigation(
+        self, cycle_id: str, investigation_id: str, *,
+        outcome: str, answer_summary: str,
+        remaining_unknowns: Sequence[str],
+    ) -> dict[str, Any]:
+        """Close an investigation once and journal its unresolved questions."""
+        self._require_cycle(cycle_id)
+        store = self._require_curiosity_store()
+        record = store.close_investigation(
+            investigation_id, outcome=outcome,
+            answer_summary=answer_summary,
+            remaining_unknowns=remaining_unknowns, cycle_id=cycle_id,
+        )
+        evidence_refs = tuple(
+            item["evidence_ref"] for item in record.get("evidence", [])
+        )
+        self._journal_curiosity_record(
+            cycle_id, "investigation_closed", investigation_id, record,
+            source_refs=evidence_refs,
+        )
+        return record
 
     def pause(self, cycle_id: str, *, checkpoint: str, reason: str = "requested") -> None:
         self._require_cycle(cycle_id)
@@ -1401,7 +1493,7 @@ class VirtualBrain:
                 "change": change,
                 "evidence_refs": [evaluation.id, validation.id],
                 "reason": f"Outcome evaluation applied reward {reward}.",
-                "created_by": "MNNCognitionAdapter",
+                "created_by": type(self.cognition).__name__,
             },
             input_refs=[evaluation.id, validation.id],
             source_refs=evaluation.source_refs,
