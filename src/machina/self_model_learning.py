@@ -379,6 +379,92 @@ class SelfModelLearningBridge:
             'self_model_updated': True,
         }
 
+    def review_goal_strategy(
+        self, goal_type: str, *, cycle_id: str, window_size: int = 5,
+        minimum_change: float = 0.10, belief_property: str | None = None,
+    ) -> dict[str, Any]:
+        """Compare recent and prior evaluator outcomes and record a review proposal.
+
+        This is a descriptive temporal comparison, not a causal estimate. It
+        never changes a goal, policy, autonomy score, or execution permission.
+        """
+        import math
+        if not isinstance(goal_type, str) or not goal_type.strip():
+            raise ValueError("goal_type must be a non-empty string")
+        if isinstance(window_size, bool) or not isinstance(window_size, int) or window_size < 2:
+            raise ValueError("window_size must be an integer >= 2")
+        if isinstance(minimum_change, bool):
+            raise ValueError("minimum_change must be finite and in [0, 1]")
+        try:
+            threshold = float(minimum_change)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("minimum_change must be finite and in [0, 1]") from exc
+        if not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
+            raise ValueError("minimum_change must be finite and in [0, 1]")
+        label = goal_type.strip()
+        history = self.learner.history(label, limit=window_size * 2)
+        if len(history) < window_size * 2:
+            return {
+                "accepted": False, "reason": "insufficient_history",
+                "required_observations": window_size * 2,
+                "available_observations": len(history),
+                "self_model_updated": False, "causal_claim": False,
+            }
+        recent = history[:window_size]
+        previous = history[window_size:window_size * 2]
+        recent_mean = sum(float(item["outcome"]) for item in recent) / window_size
+        previous_mean = sum(float(item["outcome"]) for item in previous) / window_size
+        change = recent_mean - previous_mean
+        if change <= -threshold:
+            assessment, recommendation = "deteriorating", "review_strategy"
+        elif change >= threshold:
+            assessment, recommendation = "improving", "retain_and_validate"
+        else:
+            assessment, recommendation = "no_material_change_detected", "continue_monitoring"
+        refs = [f"goal-outcome:{item['id']}" for item in reversed(previous + recent)]
+        evidence_ref = "goal-outcome-window:" + label + ":" + "|".join(refs)
+        prop = belief_property or f"strategy_review:{label}"
+        existing = self.self_model.beliefs.get(prop)
+        review = {
+            "kind": "descriptive_strategy_review", "goal_type": label,
+            "assessment": assessment, "recommendation": recommendation,
+            "recent_mean": recent_mean, "previous_mean": previous_mean,
+            "change_recent_minus_previous": change,
+            "window_size": window_size, "minimum_change": threshold,
+            "recent_observation_ids": [item.get("observation_id") or item["id"] for item in recent],
+            "previous_observation_ids": [item.get("observation_id") or item["id"] for item in previous],
+            "interpretation_limit": "temporal association only; not causal and not a policy change",
+        }
+        # This score expresses only evidence volume, not probability of truth.
+        support_score = min(0.75, (2 * window_size) / (2 * window_size + 4.0))
+        if existing and existing.get("evidence_ref") == evidence_ref:
+            return {
+                "accepted": True, "already_applied": True, "review": existing.get("value"),
+                "evidence_ref": evidence_ref, "self_model_updated": False, "causal_claim": False,
+            }
+        if existing:
+            revision = self.self_model.revise_belief(
+                prop, review, cycle_id=cycle_id,
+                reason="A new non-overlapping evaluator outcome window changed the descriptive strategy assessment.",
+                source="goal_outcome_strategy_review", evidence_ref=evidence_ref,
+                status="inferred", confidence=support_score,
+                contradicts_previous=existing.get("value", {}).get("assessment") != assessment
+                if isinstance(existing.get("value"), dict) else False,
+            )
+            state = self.self_model.snapshot()
+        else:
+            revision = None
+            state = self.self_model.update(
+                {prop: review}, cycle_id=cycle_id,
+                evidence_refs={prop: evidence_ref}, statuses={prop: "inferred"},
+                confidences={prop: support_score},
+            )
+        return {
+            "accepted": True, "already_applied": False, "review": review,
+            "belief_property": prop, "revision": revision,
+            "evidence_ref": evidence_ref, "status": "inferred",
+            "self_model": state, "self_model_updated": True, "causal_claim": False,
+        }
     def update_capability(
         self,
         goal_type: str,
