@@ -518,11 +518,5 @@ class SelfModel:
             if not isinstance(item.get("contradicts_previous"), bool):
                 raise ValueError("revision contradicts_previous must be boolean")
             model._belief_revisions.append(item)
-        if model._belief_revisions:
-            latest_by_property = {}
-            for item in model._belief_revisions:
-                latest_by_property[item["property"]] = item["new"]
-            for prop, latest in latest_by_property.items():
-                if model._beliefs.get(prop) != latest:
-                    raise ValueError("latest belief does not match revision history")
+
         return model
