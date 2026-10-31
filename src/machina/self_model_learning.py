@@ -24,6 +24,114 @@ class SelfModelLearningBridge:
         self.learner = learner
 
 
+    def propose_curiosity_goals(
+        self, gap_mappings: Mapping[str, Mapping[str, Any]], *,
+        include_inferred: bool = True, maximum_belief_confidence: float = 0.65,
+    ) -> dict[str, Any]:
+        """Propose bounded internal investigations for explicit knowledge gaps.
+
+        The caller defines each question and its estimated information gain,
+        impact, cost, urgency, and risk. The bridge only checks the self-model
+        status and builds inspectable internal candidates; it does not invent
+        facts, perform research, or execute actions.
+        """
+        import math
+        import re
+        from .autonomy import GoalCandidate
+
+        if not isinstance(gap_mappings, Mapping):
+            raise ValueError("gap_mappings must be a mapping")
+        if not isinstance(include_inferred, bool):
+            raise ValueError("include_inferred must be a boolean")
+        if isinstance(maximum_belief_confidence, bool):
+            raise ValueError("maximum_belief_confidence must be finite and in [0, 1]")
+        try:
+            confidence_limit = float(maximum_belief_confidence)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("maximum_belief_confidence must be finite and in [0, 1]") from exc
+        if not math.isfinite(confidence_limit) or not 0.0 <= confidence_limit <= 1.0:
+            raise ValueError("maximum_belief_confidence must be finite and in [0, 1]")
+
+        beliefs = self.self_model.beliefs
+        goals, provenance, seen = [], [], set()
+        for raw_property, spec in gap_mappings.items():
+            if not isinstance(raw_property, str) or not raw_property.strip():
+                raise ValueError("gap mapping keys must be non-empty property names")
+            prop = raw_property.strip()
+            if not isinstance(spec, Mapping):
+                raise ValueError("each gap mapping must be a mapping")
+            belief = beliefs.get(prop)
+            status = belief.get("status", "unknown") if belief else "unknown"
+            confidence = float(belief.get("confidence", 0.0)) if belief else 0.0
+            if status not in {"unknown", "stale"} and not (
+                include_inferred and status == "inferred" and confidence <= confidence_limit
+            ):
+                continue
+            question = spec.get("question")
+            drive = spec.get("drive", "curiosity")
+            if not isinstance(question, str) or not question.strip():
+                raise ValueError("each gap mapping requires a non-empty question")
+            if not isinstance(drive, str) or not drive.strip():
+                raise ValueError("drive must be a non-empty string")
+            values = {}
+            for field, default in (("information_gain", 0.5), ("impact", 0.5),
+                                   ("urgency", 0.5), ("estimated_cost", 0.25), ("risk", 0.05)):
+                raw = spec.get(field, default)
+                if isinstance(raw, bool):
+                    raise ValueError(f"{field} must be finite and in [0, 1]")
+                try:
+                    number = float(raw)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError(f"{field} must be finite and in [0, 1]") from exc
+                if not math.isfinite(number) or not 0.0 <= number <= 1.0:
+                    raise ValueError(f"{field} must be finite and in [0, 1]")
+                values[field] = number
+            slug = re.sub(r"[^a-z0-9]+", "-", prop.lower()).strip("-") or "gap"
+            goal_id = "investigate_gap:" + slug
+            if goal_id in seen:
+                raise ValueError("duplicate generated curiosity goal_id: " + goal_id)
+            benefit = values["information_gain"] * values["impact"]
+            goal = GoalCandidate(
+                goal_id=goal_id, description=question.strip(), drive=drive.strip(),
+                urgency=values["urgency"], expected_benefit=benefit,
+                confidence=max(0.0, min(1.0, 1.0 - confidence)),
+                estimated_cost=values["estimated_cost"], risk=values["risk"],
+                requires_external_action=False,
+            )
+            seen.add(goal_id)
+            goals.append(goal)
+            provenance.append({
+                "goal_id": goal_id, "belief_property": prop,
+                "belief_status": status, "belief_confidence": confidence,
+                "belief_evidence_ref": belief.get("evidence_ref") if belief else None,
+                "question": question.strip(), **values,
+                "expected_information_value": benefit,
+                "execution_performed": False,
+            })
+        return {"goals": goals, "provenance": provenance, "execution_performed": False}
+
+    def select_curiosity_goal(
+        self, controller: Any, gap_mappings: Mapping[str, Mapping[str, Any]], *,
+        include_inferred: bool = True, maximum_belief_confidence: float = 0.65,
+        recent_goal_ids: tuple[str, ...] = (),
+    ) -> dict[str, Any]:
+        """Rank explicit knowledge-gap investigations through bounded autonomy."""
+        from .autonomy import AutonomyController
+        if not isinstance(controller, AutonomyController):
+            raise TypeError("controller must be an AutonomyController")
+        proposals = self.propose_curiosity_goals(
+            gap_mappings, include_inferred=include_inferred,
+            maximum_belief_confidence=maximum_belief_confidence,
+        )
+        decision = controller.choose(proposals["goals"], recent_goal_ids=recent_goal_ids)
+        by_id = {item["goal_id"]: item for item in proposals["provenance"]}
+        selected = decision.selected_goal
+        return {
+            "proposals": proposals, "decision": decision,
+            "selected_goal_id": selected.goal_id if selected else None,
+            "selected_provenance": by_id.get(selected.goal_id) if selected else None,
+            "execution_performed": False,
+        }
     def propose_goals_from_limitations(
         self,
         goal_mappings: Mapping[str, Mapping[str, Any]],
