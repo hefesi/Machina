@@ -52,6 +52,46 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             self.bridge.review_goal_strategy('research', cycle_id='c', window_size=1)
         with self.assertRaisesRegex(ValueError, 'minimum_change'):
             self.bridge.review_goal_strategy('research', cycle_id='c', minimum_change=float('nan'))
+    def test_curiosity_proposes_only_unknown_stale_and_low_confidence_gaps(self):
+        self.model.update(
+            {"known": "settled", "uncertain": "tentative", "outdated": "old"},
+            cycle_id="c1",
+            evidence_refs={"known": "e-known", "uncertain": "e-uncertain", "outdated": "e-old"},
+            statuses={"known": "observed", "uncertain": "inferred", "outdated": "stale"},
+            confidences={"uncertain": 0.3, "outdated": 0.2},
+        )
+        mappings = {
+            "missing": {"question": "What evidence supports this capability?", "information_gain": 0.9, "impact": 0.8},
+            "uncertain": {"question": "Can this estimate be reproduced?", "information_gain": 0.7, "impact": 0.6},
+            "outdated": {"question": "Is the old estimate still valid?", "information_gain": 0.5, "impact": 0.7},
+            "known": {"question": "Recheck settled evidence"},
+        }
+        result = self.bridge.propose_curiosity_goals(mappings)
+        self.assertEqual({"investigate_gap:missing", "investigate_gap:uncertain", "investigate_gap:outdated"},
+                         {goal.goal_id for goal in result["goals"]})
+        self.assertTrue(all(not goal.requires_external_action for goal in result["goals"]))
+        self.assertFalse(result["execution_performed"])
+        by_property = {item["belief_property"]: item for item in result["provenance"]}
+        self.assertEqual("e-uncertain", by_property["uncertain"]["belief_evidence_ref"])
+
+    def test_curiosity_selection_uses_bounded_autonomy_without_execution(self):
+        from machina.autonomy import AutonomyController
+        result = self.bridge.select_curiosity_goal(
+            AutonomyController(),
+            {
+                "memory_gap": {"question": "Which memory source is missing?", "information_gain": 0.9, "impact": 0.9, "risk": 0.01},
+                "model_gap": {"question": "Which model assumption needs testing?", "information_gain": 0.5, "impact": 0.4, "risk": 0.02},
+            },
+        )
+        self.assertIsNotNone(result["selected_goal_id"])
+        self.assertFalse(result["execution_performed"])
+        self.assertFalse(result["selected_provenance"]["execution_performed"])
+
+    def test_curiosity_rejects_invalid_information_value_and_external_action_flag(self):
+        with self.assertRaisesRegex(ValueError, "information_gain"):
+            self.bridge.propose_curiosity_goals({"gap": {"question": "Investigate", "information_gain": 2}})
+        result = self.bridge.propose_curiosity_goals({"gap": {"question": "Investigate", "requires_external_action": True}})
+        self.assertFalse(result["goals"][0].requires_external_action)
     def test_evaluated_history_updates_inferred_capability(self):
         self.learner.observe(
             "research", .9, evidence="Nine of ten acceptance checks passed.",
