@@ -6,7 +6,7 @@ Investigar se é possível criar, exclusivamente por meio de código e sistemas 
 
 Esta é uma aposta científica, filosófica e tecnológica em aberto. Não afirmamos que consciência artificial já tenha sido alcançada, que sua possibilidade esteja demonstrada ou que conheçamos as condições necessárias para produzi-la.
 
-A pergunta central, as distinções conceituais e o método de investigação estão definidos na [Aposta Fundamental do Machina](./central-hypothesis.md).
+A pergunta central, as distinções conceituais e o método de investigação estão definidos na [Aposta Fundamental do Machina](./central-hypothesis.md). A tradução dessa aposta em hipóteses testáveis, experimentos e fases de desenvolvimento está no [Programa de Investigação](./research-program.md).
 
 ## Objetivos de investigação e construção
 
