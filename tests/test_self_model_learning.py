@@ -19,6 +19,39 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
         self.learner.close()
         self.tmp.cleanup()
 
+    def test_strategy_review_requires_two_complete_windows_without_mutation(self):
+        result = self.bridge.review_goal_strategy('research', cycle_id='review-1', window_size=2)
+        self.assertFalse(result['accepted'])
+        self.assertEqual('insufficient_history', result['reason'])
+        self.assertFalse(result['self_model_updated'])
+        self.assertEqual({}, self.model.beliefs)
+
+    def test_strategy_review_detects_change_and_preserves_revision_history(self):
+        for index, outcome in enumerate((0.2, 0.3, 0.8, 0.9), start=1):
+            self.learner.observe('research', outcome, evidence=f'evaluator result {index}', observation_id=f'res-{index}')
+        first = self.bridge.review_goal_strategy('research', cycle_id='review-1', window_size=2, minimum_change=0.2)
+        self.assertTrue(first['accepted'])
+        self.assertEqual('improving', first['review']['assessment'])
+        self.assertEqual('retain_and_validate', first['review']['recommendation'])
+        self.assertFalse(first['causal_claim'])
+        repeated = self.bridge.review_goal_strategy('research', cycle_id='review-2', window_size=2, minimum_change=0.2)
+        self.assertTrue(repeated['already_applied'])
+        self.assertFalse(repeated['self_model_updated'])
+        for index, outcome in enumerate((0.1, 0.1), start=5):
+            self.learner.observe('research', outcome, evidence=f'evaluator result {index}', observation_id=f'res-{index}')
+        second = self.bridge.review_goal_strategy('research', cycle_id='review-3', window_size=2, minimum_change=0.2)
+        self.assertEqual('deteriorating', second['review']['assessment'])
+        self.assertEqual('review_strategy', second['review']['recommendation'])
+        self.assertIsNotNone(second['revision'])
+        self.assertTrue(second['revision']['contradicts_previous'])
+        self.assertEqual(1, len(self.model.belief_revision_history))
+        self.assertEqual('inferred', self.model.beliefs['strategy_review:research']['status'])
+
+    def test_strategy_review_validates_parameters(self):
+        with self.assertRaisesRegex(ValueError, 'window_size'):
+            self.bridge.review_goal_strategy('research', cycle_id='c', window_size=1)
+        with self.assertRaisesRegex(ValueError, 'minimum_change'):
+            self.bridge.review_goal_strategy('research', cycle_id='c', minimum_change=float('nan'))
     def test_evaluated_history_updates_inferred_capability(self):
         self.learner.observe(
             "research", .9, evidence="Nine of ten acceptance checks passed.",
