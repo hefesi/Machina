@@ -1,6 +1,7 @@
 """Bridge empirical outcome learning into Machina's operational self-model."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from .goal_outcome_learning import GoalOutcomeLearner
