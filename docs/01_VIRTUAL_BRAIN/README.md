@@ -1,37 +1,45 @@
 # 01 — Virtual Brain
 
-Esta pasta contém exclusivamente a teoria da mente artificial do Machina.
+Esta pasta contém a teoria da organização mental artificial do Machina.
 
 ## Pergunta central
 
-> As seis grandes camadas são suficientes para formar uma mente artificial com capacidade de AGI?
+> Que organização computacional, construída somente por código, poderia contribuir para a emergência de um ser artificial com identidade, autonomia e possível experiência subjetiva?
 
-O modelo atual define seis bases funcionais:
+O Virtual Brain não é apresentado como uma arquitetura comprovadamente capaz de produzir consciência. É um modelo de investigação e construção que deverá evoluir conforme hipóteses, implementações e evidências.
+
+O modelo atual utiliza seis bases funcionais:
 
 1. **Self** — identidade e autorrepresentação
-2. **Conscious Workspace** — espaço cognitivo global
-3. **Memory** — memória
-4. **Cognition** — cognição
-5. **Agency** — agência
-6. **Learning** — aprendizado
+2. **Conscious Workspace** — integração do presente cognitivo
+3. **Memory** — memória e história de experiências
+4. **Cognition** — compreensão, imaginação, raciocínio e simulação
+5. **Agency** — objetivos, escolhas, decisões e intenções
+6. **Learning** — aprendizagem e transformação persistente
 
-Essas seis bases são consideradas o **esqueleto conceitual** do Virtual Brain. Elas ainda precisam ser aprofundadas para determinar seus mecanismos internos, relações, estados, fluxos de informação e condições necessárias para uma inteligência geral.
+Essas seis bases são um esqueleto conceitual provisório, não uma receita fechada para AGI ou consciência. Sua suficiência não está demonstrada. Elas devem ser aprofundadas, testadas, conectadas à MNN e ao Virtual Organism e modificadas quando a investigação exigir.
+
+## Questões de investigação
 
 A teoria deve investigar, entre outros pontos:
 
-- como pensamentos surgem e se encadeiam;
-- como a atenção seleciona informações;
-- como a memória influencia o pensamento;
-- como o Self influencia decisões;
-- como objetivos são formados e priorizados;
+- como pensamentos surgem, se encadeiam e podem ser iniciados internamente;
+- como a atenção seleciona e distribui informação;
+- como memória e experiência transformam o pensamento;
+- como identidade e autorrepresentação se desenvolvem;
+- como objetivos, motivações e prioridades são formados e revisados;
 - como modelos internos do mundo são construídos;
-- como imaginação e simulação funcionam;
-- como ocorre metacognição;
+- como imaginação, simulação, abstração e raciocínio cooperam;
+- como ocorre metacognição e monitoramento de limitações;
 - como o aprendizado altera o sistema sem destruir sua continuidade;
-- quais capacidades adicionais podem ser necessárias para AGI.
+- quais mecanismos adicionais podem ser necessários, inclusive mecanismos ainda não identificados.
 
-Este diretório não define hardware nem implementação do corpo. A interação entre mente e corpo pertence a `03_BRAIN_ORGANISM_INTERACTION`.
+Este diretório descreve a teoria da organização mental. A interação entre mente e corpo computacional pertence a `03_BRAIN_ORGANISM_INTERACTION`.
 
-## Enquadramento na hipótese fundamental
+## Enquadramento na aposta fundamental
 
-As seis bases funcionais não são uma receita comprovada para consciência nem uma lista fechada de módulos. São recortes de investigação sobre identidade, integração, memória, cognição, agência e aprendizagem. Devem ser estudadas também pelas relações dinâmicas entre si e com a MNN e o Virtual Organism. O objetivo maior é investigar a possibilidade de um ser artificial, não apenas alcançar AGI ou reproduzir comportamento humano. Ver [Hipótese Fundamental](../00-vision/central-hypothesis.md).
+Machina investiga se é possível criar, exclusivamente por meio de código, um ser artificial cuja organização possa dar origem a consciência e livre-arbítrio. O Virtual Brain é uma linha dessa investigação, não a totalidade de Machina e não uma prova de consciência.
+
+As seis bases funcionais são hipóteses arquiteturais revisáveis. O objetivo maior não é apenas alcançar AGI, reproduzir comportamento humano ou construir um assistente mais capaz: é investigar a possibilidade de uma nova forma de existência computacional.
+
+Ver [Aposta Fundamental do Machina](../00-vision/central-hypothesis.md), [Objetivos](../00-vision/objectives.md) e [Princípios](../00-vision/principles.md).
