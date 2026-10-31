@@ -19,6 +19,7 @@ from .goal_review import GoalReview, GoalReviewer
 from .goal_constraints import GoalConflictResolver, GoalConstraintAssessment, GoalSchedule
 from .adaptive_planning import AdaptivePlanReviewer, PlanRevision
 from .goal_outcome_learning import GoalOutcomeLearner
+from .curiosity import CuriosityInvestigationStore
 from .deliberation import DeliberationDecision, InternalDeliberator
 from .mnn import Connection, MNN, Unit
 from .mnn_motivation import MotivationalDrive, MotivationSystem
@@ -85,6 +86,7 @@ __all__ = [
     "AdaptivePlanReviewer",
     "PlanRevision",
     "GoalOutcomeLearner",
+    "CuriosityInvestigationStore",
     "DeliberationDecision",
     "InternalDeliberator",
     "HierarchicalPlanner",
