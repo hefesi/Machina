@@ -71,6 +71,76 @@ class SelfModelTests(unittest.TestCase):
         snapshot["beliefs"]["available"]["value"] = True
         self.assertFalse(restored.beliefs["available"]["value"])
 
+
+    def test_self_prediction_is_compared_with_evidence_backed_outcome(self):
+        model = SelfModel()
+        prediction = model.predict(
+            "runtime_available", True,
+            prediction_ref="prediction-1", cycle_id="cycle-1",
+            confidence=0.8, horizon="next_cycle",
+        )
+        self.assertEqual("prediction-1", prediction["prediction_ref"])
+        evaluation = model.evaluate_prediction(
+            "prediction-1", True, cycle_id="cycle-2",
+            evidence_ref="runtime-check-2",
+        )
+        self.assertTrue(evaluation["matched"])
+        self.assertEqual(0.0, evaluation["error"])
+        self.assertEqual("runtime-check-2", evaluation["evidence_ref"])
+
+    def test_prediction_error_is_recorded_for_mismatch(self):
+        model = SelfModel()
+        model.predict(
+            "memory_count", 5, prediction_ref="prediction-2",
+            cycle_id="cycle-1",
+        )
+        evaluation = model.evaluate_prediction(
+            "prediction-2", 3, cycle_id="cycle-2",
+            evidence_ref="memory-audit-2",
+        )
+        self.assertFalse(evaluation["matched"])
+        self.assertEqual(1.0, evaluation["error"])
+        self.assertEqual(1, len(model.prediction_errors))
+
+    def test_predictions_cannot_be_duplicated_or_evaluated_twice(self):
+        model = SelfModel()
+        model.predict("ready", True, prediction_ref="p1", cycle_id="c1")
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            model.predict("ready", False, prediction_ref="p1", cycle_id="c1")
+        model.evaluate_prediction("p1", True, cycle_id="c2", evidence_ref="e2")
+        with self.assertRaisesRegex(ValueError, "already evaluated"):
+            model.evaluate_prediction("p1", True, cycle_id="c3", evidence_ref="e3")
+        with self.assertRaisesRegex(ValueError, "unknown"):
+            model.evaluate_prediction("missing", True, cycle_id="c3", evidence_ref="e3")
+
+    def test_prediction_history_survives_snapshot_round_trip(self):
+        model = SelfModel()
+        model.predict(
+            "runtime_available", True, prediction_ref="p1",
+            cycle_id="c1", confidence=0.7,
+        )
+        model.evaluate_prediction(
+            "p1", False, cycle_id="c2", evidence_ref="runtime-check",
+        )
+        snapshot = json.loads(json.dumps(model.snapshot()))
+        restored = SelfModel.from_snapshot(snapshot)
+        self.assertEqual(model.snapshot(), restored.snapshot())
+        snapshot["predictions"][0]["predicted_value"] = False
+        self.assertIs(True, restored.prediction_history["predictions"][0]["predicted_value"])
+
+    def test_prediction_validation_rejects_invalid_confidence_and_corrupt_restore(self):
+        model = SelfModel()
+        with self.assertRaises(ValueError):
+            model.predict("ready", True, prediction_ref="p1", cycle_id="c1", confidence=1.5)
+        model.predict("ready", True, prediction_ref="p1", cycle_id="c1")
+        snapshot = model.snapshot()
+        snapshot["prediction_evaluations"] = [{
+            "prediction_ref": "unknown", "error": 0.0, "matched": True,
+            "evidence_ref": "e1", "evaluation_cycle_id": "c2",
+        }]
+        with self.assertRaisesRegex(ValueError, "unknown or repeated"):
+            SelfModel.from_snapshot(snapshot)
+
     def test_rejects_unknown_schema_and_malformed_snapshot(self):
         with self.assertRaisesRegex(ValueError, "unsupported"):
             SelfModel.from_snapshot({"schema_version": 99})
