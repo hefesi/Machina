@@ -52,6 +52,7 @@ class SelfModel:
         self._prediction_errors: list[dict[str, Any]] = []
         self._predictions: list[dict[str, Any]] = []
         self._prediction_evaluations: list[dict[str, Any]] = []
+        self._belief_revisions: list[dict[str, Any]] = []
         self._cycle_id: str | None = None
 
     @property
@@ -80,6 +81,11 @@ class SelfModel:
             "predictions": _json_copy(self._predictions, "predictions"),
             "evaluations": _json_copy(self._prediction_evaluations, "prediction_evaluations"),
         }
+
+    @property
+    def belief_revision_history(self) -> list[dict[str, Any]]:
+        """Return a detached append-only history of explicit belief revisions."""
+        return _json_copy(self._belief_revisions, "belief_revision_history")
 
     @property
     def cycle_id(self) -> str | None:
@@ -169,6 +175,39 @@ class SelfModel:
         self._cycle_id = cycle
         return self.snapshot()
 
+    def revise_belief(self, property_name: str, new_value: Any, *, cycle_id: str,
+                     reason: str, source: str, evidence_ref: str,
+                     status: str = "inferred", confidence: float = 0.5,
+                     contradicts_previous: bool = False) -> dict[str, Any]:
+        """Revise an existing belief while preserving its previous state."""
+        prop = _name(property_name, "property_name")
+        cycle = _name(cycle_id, "cycle_id")
+        rationale = _name(reason, "reason")
+        origin = _name(source, "source")
+        evidence = _name(evidence_ref, "evidence_ref")
+        if status not in _STATUSES or status == "unknown":
+            raise ValueError("revision status must be observed, inferred, or stale")
+        certainty = _confidence(confidence, prop)
+        if not isinstance(contradicts_previous, bool):
+            raise ValueError("contradicts_previous must be a boolean")
+        previous = self._beliefs.get(prop)
+        if previous is None:
+            raise ValueError(f"cannot revise missing belief: {prop}")
+        if previous.get("evidence_ref") == evidence:
+            raise ValueError("belief revision evidence_ref must be new")
+        value = _json_copy(new_value, f"revised belief {prop}")
+        revision = {
+            "sequence": len(self._belief_revisions) + 1, "property": prop,
+            "previous": _json_copy(previous, "previous belief"),
+            "new": {"property": prop, "value": value, "confidence": certainty,
+                    "evidence_ref": evidence, "observed_at_cycle": cycle, "status": status},
+            "reason": rationale, "source": origin,
+            "contradicts_previous": contradicts_previous,
+        }
+        self._belief_revisions.append(revision)
+        self._beliefs[prop] = _json_copy(revision["new"], "revised belief")
+        self._cycle_id = cycle
+        return _json_copy(revision, "belief revision")
     def mark_unknown(self, property_name: str, *, cycle_id: str) -> dict[str, Any]:
         """Invalidate a belief when its current value cannot be established."""
         return self.update(
@@ -324,6 +363,7 @@ class SelfModel:
             "prediction_errors": _json_copy(self._prediction_errors, "prediction_errors"),
             "predictions": _json_copy(self._predictions, "predictions"),
             "prediction_evaluations": _json_copy(self._prediction_evaluations, "prediction_evaluations"),
+            "belief_revisions": _json_copy(self._belief_revisions, "belief_revisions"),
         }
 
     @classmethod
@@ -451,4 +491,38 @@ class SelfModel:
             _name(evaluation.get("evidence_ref"), "evaluation evidence_ref")
             _name(evaluation.get("evaluation_cycle_id"), "evaluation cycle_id")
             model._prediction_evaluations.append(evaluation)
+        revisions = data.get("belief_revisions", [])
+        if not isinstance(revisions, list):
+            raise ValueError("snapshot belief_revisions must be a list")
+        for index, raw in enumerate(revisions, start=1):
+            if not isinstance(raw, Mapping):
+                raise ValueError("belief revision entries must be mappings")
+            item = _json_copy(dict(raw), "belief revision")
+            if item.get("sequence") != index:
+                raise ValueError("belief revision sequence must be contiguous")
+            prop = _name(item.get("property"), "revision property")
+            previous, new = item.get("previous"), item.get("new")
+            if not isinstance(previous, Mapping) or not isinstance(new, Mapping):
+                raise ValueError("belief revision requires previous and new belief records")
+            if previous.get("property") != prop or new.get("property") != prop:
+                raise ValueError("belief revision property mismatch")
+            for record in (previous, new):
+                if record.get("status") not in _STATUSES:
+                    raise ValueError("invalid status in belief revision")
+                _confidence(record.get("confidence"), "revision confidence")
+                _name(record.get("observed_at_cycle"), "revision cycle")
+                if record.get("status") == "observed":
+                    _name(record.get("evidence_ref"), "revision evidence_ref")
+            _name(item.get("reason"), "revision reason")
+            _name(item.get("source"), "revision source")
+            if not isinstance(item.get("contradicts_previous"), bool):
+                raise ValueError("revision contradicts_previous must be boolean")
+            model._belief_revisions.append(item)
+        if model._belief_revisions:
+            latest_by_property = {}
+            for item in model._belief_revisions:
+                latest_by_property[item["property"]] = item["new"]
+            for prop, latest in latest_by_property.items():
+                if model._beliefs.get(prop) != latest:
+                    raise ValueError("latest belief does not match revision history")
         return model
