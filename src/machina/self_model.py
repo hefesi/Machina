@@ -249,6 +249,58 @@ class SelfModel:
         self.record_prediction_error(evaluation)
         return _json_copy(evaluation, "prediction evaluation")
 
+    @staticmethod
+    def _calibration_summary(predictions: list[dict[str, Any]], evaluations: list[dict[str, Any]]) -> dict[str, Any]:
+        """Summarize exact-match outcomes; confidence means P(exact match)."""
+        evaluated_by_ref = {item["prediction_ref"]: item for item in evaluations}
+        evaluated = [(p, evaluated_by_ref[p["prediction_ref"]]) for p in predictions if p["prediction_ref"] in evaluated_by_ref]
+        emitted_count, evaluated_count = len(predictions), len(evaluated)
+        pending_count = emitted_count - evaluated_count
+        if evaluated_count:
+            accuracy = sum(1 for _, result in evaluated if result["matched"]) / evaluated_count
+            mean_confidence = sum(item["confidence"] for item, _ in evaluated) / evaluated_count
+            calibration_gap = mean_confidence - accuracy
+        else:
+            accuracy = mean_confidence = calibration_gap = None
+        return {
+            "emitted": emitted_count, "evaluated": evaluated_count, "pending": pending_count,
+            "coverage": evaluated_count / emitted_count if emitted_count else None,
+            "accuracy": accuracy, "mean_confidence": mean_confidence,
+            "calibration_gap": calibration_gap,
+        }
+
+    def calibration_report(self, *, property_name: str | None = None, horizon: str | None = None) -> dict[str, Any]:
+        """Report exact-match accuracy and confidence calibration without changing policy."""
+        prop_filter = _name(property_name, "property_name") if property_name is not None else None
+        horizon_filter = _name(horizon, "horizon") if horizon is not None else None
+        predictions = [
+            item for item in self._predictions
+            if (prop_filter is None or item["property"] == prop_filter)
+            and (horizon_filter is None or item["horizon"] == horizon_filter)
+        ]
+        refs = {item["prediction_ref"] for item in predictions}
+        evaluations = [item for item in self._prediction_evaluations if item["prediction_ref"] in refs]
+        by_property, by_horizon = {}, {}
+        for key in sorted({item["property"] for item in predictions}):
+            group = [item for item in predictions if item["property"] == key]
+            group_refs = {item["prediction_ref"] for item in group}
+            by_property[key] = self._calibration_summary(group, [e for e in evaluations if e["prediction_ref"] in group_refs])
+        for key in sorted({item["horizon"] for item in predictions}):
+            group = [item for item in predictions if item["horizon"] == key]
+            group_refs = {item["prediction_ref"] for item in group}
+            by_horizon[key] = self._calibration_summary(group, [e for e in evaluations if e["prediction_ref"] in group_refs])
+        return {
+            "filters": {"property": prop_filter, "horizon": horizon_filter},
+            "overall": self._calibration_summary(predictions, evaluations),
+            "by_property": by_property, "by_horizon": by_horizon,
+            "interpretation": {
+                "confidence_semantics": "estimated_probability_of_exact_match",
+                "calibration_gap": "mean_confidence_minus_observed_accuracy",
+                "pending_predictions_excluded_from_accuracy": True,
+                "selection_bias_warning": "Unevaluated predictions may differ systematically from evaluated ones; consider coverage and pending counts.",
+            },
+        }
+
     def record_prediction_error(self, record: Mapping[str, Any]) -> dict[str, Any]:
         """Append an evaluated prediction record; existing records are never replaced."""
         if not isinstance(record, Mapping):
