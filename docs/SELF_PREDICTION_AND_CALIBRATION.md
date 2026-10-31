@@ -90,3 +90,9 @@ self-adjust confidence or affect autonomy, action execution, or authorization.
 This is an empirical diagnostic, not a complete statistical calibration
 study; Brier scores are deferred until a separately specified binary-outcome
 prediction contract exists.
+
+
+Confidence values are estimates supplied at prediction time, not probabilities
+derived from a trained probabilistic model. The report therefore measures
+agreement between those declared estimates and empirical exact-match frequency;
+it does not certify statistical calibration from small samples.
