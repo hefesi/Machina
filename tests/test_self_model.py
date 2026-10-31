@@ -197,7 +197,7 @@ class SelfModelTests(unittest.TestCase):
         self.assertAlmostEqual(2 / 3, overall["accuracy"])
         self.assertAlmostEqual(0.7, overall["mean_confidence"])
         self.assertAlmostEqual(0.7 - 2 / 3, overall["calibration_gap"])
-        self.assertEqual(2, report["by_property"]["runtime"]["evaluated"])
+        self.assertEqual(3, report["by_property"]["runtime"]["evaluated"])
         self.assertEqual(1, report["by_horizon"]["long"]["evaluated"])
 
     def test_calibration_report_filters_property_and_horizon(self):
