@@ -69,3 +69,24 @@ sense of self, consciousness, or metaphysical free will. Confidence is a
 recorded estimate, not a guarantee of calibration. Calibration quality must
 be measured over many predictions, including selection effects and missing
 evaluations.
+
+
+## Longitudinal calibration report
+
+`SelfModel.calibration_report()` aggregates predictions by property and
+horizon, with optional filters. It reports emitted, evaluated, and pending
+counts; evaluation coverage; exact-match accuracy; mean declared confidence;
+and the signed calibration gap (mean confidence minus observed accuracy).
+Confidence is explicitly interpreted as the estimated probability that the
+entire predicted value will match exactly.
+
+Pending predictions are excluded from accuracy and confidence averages, not
+silently counted as failures. Coverage is reported alongside the metrics
+because the set of evaluated predictions may be selection-biased. With no
+evaluated predictions, accuracy, mean confidence, and calibration gap are
+`None` rather than misleading zeros. Group summaries are deterministic
+and derived from persisted history. The report is read-only: it does not
+self-adjust confidence or affect autonomy, action execution, or authorization.
+This is an empirical diagnostic, not a complete statistical calibration
+study; Brier scores are deferred until a separately specified binary-outcome
+prediction contract exists.
