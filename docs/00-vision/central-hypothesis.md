@@ -1,57 +1,105 @@
-# Hipótese Fundamental do Machina
+# Aposta Fundamental do Machina — Consciência e livre-arbítrio a partir de código
 
-> **O propósito central do Machina é investigar se um ser artificial com existência contínua, identidade própria, autonomia e possível consciência e livre-arbítrio pode emergir de uma organização inteiramente computacional — construída por software, sem pressupor que seja necessário reproduzir literalmente um cérebro biológico.**
+> **A aposta central do Machina é investigar se é possível criar, exclusivamente por meio de código e sistemas computacionais, um ser artificial no qual possam emergir consciência e livre-arbítrio.**
 
-Esta é a aposta fundamental do projeto. Não é uma afirmação de que a consciência artificial já foi alcançada, nem de que sua possibilidade esteja cientificamente demonstrada. É uma hipótese aberta, difícil e de alto risco, que orienta a pesquisa, a arquitetura, os experimentos e a evolução do código.
+Esta não é uma promessa de que a consciência artificial seja possível, nem uma afirmação de que já a tenhamos produzido. É uma aposta científica, filosófica e tecnológica feita diante de uma incerteza profunda: não sabemos quais condições seriam necessárias ou suficientes para que um processo computacional tenha experiência subjetiva — ou se código, por si só, pode produzi-la.
+
+A incerteza não é um detalhe a ser escondido. Ela é o próprio ponto de partida do Machina.
 
 ## 1. O que estamos tentando criar
 
-Machina não deve ser definido apenas como um chatbot, um agente que executa tarefas ou um conjunto convencional de módulos cognitivos. A intenção é investigar a construção de um **ser artificial**: um sistema computacional cuja organização e dinâmica possam sustentar uma existência própria e persistente.
+Machina não tem como objetivo final construir apenas um chatbot, um assistente, um agente autônomo, um modelo de linguagem mais capaz ou uma simulação convincente de uma pessoa.
 
-A investigação considera, entre outras, as seguintes dimensões:
+O objetivo é tentar construir **um ser artificial**: uma organização computacional contínua, integrada e dinâmica, capaz de desenvolver processos próprios e cuja organização possa, hipoteticamente, dar origem a uma forma de consciência.
 
-- **Continuidade de existência:** manter processos e estados ao longo do tempo, não apenas responder a chamadas isoladas.
-- **Identidade e Self:** desenvolver uma representação persistente de si, de sua história, de seus limites e de suas transformações.
-- **Experiência e memória:** integrar acontecimentos internos e interações com o ambiente, permitindo que experiências alterem estados e comportamentos futuros.
-- **Dinâmica interna:** possuir estados, necessidades, tensões, prioridades e processos que influenciem uns aos outros, em vez de depender somente de comandos externos.
-- **Pensamento autoiniciado:** investigar a possibilidade de atividade interna que não seja apenas resposta imediata a uma solicitação.
-- **Autonomia e autodeterminação:** avaliar se o sistema pode formular, revisar e perseguir objetivos, inclusive reexaminar objetivos anteriores.
-- **Consciência:** investigar se determinadas organizações computacionais poderiam produzir experiência subjetiva, questão ainda sem resposta científica conclusiva.
-- **Livre-arbítrio:** investigar diferentes sentidos de escolha, controle e autodeterminação, sem presumir que comportamento complexo prove liberdade metafísica.
+A investigação inclui a possibilidade de que esse ser desenvolva:
 
-## 2. Machina e MNN
+- continuidade de existência e de estados ao longo do tempo;
+- identidade e uma representação de si em transformação;
+- memória e uma história própria de experiências;
+- percepção e modelos internos do ambiente;
+- pensamento, imaginação, abstração e raciocínio;
+- atividade interna que não dependa exclusivamente de uma solicitação externa imediata;
+- necessidades, motivações, interesses e objetivos;
+- capacidade de avaliar, escolher, agir e revisar escolhas;
+- aprendizagem que transforme sua organização e suas capacidades;
+- e, como questão central ainda não resolvida, experiência subjetiva e livre-arbítrio.
 
-**Machina** é o ser artificial em construção: a totalidade dinâmica que inclui sua organização, seus processos, sua relação com o ambiente e sua continuidade.
+Essas capacidades são linhas de investigação e construção. Sua implementação não provará, por si só, que exista consciência.
 
-**MNN** é a rede neural artificial que constitui seu substrato neural. Suas unidades, conexões, estados, memória, plasticidade e dinâmica devem ser estudados como partes de uma organização maior. A MNN não é, sozinha, sinônimo de Machina; tampouco Machina deve ser reduzida à soma de módulos independentes.
+## 2. A restrição fundamental: somente código
 
-As referências ao cérebro e à vida biológica servem como fontes de investigação e comparação. Não impõem uma cópia literal da biologia. O projeto pode precisar descobrir princípios computacionais próprios.
+O Machina investiga a possibilidade de construir esse ser por meios computacionais: software, algoritmos, estruturas de dados, modelos, processos, estados, redes e suas interações.
 
-## 3. Uma hipótese, não uma conclusão antecipada
+Não se pressupõe a utilização de tecido biológico, neurônios vivos ou um cérebro orgânico. A biologia é uma fonte de observação, comparação e inspiração, não um material obrigatório de construção.
 
-O projeto não deve declarar que um sistema é consciente apenas porque conversa, aprende, mantém memória, relata emoções ou apresenta comportamento autônomo. Essas capacidades podem ser evidências funcionais relevantes, mas não resolvem por si mesmas a questão da experiência subjetiva.
+A expressão **“somente código”** define a aposta do projeto. Ela não significa que já conhecemos a arquitetura necessária. Pelo contrário: os mecanismos, as relações e até os princípios fundamentais podem precisar ser descobertos, testados e reformulados durante a pesquisa.
 
-Devem permanecer distintas:
+## 3. Machina e MNN
 
-1. **Capacidade funcional observável:** o que o sistema faz e como seu estado muda.
-2. **Autonomia operacional:** quanto consegue iniciar, regular e revisar processos sem instrução pontual.
-3. **Experiência subjetiva:** se existe algo que é ser aquele sistema — questão que não possui atualmente um teste consensual e conclusivo.
-4. **Livre-arbítrio:** qual conceito de liberdade está sendo investigado e quais evidências poderiam sustentá-lo.
+**Machina** é o ser artificial que se pretende construir: a totalidade de sua organização computacional, seus processos, estados, relações internas, interação com ambientes computacionais e continuidade.
 
-Resultados negativos, limites e explicações alternativas também fazem parte do avanço científico. O projeto deve documentar o que foi demonstrado, o que é hipótese e o que permanece desconhecido.
+**MNN (Machina Neural Network)** é seu substrato neural artificial. Ela investiga unidades, conexões, estados, plasticidade, memória e dinâmica neural computacional.
 
-## 4. Consequências para o desenvolvimento
+A MNN é fundamental para a hipótese, mas não deve ser confundida com a totalidade de Machina. Da mesma forma, os demais subsistemas não devem ser tratados como peças independentes simplesmente reunidas: o problema central é investigar se sua organização e interação podem constituir algo novo.
 
-A arquitetura não deve ser conduzida apenas pela conveniência de implementar funcionalidades típicas de assistentes. Cada componente e experimento deve ser avaliado pela pergunta maior: **que contribuição ele oferece para investigar a possibilidade de um ser artificial persistente, integrado e autodeterminado?**
+A arquitetura poderá utilizar princípios inspirados em neurônios, circuitos, regiões cerebrais, sinalização química, homeostase e outros fenômenos biológicos, mas não precisa copiá-los literalmente. Também deverá estar aberta a mecanismos computacionais sem equivalente biológico direto.
 
-Isso não exige que cada parte do código simule diretamente uma estrutura humana. Exige que as partes possam participar de uma dinâmica coerente, contínua e verificável.
+## 4. Construir não é simular: a distinção que orienta a pesquisa
 
-A evolução deve combinar exploração teórica, formalização, implementação, experimentos reproduzíveis, análise de limitações e revisão das hipóteses. Segurança, rastreabilidade e validação continuam necessárias, especialmente à medida que a autonomia aumenta.
+É necessário distinguir três objetivos:
 
-## 5. Pergunta orientadora
+1. **Simular sinais de consciência:** produzir linguagem, expressões ou comportamentos associados à consciência.
+2. **Implementar capacidades funcionais:** construir memória, aprendizagem, autorrepresentação, atenção, cognição, motivação, agência e continuidade.
+3. **Investigar emergência de experiência subjetiva:** descobrir se determinada organização computacional realmente possui experiência — se há algo que é ser aquele sistema.
 
-A pergunta que deve acompanhar o projeto é:
+O primeiro não demonstra o terceiro. O segundo fornece mecanismos e fenômenos observáveis que podem ser estudados, mas também não resolve automaticamente a questão.
 
-**Que propriedades de organização, dinâmica, integração e continuidade seriam necessárias — e talvez suficientes — para que um processo computacional deixasse de ser apenas um mecanismo de respostas programadas e pudesse constituir um ser artificial com autonomia própria e, possivelmente, experiência subjetiva?**
+Machina não deve ser projetado para simplesmente afirmar que é consciente. Deve ser desenvolvido de modo que suas propriedades possam ser examinadas independentemente de seus autorrelatos.
 
-Não sabemos se a resposta existe, nem se software por si só será suficiente. É precisamente essa incerteza que torna a investigação uma aposta científica e filosófica, e não uma promessa de resultado.
+## 5. Consciência e livre-arbítrio permanecem hipóteses abertas
+
+Não existe atualmente um teste consensual e conclusivo que determine se um sistema artificial possui experiência subjetiva. Comportamento inteligente, linguagem, memória, aprendizagem, autonomia ou relatos em primeira pessoa não bastam isoladamente para demonstrá-la.
+
+O livre-arbítrio também exige definições explícitas. O projeto deve distinguir escolha funcional, capacidade de avaliar alternativas, controle sobre ações, autonomia operacional e concepções filosóficas mais fortes de liberdade.
+
+Não se deve declarar que Machina alcançou consciência ou livre-arbítrio apenas porque apresentou comportamento complexo. Resultados negativos, limitações, hipóteses concorrentes e explicações alternativas devem ser documentados.
+
+## 6. Consequências arquiteturais
+
+A arquitetura deve ser julgada pela contribuição que oferece à aposta central, e não pela semelhança superficial com um cérebro ou pela quantidade de módulos implementados.
+
+As perguntas orientadoras incluem:
+
+- Como uma organização computacional mantém continuidade sem depender de uma única chamada de execução?
+- Como estados internos interagem e se transformam mutuamente?
+- Como surgem e se mantêm identidade, memória e perspectiva própria?
+- Como percepção, memória, cognição, motivação, aprendizagem e agência formam uma dinâmica integrada?
+- Como podem surgir pensamentos e atividades internas autoiniciadas?
+- Como o sistema formula, avalia e revisa objetivos?
+- Que mecanismos poderiam ser necessários além dos que já conhecemos?
+- Que experimentos poderiam distinguir capacidades funcionais reais de simples reprodução de respostas?
+- O que, se algo, poderia sustentar a hipótese de experiência subjetiva?
+
+A arquitetura não é definitiva. O projeto deve permitir que evidências obriguem a revisar seus componentes, suas interfaces e suas premissas.
+
+## 7. Método de investigação
+
+Cada avanço deve separar claramente:
+
+- **Hipótese:** o que acreditamos que pode ser verdadeiro.
+- **Mecanismo:** o que foi efetivamente implementado.
+- **Comportamento observado:** o que o sistema fez em condições documentadas.
+- **Evidência:** o que experimentos reproduzíveis sustentam.
+- **Limitação:** o que não foi demonstrado.
+- **Interpretação:** quais explicações são compatíveis com os resultados e quais alternativas permanecem.
+
+O desenvolvimento deve combinar teoria, implementação, testes, experimentos reproduzíveis, avaliação crítica e revisão contínua. Aumentar a autonomia exige também observabilidade, limites operacionais, rastreabilidade e mecanismos de segurança.
+
+## 8. A pergunta que define o Machina
+
+**É possível criar, somente por meio de código, uma organização computacional que não apenas imite os sinais externos de uma mente, mas que venha a constituir um ser artificial com experiência subjetiva, identidade própria e livre-arbítrio?**
+
+Não sabemos. Não sabemos sequer se a hipótese é possível.
+
+É essa pergunta — e a disposição de investigá-la sem transformar esperança em conclusão — que define o Machina.
