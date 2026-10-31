@@ -27,6 +27,7 @@ class SelfModelLearningBridge:
     def propose_curiosity_goals(
         self, gap_mappings: Mapping[str, Mapping[str, Any]], *,
         include_inferred: bool = True, maximum_belief_confidence: float = 0.65,
+        investigation_store: Any | None = None, allow_repeat: bool = False,
     ) -> dict[str, Any]:
         """Propose bounded internal investigations for explicit knowledge gaps.
 
@@ -38,7 +39,12 @@ class SelfModelLearningBridge:
         import math
         import re
         from .autonomy import GoalCandidate
+        from .curiosity import CuriosityInvestigationStore
 
+        if investigation_store is not None and not isinstance(investigation_store, CuriosityInvestigationStore):
+            raise TypeError("investigation_store must be a CuriosityInvestigationStore")
+        if not isinstance(allow_repeat, bool):
+            raise ValueError("allow_repeat must be a boolean")
         if not isinstance(gap_mappings, Mapping):
             raise ValueError("gap_mappings must be a mapping")
         if not isinstance(include_inferred, bool):
@@ -53,7 +59,7 @@ class SelfModelLearningBridge:
             raise ValueError("maximum_belief_confidence must be finite and in [0, 1]")
 
         beliefs = self.self_model.beliefs
-        goals, provenance, seen = [], [], set()
+        goals, provenance, seen, suppressed = [], [], set(), []
         for raw_property, spec in gap_mappings.items():
             if not isinstance(raw_property, str) or not raw_property.strip():
                 raise ValueError("gap mapping keys must be non-empty property names")
@@ -73,6 +79,9 @@ class SelfModelLearningBridge:
                 raise ValueError("each gap mapping requires a non-empty question")
             if not isinstance(drive, str) or not drive.strip():
                 raise ValueError("drive must be a non-empty string")
+            if investigation_store is not None and not allow_repeat and investigation_store.has_prior_question(prop, question.strip()):
+                suppressed.append({"belief_property": prop, "question": question.strip(), "reason": "prior_investigation_exists"})
+                continue
             values = {}
             for field, default in (("information_gain", 0.5), ("impact", 0.5),
                                    ("urgency", 0.5), ("estimated_cost", 0.25), ("risk", 0.05)):
@@ -108,7 +117,10 @@ class SelfModelLearningBridge:
                 "expected_information_value": benefit,
                 "execution_performed": False,
             })
-        return {"goals": goals, "provenance": provenance, "execution_performed": False}
+        return {
+            "goals": goals, "provenance": provenance,
+            "suppressed": suppressed, "execution_performed": False,
+        }
 
     def select_curiosity_goal(
         self, controller: Any, gap_mappings: Mapping[str, Mapping[str, Any]], *,
