@@ -22,6 +22,101 @@ class SelfModelLearningBridge:
         self.self_model = self_model
         self.learner = learner
 
+
+    def propose_goals_from_limitations(
+        self,
+        goal_mappings: Mapping[str, Mapping[str, Any]],
+        *,
+        allow_inferred: bool = False,
+        minimum_confidence: float = 0.7,
+    ) -> dict[str, Any]:
+        """Create internal goal candidates from evidence-backed self-limitations.
+
+        Mapping keys must match known_limitations. Each mapping supplies a
+        description and drive. Observed beliefs are accepted by default;
+        inferred beliefs require explicit opt-in, a confidence threshold,
+        and an evidence reference. Unknown and stale beliefs are ignored.
+        """
+        import re
+        from .autonomy import GoalCandidate
+
+        if not isinstance(goal_mappings, Mapping):
+            raise ValueError("goal_mappings must be a mapping")
+        if not isinstance(allow_inferred, bool):
+            raise ValueError("allow_inferred must be a boolean")
+        if isinstance(minimum_confidence, bool):
+            raise ValueError("minimum_confidence must be finite and in [0, 1]")
+        try:
+            floor = float(minimum_confidence)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("minimum_confidence must be finite and in [0, 1]") from exc
+        if not 0.0 <= floor <= 1.0:
+            raise ValueError("minimum_confidence must be finite and in [0, 1]")
+
+        limitations = set(self.self_model.known_limitations)
+        beliefs = self.self_model.beliefs
+        goals, provenance, seen = [], [], set()
+        for raw_limitation, spec in goal_mappings.items():
+            if not isinstance(raw_limitation, str) or not raw_limitation.strip():
+                raise ValueError("limitation mapping keys must be non-empty strings")
+            limitation = raw_limitation.strip()
+            if limitation not in limitations:
+                continue
+            if not isinstance(spec, Mapping):
+                raise ValueError("each goal mapping must be a mapping")
+            prop = spec.get("belief_property", limitation)
+            if not isinstance(prop, str) or not prop.strip():
+                raise ValueError("belief_property must be a non-empty string")
+            belief = beliefs.get(prop.strip())
+            if belief is None:
+                continue
+            status = belief.get("status")
+            evidence = belief.get("evidence_ref")
+            confidence = float(belief.get("confidence", 0.0))
+            if status == "observed":
+                if not isinstance(evidence, str) or not evidence.strip():
+                    continue
+            elif status == "inferred":
+                if not allow_inferred or confidence < floor:
+                    continue
+                if not isinstance(evidence, str) or not evidence.strip():
+                    continue
+            else:
+                continue
+
+            description, drive = spec.get("description"), spec.get("drive")
+            if not isinstance(description, str) or not description.strip():
+                raise ValueError("goal mapping requires a non-empty description")
+            if not isinstance(drive, str) or not drive.strip():
+                raise ValueError("goal mapping requires a non-empty drive")
+            slug = re.sub(r"[^a-z0-9]+", "-", limitation.lower()).strip("-") or "limitation"
+            goal_id = "address_limitation:" + slug
+            if goal_id in seen:
+                raise ValueError("duplicate generated goal_id: " + goal_id)
+            goal = GoalCandidate(
+                goal_id=goal_id,
+                description=description.strip(),
+                drive=drive.strip(),
+                urgency=spec.get("urgency", 0.65),
+                expected_benefit=spec.get("expected_benefit", 0.65),
+                confidence=min(0.8, confidence),
+                estimated_cost=spec.get("estimated_cost", 0.25),
+                risk=spec.get("risk", 0.05),
+                requires_external_action=False,
+            )
+            seen.add(goal_id)
+            goals.append(goal)
+            provenance.append({
+                "goal_id": goal_id,
+                "limitation": limitation,
+                "belief_property": prop.strip(),
+                "source_status": status,
+                "source_confidence": confidence,
+                "evidence_ref": evidence,
+                "observed_at_cycle": belief.get("observed_at_cycle"),
+            })
+        return {"goals": goals, "provenance": provenance}
+
     def update_prediction_calibration(
         self,
         property_name: str,
