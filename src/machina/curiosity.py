@@ -61,6 +61,12 @@ class CuriosityInvestigationStore:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(investigation_id, evidence_ref)
             );
+            CREATE TABLE IF NOT EXISTS curiosity_reviews (
+                review_id TEXT PRIMARY KEY,
+                investigation_id TEXT NOT NULL REFERENCES curiosity_investigations(investigation_id),
+                report TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             CREATE TABLE IF NOT EXISTS curiosity_closures (
                 investigation_id TEXT PRIMARY KEY REFERENCES
                     curiosity_investigations(investigation_id),
@@ -206,6 +212,42 @@ class CuriosityInvestigationStore:
         )
         self._db.commit()
         return self.get_investigation(key)
+
+    def record_review(self, review_id: str, investigation_id: str, report: dict[str, Any]) -> dict[str, Any]:
+        """Persist one immutable assessment report per caller-supplied review ID."""
+        review = self._label(review_id, "review_id")
+        key = self._label(investigation_id, "investigation_id")
+        self.get_investigation(key)
+        if not isinstance(report, dict):
+            raise ValueError("report must be a mapping")
+        payload = json.dumps(report, ensure_ascii=False, sort_keys=True, allow_nan=False)
+        try:
+            self._db.execute(
+                "INSERT INTO curiosity_reviews (review_id, investigation_id, report) VALUES (?, ?, ?)",
+                (review, key, payload),
+            )
+            self._db.commit()
+        except sqlite3.IntegrityError as exc:
+            self._db.rollback()
+            raise ValueError("review_id already exists") from exc
+        return self.get_review(review)
+
+    def get_review(self, review_id: str) -> dict[str, Any]:
+        review = self._label(review_id, "review_id")
+        row = self._db.execute(
+            "SELECT review_id, investigation_id, report, created_at FROM curiosity_reviews WHERE review_id=?",
+            (review,),
+        ).fetchone()
+        if row is None:
+            raise ValueError("unknown review_id")
+        result = dict(row)
+        result["report"] = json.loads(result["report"])
+        return result
+
+    def find_review(self, review_id: str) -> dict[str, Any] | None:
+        review = self._label(review_id, "review_id")
+        row = self._db.execute("SELECT 1 FROM curiosity_reviews WHERE review_id=?", (review,)).fetchone()
+        return self.get_review(review) if row else None
 
     def get_investigation(self, investigation_id: str) -> dict[str, Any]:
         key = self._label(investigation_id, "investigation_id")
