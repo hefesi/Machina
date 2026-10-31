@@ -181,5 +181,55 @@ class SelfModelTests(unittest.TestCase):
                     )
 
 
+    def test_calibration_report_measures_accuracy_confidence_and_coverage(self):
+        model = SelfModel()
+        model.predict("runtime", True, prediction_ref="p1", cycle_id="c1", confidence=0.9, horizon="short")
+        model.predict("runtime", True, prediction_ref="p2", cycle_id="c1", confidence=0.6, horizon="short")
+        model.predict("runtime", False, prediction_ref="p3", cycle_id="c1", confidence=0.6, horizon="long")
+        model.predict("memory", 4, prediction_ref="p4", cycle_id="c1", confidence=0.8, horizon="short")
+        model.evaluate_prediction("p1", True, cycle_id="c2", evidence_ref="e1")
+        model.evaluate_prediction("p2", False, cycle_id="c2", evidence_ref="e2")
+        model.evaluate_prediction("p3", False, cycle_id="c2", evidence_ref="e3")
+        report = model.calibration_report()
+        overall = report["overall"]
+        self.assertEqual((4, 3, 1), (overall["emitted"], overall["evaluated"], overall["pending"]))
+        self.assertAlmostEqual(0.75, overall["coverage"])
+        self.assertAlmostEqual(2 / 3, overall["accuracy"])
+        self.assertAlmostEqual(0.7, overall["mean_confidence"])
+        self.assertAlmostEqual(0.7 - 2 / 3, overall["calibration_gap"])
+        self.assertEqual(2, report["by_property"]["runtime"]["evaluated"])
+        self.assertEqual(1, report["by_horizon"]["long"]["evaluated"])
+
+    def test_calibration_report_filters_property_and_horizon(self):
+        model = SelfModel()
+        model.predict("runtime", True, prediction_ref="p1", cycle_id="c1", confidence=0.8, horizon="short")
+        model.predict("runtime", True, prediction_ref="p2", cycle_id="c1", confidence=0.7, horizon="long")
+        model.predict("memory", 2, prediction_ref="p3", cycle_id="c1", confidence=0.6, horizon="short")
+        model.evaluate_prediction("p1", True, cycle_id="c2", evidence_ref="e1")
+        model.evaluate_prediction("p2", False, cycle_id="c2", evidence_ref="e2")
+        report = model.calibration_report(property_name="runtime", horizon="short")
+        self.assertEqual({"property": "runtime", "horizon": "short"}, report["filters"])
+        self.assertEqual(1, report["overall"]["emitted"])
+        self.assertEqual(1, report["overall"]["evaluated"])
+        self.assertEqual(1.0, report["overall"]["accuracy"])
+        self.assertEqual(["runtime"], list(report["by_property"]))
+
+    def test_empty_calibration_report_is_explicit_and_does_not_claim_zero_accuracy(self):
+        report = SelfModel().calibration_report()
+        self.assertEqual(0, report["overall"]["emitted"])
+        self.assertEqual(0, report["overall"]["evaluated"])
+        self.assertIsNone(report["overall"]["coverage"])
+        self.assertIsNone(report["overall"]["accuracy"])
+        self.assertIsNone(report["overall"]["mean_confidence"])
+        self.assertIsNone(report["overall"]["calibration_gap"])
+
+    def test_calibration_report_survives_snapshot_restore(self):
+        model = SelfModel()
+        model.predict("ready", True, prediction_ref="p1", cycle_id="c1", confidence=0.75)
+        model.evaluate_prediction("p1", True, cycle_id="c2", evidence_ref="e1")
+        restored = SelfModel.from_snapshot(json.loads(json.dumps(model.snapshot())))
+        self.assertEqual(model.calibration_report(), restored.calibration_report())
+
+
 if __name__ == "__main__":
     unittest.main()
