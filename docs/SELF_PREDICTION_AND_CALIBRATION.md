@@ -96,3 +96,21 @@ Confidence values are estimates supplied at prediction time, not probabilities
 derived from a trained probabilistic model. The report therefore measures
 agreement between those declared estimates and empirical exact-match frequency;
 it does not certify statistical calibration from small samples.
+
+
+## Explicit calibration-to-capability bridge
+
+`SelfModelLearningBridge.update_prediction_calibration()` can project
+a sufficiently sampled prediction report into an *inferred* capability
+estimate. The call is explicit; it is never triggered automatically by
+prediction evaluation. It requires a configurable minimum number of evaluated
+predictions (default 5) and minimum evaluation coverage (default 0.5), and
+rejects insufficient evidence without mutating the self-model.
+
+The estimate preserves accuracy, mean declared confidence, calibration gap,
+sample counts, pending count, coverage, property, and horizon. Its evidence
+reference aggregates the evidence references attached to evaluated
+predictions. The capability confidence is an evidence-sufficiency heuristic
+based on sample threshold and coverage, not a statistical confidence interval
+or a guarantee of future performance. This bridge does not change predictor
+confidence, goals, autonomy policy, or action permissions.
