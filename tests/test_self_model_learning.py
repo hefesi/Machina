@@ -52,6 +52,67 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             self.bridge.review_goal_strategy('research', cycle_id='c', window_size=1)
         with self.assertRaisesRegex(ValueError, 'minimum_change'):
             self.bridge.review_goal_strategy('research', cycle_id='c', minimum_change=float('nan'))
+    def test_curiosity_review_detects_support_contradiction_and_requires_opt_in(self):
+        from machina.curiosity import CuriosityInvestigationStore
+        store = CuriosityInvestigationStore(Path(self.tmp.name) / "review.sqlite3")
+        try:
+            store.start_investigation(
+                "inv-review", gap_property="memory_recall", question="Does indexing improve recall?",
+                hypothesis="Indexing improves recall", selection_reason="test", cycle_id="c1", goal_id="g1",
+            )
+            store.record_evidence("inv-review", evidence_ref="e1", finding="Recall rose in benchmark", cycle_id="c2")
+            store.record_evidence("inv-review", evidence_ref="e2", finding="Recall fell in replication", cycle_id="c2")
+            assessments = {
+                "e1": {"classification": "support", "confidence": 0.9, "rationale": "Benchmark comparison"},
+                "e2": {"classification": "contradict", "confidence": 0.8, "rationale": "Independent replication"},
+            }
+            report = self.bridge.review_curiosity_investigation(
+                store, "inv-review", review_id="review-1", cycle_id="c3",
+                evidence_assessments=assessments,
+            )
+            self.assertEqual("mixed", report["assessment"])
+            self.assertFalse(report["self_model_updated"])
+            self.assertNotIn("memory_recall", self.model.beliefs)
+            applied = self.bridge.review_curiosity_investigation(
+                store, "inv-review", review_id="review-2", cycle_id="c4",
+                evidence_assessments=assessments, apply_to_self_model=True,
+            )
+            self.assertTrue(applied["self_model_updated"])
+            self.assertEqual("inferred", self.model.beliefs["memory_recall"]["status"])
+            self.assertEqual("mixed", self.model.beliefs["memory_recall"]["value"]["assessment"])
+            repeated = self.bridge.review_curiosity_investigation(
+                store, "inv-review", review_id="review-2", cycle_id="c5",
+                evidence_assessments=assessments, apply_to_self_model=True,
+            )
+            self.assertTrue(repeated["already_reviewed"])
+            self.assertEqual(0, len(self.model.belief_revision_history))
+        finally:
+            store.close()
+
+    def test_curiosity_review_rejects_unstored_refs_and_insufficient_evidence(self):
+        from machina.curiosity import CuriosityInvestigationStore
+        store = CuriosityInvestigationStore(Path(self.tmp.name) / "review-invalid.sqlite3")
+        try:
+            store.start_investigation(
+                "inv", gap_property="capability", question="Can it do X?", hypothesis="It can do X",
+                selection_reason="test", cycle_id="c1", goal_id="g1",
+            )
+            store.record_evidence("inv", evidence_ref="e1", finding="Some result", cycle_id="c2")
+            with self.assertRaisesRegex(ValueError, "stored in this investigation"):
+                self.bridge.review_curiosity_investigation(
+                    store, "inv", review_id="bad", cycle_id="c3",
+                    evidence_assessments={"foreign": {"classification": "support", "rationale": "x"}},
+                )
+            result = self.bridge.review_curiosity_investigation(
+                store, "inv", review_id="thin", cycle_id="c3",
+                evidence_assessments={"e1": {"classification": "neutral", "rationale": "inconclusive"}},
+                apply_to_self_model=True, minimum_assessments=2,
+            )
+            self.assertEqual("insufficient", result["assessment"])
+            self.assertFalse(result["self_model_updated"])
+        finally:
+            store.close()
+
     def test_curiosity_proposes_only_unknown_stale_and_low_confidence_gaps(self):
         self.model.update(
             {"known": "settled", "uncertain": "tentative", "outdated": "old"},
