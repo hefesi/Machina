@@ -116,5 +116,42 @@ class ExperienceMemoryTests(unittest.TestCase):
             self.store.strategy_report(minimum_samples=1)
 
 
+    def test_autobiographical_report_preserves_timeline_and_detects_repeated_error_direction(self):
+        for index, observed in enumerate((.2, .3, .25), 1):
+            self._begin(f"under-{index}", "same-strategy", .8)
+            self.store.record_outcome(
+                f"under-{index}", outcome_id=f"out-under-{index}",
+                observed_outcome=observed, evidence_ref=f"e-under-{index}",
+                evaluator="reviewer", note="Measured outcome",
+            )
+        self._begin("pending", "same-strategy", .8)
+        report = self.store.autobiographical_report(minimum_repetitions=3)
+        self.assertEqual(["under-1", "under-2", "under-3", "pending"],
+                         [item["experience_id"] for item in report["episodes"]])
+        self.assertEqual("pending_outcome", report["episodes"][-1]["status"])
+        self.assertEqual("repeated_underestimation", report["patterns"][0]["pattern"])
+        self.assertEqual(3, report["patterns"][0]["repetitions"])
+        self.assertFalse(report["self_model_changed"])
+        self.assertFalse(report["autonomy_policy_changed"])
+
+    def test_autobiographical_patterns_require_minimum_repetitions(self):
+        for index, observed in enumerate((.1, .2), 1):
+            self._begin(f"few-{index}", "one-strategy", .9)
+            self.store.record_outcome(
+                f"few-{index}", outcome_id=f"out-few-{index}",
+                observed_outcome=observed, evidence_ref=f"e-few-{index}",
+                evaluator="reviewer", note="Measured",
+            )
+        self.assertEqual([], self.store.autobiographical_report(minimum_repetitions=3)["patterns"])
+
+    def test_autobiographical_report_validates_threshold_and_limits(self):
+        with self.assertRaisesRegex(ValueError, "minimum_repetitions"):
+            self.store.autobiographical_report(minimum_repetitions=1)
+        with self.assertRaisesRegex(ValueError, "error_threshold"):
+            self.store.autobiographical_report(error_threshold=float("nan"))
+        with self.assertRaisesRegex(ValueError, "limit"):
+            self.store.autobiographical_report(limit=0)
+
+
 if __name__ == "__main__":
     unittest.main()
