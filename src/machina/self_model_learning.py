@@ -118,6 +118,56 @@ class SelfModelLearningBridge:
             })
         return {"goals": goals, "provenance": provenance}
 
+
+    def select_goal_from_limitations(
+        self,
+        controller: Any,
+        goal_mappings: Mapping[str, Mapping[str, Any]],
+        *,
+        allow_inferred: bool = False,
+        minimum_confidence: float = 0.7,
+        drive_adjustments: Mapping[str, float] | None = None,
+        recent_goal_ids: tuple[str, ...] = (),
+        commitment_alignment: Mapping[str, float] | None = None,
+        commitment_weight: float = 0.10,
+    ) -> dict[str, Any]:
+        """Pass evidence-gated limitation proposals through bounded autonomy.
+
+        This is a composition helper only: it proposes candidates, asks the
+        supplied AutonomyController to rank/reject them, and returns the
+        decision with matching provenance. It does not execute the selection
+        or mutate the self-model. External approvals are intentionally not
+        accepted by this method because limitation proposals are internal.
+        """
+        from .autonomy import AutonomyController
+
+        if not isinstance(controller, AutonomyController):
+            raise TypeError("controller must be an AutonomyController")
+        proposals = self.propose_goals_from_limitations(
+            goal_mappings,
+            allow_inferred=allow_inferred,
+            minimum_confidence=minimum_confidence,
+        )
+        decision = controller.choose(
+            proposals["goals"],
+            drive_adjustments=dict(drive_adjustments or {}),
+            recent_goal_ids=recent_goal_ids,
+            commitment_alignment=dict(commitment_alignment or {}),
+            commitment_weight=commitment_weight,
+        )
+        by_goal = {
+            item["goal_id"]: item for item in proposals["provenance"]
+        }
+        selected = decision.selected_goal
+        selected_provenance = by_goal.get(selected.goal_id) if selected else None
+        return {
+            "proposals": proposals,
+            "decision": decision,
+            "selected_provenance": selected_provenance,
+            "selected_goal_id": selected.goal_id if selected else None,
+            "execution_performed": False,
+        }
+
     def update_prediction_calibration(
         self,
         property_name: str,
