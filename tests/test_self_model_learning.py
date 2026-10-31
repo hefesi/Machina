@@ -43,5 +43,40 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
         self.assertEqual("inferred", self.model.capability_estimates["deployment"]["status"])
 
 
+    def test_prediction_calibration_updates_inferred_capability_after_minimum_sample(self):
+        for index, matched in enumerate((True, True, False, True, False), start=1):
+            self.model.predict("runtime", True, prediction_ref=f"p{index}", cycle_id="predict", confidence=0.8, horizon="short")
+            self.model.evaluate_prediction(f"p{index}", True if matched else False, cycle_id="evaluate", evidence_ref=f"e{index}")
+        result = self.bridge.update_prediction_calibration("runtime", cycle_id="cycle-calibration", horizon="short")
+        capability = self.model.capability_estimates["runtime"]
+        self.assertEqual("inferred", capability["status"])
+        self.assertAlmostEqual(0.6, result["estimate"]["accuracy"])
+        self.assertEqual(5, result["estimate"]["evaluated"])
+        self.assertEqual("prediction-calibration:e1|e2|e3|e4|e5", result["evidence_ref"])
+        self.assertAlmostEqual(1.0, capability["confidence"])
+
+    def test_prediction_calibration_rejects_insufficient_history_without_mutation(self):
+        self.model.predict("runtime", True, prediction_ref="p1", cycle_id="c1")
+        self.model.evaluate_prediction("p1", True, cycle_id="c2", evidence_ref="e1")
+        with self.assertRaisesRegex(ValueError, "insufficient evaluated predictions"):
+            self.bridge.update_prediction_calibration("runtime", cycle_id="c3", min_evaluated=3)
+        self.assertNotIn("runtime", self.model.capability_estimates)
+
+    def test_prediction_calibration_rejects_low_coverage_without_mutation(self):
+        for index in range(4):
+            self.model.predict("runtime", True, prediction_ref=f"p{index}", cycle_id="c1")
+        self.model.evaluate_prediction("p0", True, cycle_id="c2", evidence_ref="e0")
+        self.model.evaluate_prediction("p1", True, cycle_id="c2", evidence_ref="e1")
+        with self.assertRaisesRegex(ValueError, "coverage"):
+            self.bridge.update_prediction_calibration("runtime", cycle_id="c3", min_evaluated=2, minimum_coverage=0.75)
+        self.assertNotIn("runtime", self.model.capability_estimates)
+
+    def test_prediction_calibration_validates_thresholds(self):
+        with self.assertRaisesRegex(ValueError, "min_evaluated"):
+            self.bridge.update_prediction_calibration("runtime", cycle_id="c1", min_evaluated=0)
+        with self.assertRaisesRegex(ValueError, "minimum_coverage"):
+            self.bridge.update_prediction_calibration("runtime", cycle_id="c1", minimum_coverage=1.5)
+
+
 if __name__ == "__main__":
     unittest.main()
