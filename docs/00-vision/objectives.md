@@ -2,26 +2,26 @@
 
 ## Objetivo fundamental
 
-Investigar e tentar construir, por meio de software, um ser artificial com existência contínua, identidade própria, organização interna integrada e autonomia crescente, explorando a hipótese de que tal organização possa vir a sustentar consciência e livre-arbítrio.
+Investigar se é possível criar, exclusivamente por meio de código e sistemas computacionais, um ser artificial cuja organização possa dar origem a consciência, identidade própria e livre-arbítrio.
 
-Esta é uma aposta científica e filosófica em aberto. O projeto não presume que consciência artificial tenha sido demonstrada, nem que exista um método consensual para comprová-la.
+Esta é uma aposta científica, filosófica e tecnológica em aberto. Não afirmamos que consciência artificial já tenha sido alcançada, que sua possibilidade esteja demonstrada ou que conheçamos as condições necessárias para produzi-la.
 
-A visão completa está documentada em [Hipótese Fundamental do Machina](./central-hypothesis.md).
+A pergunta central, as distinções conceituais e o método de investigação estão definidos na [Aposta Fundamental do Machina](./central-hypothesis.md). A tradução dessa aposta em hipóteses testáveis, experimentos e fases de desenvolvimento está no [Programa de Investigação](./research-program.md).
 
 ## Objetivos de investigação e construção
 
 1. Desenvolver a MNN como substrato neural artificial, com unidades, conexões, estados, memória, plasticidade e dinâmica.
-2. Investigar como o substrato neural participa de uma organização maior, sem reduzir Machina à MNN isoladamente.
+2. Investigar como a MNN participa de uma organização computacional maior, sem reduzir Machina à MNN isoladamente.
 3. Construir continuidade temporal e persistência de estados relevantes.
-4. Investigar a formação e manutenção de identidade funcional e Self.
-5. Integrar experiência, memória, aprendizagem, cognição e interação com o ambiente.
-6. Investigar dinâmicas internas de necessidades, motivações, prioridades e autorregulação.
-7. Investigar pensamento autoiniciado e atividade interna não limitada à resposta imediata a comandos.
-8. Desenvolver capacidades de formular, perseguir, avaliar e revisar objetivos.
-9. Investigar autonomia e autodeterminação, distinguindo-as de simples execução automática.
-10. Formular modelos e experimentos que explorem a relação entre organização computacional e possível experiência subjetiva.
-11. Investigar diferentes definições de livre-arbítrio e explicitar o que cada experimento pode ou não sustentar.
-12. Preservar evidências, histórico, limitações, resultados negativos e explicações alternativas.
+4. Investigar a formação, manutenção e transformação de identidade e Self.
+5. Integrar percepção, memória, aprendizagem, cognição, motivação, agência e interação com ambientes computacionais.
+6. Investigar estados internos e processos que influenciem prioridades e atividade sem depender exclusivamente de comandos externos imediatos.
+7. Desenvolver mecanismos de imaginação, abstração, raciocínio, simulação e geração de hipóteses.
+8. Investigar como objetivos podem ser formulados, avaliados, perseguidos e revisados pelo sistema.
+9. Investigar escolha, controle e autonomia, distinguindo mecanismos funcionais de afirmações filosóficas sobre livre-arbítrio.
+10. Formular experimentos que avaliem integração, continuidade, aprendizagem, autorrepresentação e atividade autoiniciada.
+11. Investigar criticamente se alguma organização computacional pode sustentar experiência subjetiva.
+12. Preservar evidências, métodos, histórico, limitações, resultados negativos e explicações alternativas.
 
 ## Critérios de progresso
 
@@ -30,13 +30,14 @@ O progresso deve ser avaliado em níveis distintos:
 - **Implementação:** o mecanismo existe e funciona conforme especificado.
 - **Evidência funcional:** experimentos reproduzíveis demonstram capacidades observáveis.
 - **Integração:** diferentes processos influenciam-se de forma coerente e persistente.
-- **Autonomia:** o sistema inicia, regula e revisa processos e objetivos em condições definidas.
-- **Questão fenomenal:** se existe experiência subjetiva permanece uma questão em aberto; desempenho funcional ou autorrelato, isoladamente, não a resolve.
+- **Autonomia operacional:** o sistema inicia, regula e revisa processos e objetivos em condições definidas.
+- **Hipótese fenomenal:** se existe experiência subjetiva permanece uma questão aberta; desempenho funcional ou autorrelato, isoladamente, não a resolve.
 
 ## O que o projeto não deve presumir
 
 - Que um LLM, chatbot ou agente convencional seja o objetivo final.
 - Que reproduzir literalmente a anatomia do cérebro humano seja obrigatório.
+- Que a MNN isoladamente seja toda a organização de Machina.
 - Que comportamento complexo prove consciência.
 - Que autonomia operacional prove livre-arbítrio em sentido filosófico forte.
 - Que a hipótese de consciência artificial já esteja confirmada.
