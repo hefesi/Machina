@@ -145,5 +145,44 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             self._limitation_mapping(), allow_inferred=True
         )["goals"])
 
+
+    def test_limitation_proposal_flows_through_autonomy_with_provenance(self):
+        from machina.autonomy import AutonomyController
+
+        self.model.update(
+            {"limited_memory_recall": "Recall accuracy below target"},
+            cycle_id="cycle-30",
+            evidence_refs={"limited_memory_recall": "benchmark:recall-30"},
+            known_limitations=["limited_memory_recall"],
+        )
+        result = self.bridge.select_goal_from_limitations(
+            AutonomyController(), self._limitation_mapping()
+        )
+        self.assertEqual("address_limitation:limited-memory-recall", result["selected_goal_id"])
+        self.assertEqual("benchmark:recall-30", result["selected_provenance"]["evidence_ref"])
+        self.assertFalse(result["execution_performed"])
+        self.assertEqual("cycle-30", self.model.cycle_id)
+
+    def test_empty_evidence_gated_proposals_produce_no_selection(self):
+        from machina.autonomy import AutonomyController
+
+        self.model.update(
+            {"limited_memory_recall": None},
+            cycle_id="cycle-31",
+            statuses={"limited_memory_recall": "unknown"},
+            known_limitations=["limited_memory_recall"],
+        )
+        result = self.bridge.select_goal_from_limitations(
+            AutonomyController(), self._limitation_mapping()
+        )
+        self.assertIsNone(result["selected_goal_id"])
+        self.assertIsNone(result["selected_provenance"])
+        self.assertEqual([], result["proposals"]["goals"])
+        self.assertFalse(result["execution_performed"])
+
+    def test_selection_helper_requires_real_autonomy_controller(self):
+        with self.assertRaisesRegex(TypeError, "AutonomyController"):
+            self.bridge.select_goal_from_limitations(object(), self._limitation_mapping())
+
 if __name__ == "__main__":
     unittest.main()
