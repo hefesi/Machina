@@ -50,6 +50,8 @@ class SelfModel:
         self._limitations: list[str] = []
         self._resources: dict[str, Any] = {}
         self._prediction_errors: list[dict[str, Any]] = []
+        self._predictions: list[dict[str, Any]] = []
+        self._prediction_evaluations: list[dict[str, Any]] = []
         self._cycle_id: str | None = None
 
     @property
@@ -71,6 +73,13 @@ class SelfModel:
     @property
     def prediction_errors(self) -> list[dict[str, Any]]:
         return _json_copy(self._prediction_errors, "prediction_errors")
+
+    @property
+    def prediction_history(self) -> dict[str, list[dict[str, Any]]]:
+        return {
+            "predictions": _json_copy(self._predictions, "predictions"),
+            "evaluations": _json_copy(self._prediction_evaluations, "prediction_evaluations"),
+        }
 
     @property
     def cycle_id(self) -> str | None:
@@ -167,6 +176,79 @@ class SelfModel:
             statuses={property_name: "unknown"},
         )
 
+    def predict(
+        self,
+        property_name: str,
+        predicted_value: Any,
+        *,
+        prediction_ref: str,
+        cycle_id: str,
+        confidence: float = 0.5,
+        horizon: str = "next_cycle",
+    ) -> dict[str, Any]:
+        """Record a falsifiable prediction about a named operational property."""
+        prop = _name(property_name, "property_name")
+        reference = _name(prediction_ref, "prediction_ref")
+        cycle = _name(cycle_id, "cycle_id")
+        horizon_value = _name(horizon, "horizon")
+        certainty = _confidence(confidence)
+        if any(item["prediction_ref"] == reference for item in self._predictions):
+            raise ValueError(f"duplicate prediction_ref: {reference}")
+        if any(item["prediction_ref"] == reference for item in self._prediction_evaluations):
+            raise ValueError(f"prediction_ref was already evaluated: {reference}")
+        item = {
+            "prediction_ref": reference,
+            "property": prop,
+            "predicted_value": _json_copy(predicted_value, "predicted_value"),
+            "cycle_id": cycle,
+            "horizon": horizon_value,
+            "confidence": certainty,
+        }
+        self._predictions.append(item)
+        return _json_copy(item, "prediction")
+
+    def evaluate_prediction(
+        self,
+        prediction_ref: str,
+        actual_value: Any,
+        *,
+        cycle_id: str,
+        evidence_ref: str,
+    ) -> dict[str, Any]:
+        """Compare a recorded prediction with an evidence-referenced outcome.
+
+        The generic metric is exact-match error (0.0 or 1.0); domain-specific
+        numeric distances belong in a separately specified evaluator.
+        """
+        reference = _name(prediction_ref, "prediction_ref")
+        cycle = _name(cycle_id, "cycle_id")
+        evidence = _name(evidence_ref, "evidence_ref")
+        prediction = next(
+            (item for item in self._predictions if item["prediction_ref"] == reference),
+            None,
+        )
+        if prediction is None:
+            raise ValueError(f"unknown prediction_ref: {reference}")
+        if any(item["prediction_ref"] == reference for item in self._prediction_evaluations):
+            raise ValueError(f"prediction already evaluated: {reference}")
+        actual = _json_copy(actual_value, "actual_value")
+        matched = prediction["predicted_value"] == actual
+        evaluation = {
+            "prediction_ref": reference,
+            "property": prediction["property"],
+            "predicted_value": _json_copy(prediction["predicted_value"], "predicted_value"),
+            "actual_value": actual,
+            "matched": matched,
+            "error": 0.0 if matched else 1.0,
+            "prediction_confidence": prediction["confidence"],
+            "prediction_cycle_id": prediction["cycle_id"],
+            "evaluation_cycle_id": cycle,
+            "evidence_ref": evidence,
+        }
+        self._prediction_evaluations.append(evaluation)
+        self.record_prediction_error(evaluation)
+        return _json_copy(evaluation, "prediction evaluation")
+
     def record_prediction_error(self, record: Mapping[str, Any]) -> dict[str, Any]:
         """Append an evaluated prediction record; existing records are never replaced."""
         if not isinstance(record, Mapping):
@@ -188,6 +270,8 @@ class SelfModel:
             "known_limitations": list(self._limitations),
             "resource_state": _json_copy(self._resources, "resource_state"),
             "prediction_errors": _json_copy(self._prediction_errors, "prediction_errors"),
+            "predictions": _json_copy(self._predictions, "predictions"),
+            "prediction_evaluations": _json_copy(self._prediction_evaluations, "prediction_evaluations"),
         }
 
     @classmethod
@@ -273,4 +357,40 @@ class SelfModel:
                 raise ValueError("prediction error record requires prediction_ref and error")
             record["prediction_ref"] = _name(record["prediction_ref"], "prediction_ref")
             model._prediction_errors.append(record)
+        predictions = data.get("predictions", [])
+        evaluations = data.get("prediction_evaluations", [])
+        if not isinstance(predictions, list) or not isinstance(evaluations, list):
+            raise ValueError("snapshot predictions and prediction_evaluations must be lists")
+        seen_prediction_refs: set[str] = set()
+        for raw_prediction in predictions:
+            if not isinstance(raw_prediction, Mapping):
+                raise ValueError("prediction entries must be mappings")
+            prediction = _json_copy(dict(raw_prediction), "prediction")
+            reference = _name(prediction.get("prediction_ref"), "prediction_ref")
+            if reference in seen_prediction_refs:
+                raise ValueError("duplicate prediction_ref in snapshot")
+            seen_prediction_refs.add(reference)
+            _name(prediction.get("property"), "prediction property")
+            _name(prediction.get("cycle_id"), "prediction cycle_id")
+            _name(prediction.get("horizon"), "prediction horizon")
+            _confidence(prediction.get("confidence"), "prediction confidence")
+            if "predicted_value" not in prediction:
+                raise ValueError("prediction requires predicted_value")
+            model._predictions.append(prediction)
+        evaluated_refs: set[str] = set()
+        for raw_evaluation in evaluations:
+            if not isinstance(raw_evaluation, Mapping):
+                raise ValueError("prediction evaluation entries must be mappings")
+            evaluation = _json_copy(dict(raw_evaluation), "prediction evaluation")
+            reference = _name(evaluation.get("prediction_ref"), "evaluation prediction_ref")
+            if reference not in seen_prediction_refs or reference in evaluated_refs:
+                raise ValueError("prediction evaluation references an unknown or repeated prediction")
+            evaluated_refs.add(reference)
+            if evaluation.get("error") not in (0.0, 1.0):
+                raise ValueError("prediction evaluation error must be 0.0 or 1.0")
+            if evaluation.get("matched") != (evaluation["error"] == 0.0):
+                raise ValueError("prediction evaluation match and error disagree")
+            _name(evaluation.get("evidence_ref"), "evaluation evidence_ref")
+            _name(evaluation.get("evaluation_cycle_id"), "evaluation cycle_id")
+            model._prediction_evaluations.append(evaluation)
         return model
