@@ -80,9 +80,9 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
 
 
 
-    def _causal_store(self, design="randomized", treatment=0.9, control=0.2, n=12):
+    def _causal_store(self, design="randomized", treatment=0.9, control=0.2, n=12, suffix=""):
         from machina.causal_learning import CausalExperimentStore
-        store = CausalExperimentStore(Path(self.tmp.name) / ("causal-" + design + ".sqlite3"))
+        store = CausalExperimentStore(Path(self.tmp.name) / ("causal-" + design + suffix + ".sqlite3"))
         store.register_experiment(
             "exp-1", design=design, treatment_name="new_strategy",
             control_name="baseline", protocol_ref="protocol:exp-1",
@@ -149,8 +149,8 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             store.close()
 
     def test_new_causal_evidence_revises_belief_and_marks_opposite_effect(self):
-        first = self._causal_store(treatment=0.9, control=0.2)
-        second = self._causal_store(treatment=0.2, control=0.9)
+        first = self._causal_store(treatment=0.9, control=0.2, suffix="-first")
+        second = self._causal_store(treatment=0.2, control=0.9, suffix="-second")
         try:
             self.bridge.update_belief_from_causal_experiment(
                 first, 'exp-1', belief_property='strategy_effect', cycle_id='cycle-1',
