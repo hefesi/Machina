@@ -225,6 +225,142 @@ class SelfModelLearningBridge:
             "evidence_ref": evidence_ref, "status": "inferred",
         }
 
+
+    def update_belief_from_causal_experiment(
+        self,
+        causal_store: Any,
+        experiment_id: str,
+        *,
+        belief_property: str,
+        cycle_id: str,
+        minimum_per_arm: int = 5,
+        minimum_effect: float = 0.05,
+    ) -> dict[str, Any]:
+        """Record a cautious inferred belief from an eligible experiment report.
+
+        Only sufficiently sampled randomized or matched comparisons whose
+        approximate 95% interval excludes zero and whose absolute effect
+        clears minimum_effect are eligible. The store's declared design and
+        evidence are caller-supplied and are not independently verified.
+        """
+        from .causal_learning import CausalExperimentStore
+
+        if not isinstance(causal_store, CausalExperimentStore):
+            raise TypeError("causal_store must be a CausalExperimentStore")
+        if isinstance(minimum_per_arm, bool) or not isinstance(minimum_per_arm, int) or minimum_per_arm < 2:
+            raise ValueError("minimum_per_arm must be an integer >= 2")
+        if isinstance(minimum_effect, bool):
+            raise ValueError("minimum_effect must be finite and in [0, 1]")
+        try:
+            effect_floor = float(minimum_effect)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("minimum_effect must be finite and in [0, 1]") from exc
+        import math
+        if not math.isfinite(effect_floor) or not 0.0 <= effect_floor <= 1.0:
+            raise ValueError("minimum_effect must be finite and in [0, 1]")
+        if not isinstance(belief_property, str) or not belief_property.strip():
+            raise ValueError("belief_property must be a non-empty string")
+        prop = belief_property.strip()
+
+        report = causal_store.report(experiment_id, minimum_per_arm=minimum_per_arm)
+        classification = report["classification"]
+        estimate = report.get("estimate")
+        if classification not in {"randomized_comparison", "matched_comparison"} or not estimate:
+            return {
+                "accepted": False,
+                "reason": "experiment design or sample size does not support a causal comparison",
+                "classification": classification,
+                "belief_property": prop,
+                "self_model_updated": False,
+            }
+
+        interval = estimate.get("confidence_interval_95_normal_approx")
+        effect = estimate.get("effect")
+        if (
+            not isinstance(interval, list) or len(interval) != 2
+            or any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) for value in interval)
+            or isinstance(effect, bool) or not isinstance(effect, (int, float)) or not math.isfinite(effect)
+        ):
+            return {
+                "accepted": False, "reason": "experiment estimate has no valid uncertainty interval",
+                "classification": classification, "belief_property": prop,
+                "self_model_updated": False,
+            }
+        lower, upper = float(interval[0]), float(interval[1])
+        if lower > upper or lower <= 0.0 <= upper:
+            return {
+                "accepted": False, "reason": "approximate 95% interval does not exclude zero",
+                "classification": classification, "belief_property": prop,
+                "effect": float(effect), "interval": [lower, upper],
+                "self_model_updated": False,
+            }
+        if abs(float(effect)) < effect_floor:
+            return {
+                "accepted": False, "reason": "estimated effect is below minimum_effect",
+                "classification": classification, "belief_property": prop,
+                "effect": float(effect), "interval": [lower, upper],
+                "self_model_updated": False,
+            }
+
+        trials = report.get("trials", [])
+        evidence_refs = sorted({item["evidence_ref"] for item in trials if item.get("evidence_ref")})
+        if not evidence_refs:
+            return {
+                "accepted": False, "reason": "experiment has no trial evidence references",
+                "classification": classification, "belief_property": prop,
+                "self_model_updated": False,
+            }
+        experiment = report["experiment"]
+        evidence_ref = "causal-experiment:" + str(experiment_id) + ":" + "|".join(evidence_refs)
+        existing = self.self_model.beliefs.get(prop)
+        if existing and existing.get("evidence_ref") == evidence_ref:
+            return {
+                "accepted": True, "already_applied": True, "belief_property": prop,
+                "evidence_ref": evidence_ref, "belief": existing,
+                "self_model_updated": False,
+            }
+
+        sample_units = (
+            int(estimate["matched_pairs"])
+            if classification == "matched_comparison"
+            else min(int(report["treatment"]["n"]), int(report["control"]["n"]))
+        )
+        # This is an evidence-support heuristic, not a probability or
+        # statistical confidence level.
+        support_score = min(0.8, sample_units / (sample_units + 5.0))
+        belief = {
+            "kind": "group_level_causal_effect_estimate",
+            "experiment_id": experiment_id,
+            "design": experiment["design"],
+            "classification": classification,
+            "treatment": experiment["treatment_name"],
+            "control": experiment["control_name"],
+            "effect_treatment_minus_control": float(effect),
+            "confidence_interval_95_normal_approx": [lower, upper],
+            "standard_error": estimate.get("standard_error"),
+            "sample_units": sample_units,
+            "treatment_n": report["treatment"]["n"],
+            "control_n": report["control"]["n"],
+            "protocol_ref": experiment["protocol_ref"],
+            "evidence_support_score": support_score,
+            "confidence_semantics": "heuristic evidence-support score; not probability of truth",
+            "counterfactual_scope": estimate.get("counterfactual_scope"),
+        }
+        state = self.self_model.update(
+            {prop: belief},
+            cycle_id=cycle_id,
+            evidence_refs={prop: evidence_ref},
+            statuses={prop: "inferred"},
+            confidences={prop: support_score},
+        )
+        return {
+            "accepted": True, "already_applied": False,
+            "self_model": state, "belief_property": prop,
+            "belief": state["beliefs"][prop],
+            "evidence_ref": evidence_ref, "status": "inferred",
+            "self_model_updated": True,
+        }
+
     def update_capability(
         self,
         goal_type: str,
