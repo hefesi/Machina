@@ -61,6 +61,12 @@ class CuriosityInvestigationStore:
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(investigation_id, evidence_ref)
             );
+            CREATE TABLE IF NOT EXISTS curiosity_closures (
+                investigation_id TEXT PRIMARY KEY REFERENCES
+                    curiosity_investigations(investigation_id),
+                cycle_id TEXT NOT NULL,
+                closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
             """
         )
         self._db.commit()
