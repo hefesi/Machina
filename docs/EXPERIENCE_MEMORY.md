@@ -30,3 +30,16 @@ be represented by a separate review/evaluation mechanism rather than rewriting h
 - None of these mechanisms demonstrates phenomenal consciousness or metaphysical
   free will. They make memory, self-evaluation and strategy revision hypotheses
   inspectable and testable.
+
+## Autobiographical review
+
+`autobiographical_report(...)` reconstructs an ordered record of intentions,
+including pending experiences, and detects repeated signed prediction-error
+patterns grouped by exact caller-supplied goal and strategy labels. A minimum
+number of evaluated episodes is required. The report can identify repeated
+overestimation or underestimation of outcomes, but cannot infer why it happened.
+
+This is a descriptive self-history, not a semantic autobiography: evaluator
+notes are not mined for hidden meaning, and no emotions, motives, causal
+explanations or subjective experience are inferred. The report does not update
+the SelfModel, alter autonomy or execute a recommended strategy change.
