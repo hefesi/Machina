@@ -63,3 +63,19 @@ adherence, does not infer individual counterfactuals, and does not alter
 autonomy, goals, MNN weights, or action permissions. A downstream consumer
 must independently decide whether and how inferred beliefs may influence
 behavior.
+
+## Append-only belief revision history
+
+The self-model exposes `belief_revision_history` and `revise_belief()`. An
+explicit revision requires an existing belief, a new evidence reference, a
+reason, and a source. Each record preserves detached previous/new values,
+status, confidence, cycle, and whether the caller's domain-specific comparison
+found a contradiction. Snapshot restore validates contiguous sequence numbers
+and consistency between the latest revision and the current belief. Older
+snapshots without this optional history still load.
+
+When distinct eligible causal evidence updates an existing causal belief, the
+bridge uses this revision API rather than silently overwriting it. Opposite
+signs in estimated group effects are flagged as contradictions, not treated
+as proof that either experiment is correct. This history is descriptive and
+append-only; it does not automatically change autonomy or execution policy.
