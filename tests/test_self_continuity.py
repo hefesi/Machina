@@ -71,6 +71,18 @@ class SelfContinuityTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "sequence"):
             SelfContinuity.from_snapshot(invalid)
 
+
+    def test_snapshot_rejects_active_commitment_that_disagrees_with_history(self):
+        identity = SelfContinuity("machina-01")
+        identity.update_commitment(
+            "continuity", "Preserve causal history",
+            reason="baseline", source="bootstrap",
+        )
+        snapshot = identity.snapshot()
+        snapshot["commitments"]["continuity"] = "silently replaced"
+        with self.assertRaisesRegex(ValueError, "disagrees"):
+            SelfContinuity.from_snapshot(snapshot)
+
     def test_unchanged_or_unknown_commitments_cannot_be_revised_or_retired(self):
         identity = SelfContinuity("machina-01")
         identity.update_commitment(
