@@ -93,8 +93,8 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
                 store.record_trial("exp-1", "treatment", treatment, evidence_ref=f"et-{index}{suffix}", trial_id=f"t-{index}{suffix}", context_key=context)
                 store.record_trial("exp-1", "control", control, evidence_ref=f"ec-{index}{suffix}", trial_id=f"c-{index}{suffix}", context_key=context)
             else:
-                store.record_trial("exp-1", "treatment", treatment, evidence_ref=f"et-{index}", trial_id=f"t-{index}")
-                store.record_trial("exp-1", "control", control, evidence_ref=f"ec-{index}", trial_id=f"c-{index}")
+                store.record_trial("exp-1", "treatment", treatment, evidence_ref=f"et-{index}{suffix}", trial_id=f"t-{index}{suffix}")
+                store.record_trial("exp-1", "control", control, evidence_ref=f"ec-{index}{suffix}", trial_id=f"c-{index}{suffix}")
         return store
 
     def test_randomized_causal_experiment_updates_inferred_belief_with_provenance(self):
