@@ -22,6 +22,63 @@ class SelfModelLearningBridge:
         self.self_model = self_model
         self.learner = learner
 
+    def update_prediction_calibration(
+        self,
+        property_name: str,
+        *,
+        cycle_id: str,
+        horizon: str | None = None,
+        capability_name: str | None = None,
+        min_evaluated: int = 5,
+        minimum_coverage: float = 0.5,
+    ) -> dict[str, Any]:
+        """Project sufficiently sampled self-prediction history into an inferred capability."""
+        if isinstance(min_evaluated, bool) or not isinstance(min_evaluated, int) or min_evaluated < 1:
+            raise ValueError("min_evaluated must be a positive integer")
+        try:
+            coverage_floor = float(minimum_coverage)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("minimum_coverage must be finite and in [0, 1]") from exc
+        if not 0.0 <= coverage_floor <= 1.0:
+            raise ValueError("minimum_coverage must be finite and in [0, 1]")
+        report = self.self_model.calibration_report(property_name=property_name, horizon=horizon)
+        metrics = report["overall"]
+        if metrics["evaluated"] < min_evaluated:
+            raise ValueError(f"insufficient evaluated predictions: {metrics['evaluated']} < {min_evaluated}")
+        if metrics["coverage"] is None or metrics["coverage"] < coverage_floor:
+            raise ValueError("prediction evaluation coverage is below minimum_coverage")
+        history = self.self_model.prediction_history
+        horizon_by_ref = {item["prediction_ref"]: item["horizon"] for item in history["predictions"]}
+        evidence_refs = sorted(
+            item["evidence_ref"] for item in history["evaluations"]
+            if item["property"] == property_name
+            and (horizon is None or horizon_by_ref.get(item["prediction_ref"]) == horizon)
+        )
+        name = capability_name or property_name
+        evidence_ref = "prediction-calibration:" + "|".join(evidence_refs)
+        evidence_confidence = min(1.0, metrics["evaluated"] / min_evaluated) * metrics["coverage"]
+        estimate = {
+            "kind": "empirical_self_prediction_calibration",
+            "property": property_name, "horizon": horizon,
+            "accuracy": metrics["accuracy"],
+            "mean_declared_confidence": metrics["mean_confidence"],
+            "calibration_gap": metrics["calibration_gap"],
+            "evaluated": metrics["evaluated"], "emitted": metrics["emitted"],
+            "pending": metrics["pending"], "coverage": metrics["coverage"],
+            "evidence_sufficiency": evidence_confidence,
+        }
+        state = self.self_model.update(
+            {}, cycle_id=cycle_id,
+            capability_estimates={name: {
+                "estimate": estimate, "confidence": evidence_confidence,
+                "status": "inferred", "evidence_ref": evidence_ref,
+            }},
+        )
+        return {
+            "self_model": state, "capability_name": name, "estimate": estimate,
+            "evidence_ref": evidence_ref, "status": "inferred",
+        }
+
     def update_capability(
         self,
         goal_type: str,
