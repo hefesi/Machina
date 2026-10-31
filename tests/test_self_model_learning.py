@@ -80,6 +80,111 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
 
 
 
+    def _causal_store(self, design="randomized", treatment=0.9, control=0.2, n=12):
+        from machina.causal_learning import CausalExperimentStore
+        store = CausalExperimentStore(Path(self.tmp.name) / ("causal-" + design + ".sqlite3"))
+        store.register_experiment(
+            "exp-1", design=design, treatment_name="new_strategy",
+            control_name="baseline", protocol_ref="protocol:exp-1",
+        )
+        for index in range(n):
+            if design == "matched":
+                context = f"context-{index}"
+                store.record_trial("exp-1", "treatment", treatment, evidence_ref=f"et-{index}", trial_id=f"t-{index}", context_key=context)
+                store.record_trial("exp-1", "control", control, evidence_ref=f"ec-{index}", trial_id=f"c-{index}", context_key=context)
+            else:
+                store.record_trial("exp-1", "treatment", treatment, evidence_ref=f"et-{index}", trial_id=f"t-{index}")
+                store.record_trial("exp-1", "control", control, evidence_ref=f"ec-{index}", trial_id=f"c-{index}")
+        return store
+
+    def test_randomized_causal_experiment_updates_inferred_belief_with_provenance(self):
+        store = self._causal_store()
+        try:
+            result = self.bridge.update_belief_from_causal_experiment(
+                store, "exp-1", belief_property="retrieval_strategy_effect",
+                cycle_id="cycle-causal",
+            )
+            belief = self.model.beliefs["retrieval_strategy_effect"]
+            self.assertTrue(result["accepted"])
+            self.assertEqual("inferred", belief["status"])
+            self.assertEqual("randomized_comparison", belief["value"]["classification"])
+            self.assertGreater(belief["value"]["effect_treatment_minus_control"], 0)
+            self.assertIn("protocol:exp-1", str(belief["value"]["protocol_ref"]))
+            self.assertIn("et-0", belief["evidence_ref"])
+            self.assertEqual("cycle-causal", belief["observed_at_cycle"])
+        finally:
+            store.close()
+
+    def test_matched_causal_experiment_can_update_inferred_belief(self):
+        store = self._causal_store(design="matched")
+        try:
+            result = self.bridge.update_belief_from_causal_experiment(
+                store, "exp-1", belief_property="matched_effect", cycle_id="cycle-matched",
+            )
+            self.assertTrue(result["accepted"])
+            self.assertEqual("matched_comparison", self.model.beliefs["matched_effect"]["value"]["classification"])
+        finally:
+            store.close()
+
+    def test_causal_bridge_rejects_interval_crossing_zero_without_mutation(self):
+        store = self._causal_store(treatment=0.55, control=0.50, n=6)
+        try:
+            result = self.bridge.update_belief_from_causal_experiment(
+                store, "exp-1", belief_property="uncertain_effect", cycle_id="cycle-reject",
+            )
+            self.assertFalse(result["accepted"])
+            self.assertFalse(result["self_model_updated"])
+            self.assertNotIn("uncertain_effect", self.model.beliefs)
+        finally:
+            store.close()
+
+    def test_causal_bridge_never_promotes_observational_association(self):
+        store = self._causal_store(design="observational")
+        try:
+            result = self.bridge.update_belief_from_causal_experiment(
+                store, "exp-1", belief_property="observed_association", cycle_id="cycle-observe",
+            )
+            self.assertFalse(result["accepted"])
+            self.assertEqual("observational_association", result["classification"])
+            self.assertNotIn("observed_association", self.model.beliefs)
+        finally:
+            store.close()
+
+    def test_causal_bridge_is_idempotent_for_same_experiment_and_property(self):
+        store = self._causal_store()
+        try:
+            first = self.bridge.update_belief_from_causal_experiment(
+                store, "exp-1", belief_property="effect", cycle_id="cycle-1",
+            )
+            second = self.bridge.update_belief_from_causal_experiment(
+                store, "exp-1", belief_property="effect", cycle_id="cycle-2",
+            )
+            self.assertTrue(first["self_model_updated"])
+            self.assertTrue(second["already_applied"])
+            self.assertFalse(second["self_model_updated"])
+            self.assertEqual("cycle-1", self.model.cycle_id)
+        finally:
+            store.close()
+
+    def test_causal_bridge_validates_thresholds_and_minimum_effect(self):
+        store = self._causal_store()
+        try:
+            with self.assertRaisesRegex(ValueError, "minimum_per_arm"):
+                self.bridge.update_belief_from_causal_experiment(
+                    store, "exp-1", belief_property="effect", cycle_id="c", minimum_per_arm=1,
+                )
+            with self.assertRaisesRegex(ValueError, "minimum_effect"):
+                self.bridge.update_belief_from_causal_experiment(
+                    store, "exp-1", belief_property="effect", cycle_id="c", minimum_effect=float("nan"),
+                )
+            rejected = self.bridge.update_belief_from_causal_experiment(
+                store, "exp-1", belief_property="tiny_effect", cycle_id="c", minimum_effect=0.9,
+            )
+            self.assertFalse(rejected["accepted"])
+            self.assertNotIn("tiny_effect", self.model.beliefs)
+        finally:
+            store.close()
+
     def _limitation_mapping(self):
         return {"limited_memory_recall": {
             "description": "Investigate and improve long-term memory retrieval",
