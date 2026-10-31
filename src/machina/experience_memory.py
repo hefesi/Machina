@@ -188,6 +188,79 @@ class ExperienceMemoryStore:
         rows = self._db.execute(query, (*params, limit)).fetchall()
         return [dict(row) for row in rows]
 
+    def autobiographical_report(
+        self, *, minimum_repetitions: int = 2, error_threshold: float = 0.15,
+        limit: int = 200,
+    ) -> dict[str, Any]:
+        """Summarize recorded history and repeated numeric prediction patterns."""
+        if isinstance(minimum_repetitions, bool) or not isinstance(minimum_repetitions, int) or minimum_repetitions < 2:
+            raise ValueError("minimum_repetitions must be an integer >= 2")
+        threshold = self._score(error_threshold, "error_threshold")
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
+            raise ValueError("limit must be a positive integer")
+        rows = self._db.execute("""
+            SELECT i.*, o.outcome_id, o.observed_outcome, o.evidence_ref,
+                   o.evaluator, o.note AS outcome_note
+            FROM agent_experiences i
+            LEFT JOIN agent_experience_outcomes o USING(experience_id)
+            WHERE i.rowid IN (
+                SELECT rowid FROM agent_experiences ORDER BY rowid DESC LIMIT ?
+            )
+            ORDER BY i.rowid ASC
+        """, (limit,)).fetchall()
+        episodes = []
+        groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for row in rows:
+            item = dict(row)
+            expected, observed = item["expected_outcome"], item["observed_outcome"]
+            error = None if expected is None or observed is None else float(observed) - float(expected)
+            episodes.append({
+                "experience_id": item["experience_id"], "cycle_id": item["cycle_id"],
+                "goal_id": item["goal_id"], "strategy": item["strategy"],
+                "intention": item["intention"], "expected_outcome": expected,
+                "observed_outcome": observed, "prediction_error": error,
+                "evidence_ref": item["evidence_ref"], "evaluator": item["evaluator"],
+                "status": "evaluated" if observed is not None else "pending_outcome",
+            })
+            if error is not None:
+                groups.setdefault((item["goal_id"], item["strategy"]), []).append({
+                    "experience_id": item["experience_id"], "error": error,
+                    "evidence_ref": item["evidence_ref"],
+                })
+        patterns = []
+        for (goal_id, strategy), observations in sorted(groups.items()):
+            if len(observations) < minimum_repetitions:
+                continue
+            mean_error = sum(item["error"] for item in observations) / len(observations)
+            if mean_error <= -threshold:
+                pattern = "repeated_underestimation"
+            elif mean_error >= threshold:
+                pattern = "repeated_overestimation"
+            else:
+                pattern = "no_consistent_direction_detected"
+            patterns.append({
+                "goal_id": goal_id, "strategy": strategy, "pattern": pattern,
+                "repetitions": len(observations),
+                "mean_signed_prediction_error": mean_error,
+                "mean_absolute_prediction_error": sum(abs(item["error"]) for item in observations) / len(observations),
+                "experience_ids": [item["experience_id"] for item in observations],
+                "evidence_refs": [item["evidence_ref"] for item in observations],
+                "interpretation": "repeated_descriptive_pattern_not_causal",
+            })
+        return {
+            "episodes": episodes, "patterns": patterns, "episodes_included": len(episodes),
+            "minimum_repetitions": minimum_repetitions, "error_threshold": threshold,
+            "chronology": "recorded_intention_order", "recommendation_only": True,
+            "self_model_changed": False, "autonomy_policy_changed": False,
+            "limitations": [
+                "Only the most recent limit recorded intentions are included.",
+                "Patterns require explicit numeric expectations and evaluator-scored outcomes.",
+                "Grouping uses exact goal and strategy labels supplied by the caller.",
+                "Repeated error direction is descriptive; context confounding is not resolved.",
+                "No motives, feelings, subjective experience, or causal explanations are inferred.",
+            ],
+        }
+
     def strategy_report(
         self, *, minimum_samples: int = 3, minimum_difference: float = 0.1,
     ) -> dict[str, Any]:
