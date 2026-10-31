@@ -148,6 +148,27 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
         finally:
             store.close()
 
+    def test_new_causal_evidence_revises_belief_and_marks_opposite_effect(self):
+        first = self._causal_store(treatment=0.9, control=0.2)
+        second = self._causal_store(treatment=0.2, control=0.9)
+        try:
+            self.bridge.update_belief_from_causal_experiment(
+                first, 'exp-1', belief_property='strategy_effect', cycle_id='cycle-1',
+            )
+            result = self.bridge.update_belief_from_causal_experiment(
+                second, 'exp-1', belief_property='strategy_effect', cycle_id='cycle-2',
+            )
+            self.assertTrue(result['accepted'])
+            self.assertTrue(result['contradicts_previous'])
+            self.assertEqual(1, len(self.model.belief_revision_history))
+            revision = self.model.belief_revision_history[0]
+            self.assertTrue(revision['contradicts_previous'])
+            self.assertGreater(revision['previous']['value']['effect_treatment_minus_control'], 0)
+            self.assertLess(revision['new']['value']['effect_treatment_minus_control'], 0)
+            self.assertEqual('causal_experiment_bridge', revision['source'])
+        finally:
+            first.close()
+            second.close()
     def test_causal_bridge_never_promotes_observational_association(self):
         store = self._causal_store(design="observational")
         try:
