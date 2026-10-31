@@ -386,10 +386,16 @@ class SelfModel:
             if reference not in seen_prediction_refs or reference in evaluated_refs:
                 raise ValueError("prediction evaluation references an unknown or repeated prediction")
             evaluated_refs.add(reference)
-            if evaluation.get("error") not in (0.0, 1.0):
+            error_value = evaluation.get("error")
+            if isinstance(error_value, bool) or error_value not in (0.0, 1.0):
                 raise ValueError("prediction evaluation error must be 0.0 or 1.0")
-            if evaluation.get("matched") != (evaluation["error"] == 0.0):
+            if not isinstance(evaluation.get("matched"), bool) or evaluation["matched"] != (error_value == 0.0):
                 raise ValueError("prediction evaluation match and error disagree")
+            if "predicted_value" not in evaluation or "actual_value" not in evaluation:
+                raise ValueError("prediction evaluation requires predicted_value and actual_value")
+            _name(evaluation.get("property"), "evaluation property")
+            _name(evaluation.get("prediction_cycle_id"), "prediction cycle_id")
+            _confidence(evaluation.get("prediction_confidence"), "prediction confidence")
             _name(evaluation.get("evidence_ref"), "evaluation evidence_ref")
             _name(evaluation.get("evaluation_cycle_id"), "evaluation cycle_id")
             model._prediction_evaluations.append(evaluation)
