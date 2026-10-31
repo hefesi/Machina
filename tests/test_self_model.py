@@ -152,6 +152,47 @@ class SelfModelTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             SelfModel.from_snapshot(state)
 
+    def test_explicit_belief_revision_preserves_previous_state(self):
+        model = SelfModel()
+        model.update({'strategy_effect': {'effect': 0.2}}, cycle_id='cycle-1',
+                     evidence_refs={'strategy_effect': 'experiment-1'},
+                     statuses={'strategy_effect': 'inferred'},
+                     confidences={'strategy_effect': 0.6})
+        revision = model.revise_belief(
+            'strategy_effect', {'effect': -0.1}, cycle_id='cycle-2',
+            reason='A replication produced an opposite estimate.',
+            source='replication', evidence_ref='experiment-2',
+            status='inferred', confidence=0.7, contradicts_previous=True,
+        )
+        self.assertEqual(1, revision['sequence'])
+        self.assertEqual({'effect': 0.2}, revision['previous']['value'])
+        self.assertEqual({'effect': -0.1}, model.beliefs['strategy_effect']['value'])
+        self.assertTrue(model.belief_revision_history[0]['contradicts_previous'])
+
+    def test_belief_revision_requires_existing_belief_and_new_evidence(self):
+        model = SelfModel()
+        with self.assertRaisesRegex(ValueError, 'missing belief'):
+            model.revise_belief('missing', 1, cycle_id='c2', reason='r', source='test', evidence_ref='e2')
+        model.update({'x': 1}, cycle_id='c1', evidence_refs={'x': 'e1'})
+        with self.assertRaisesRegex(ValueError, 'must be new'):
+            model.revise_belief('x', 2, cycle_id='c2', reason='r', source='test', evidence_ref='e1')
+
+    def test_belief_revision_history_survives_snapshot_restore_and_is_validated(self):
+        model = SelfModel()
+        model.update({'x': 1}, cycle_id='c1', evidence_refs={'x': 'e1'}, statuses={'x': 'inferred'})
+        model.revise_belief('x', 2, cycle_id='c2', reason='new evidence', source='test', evidence_ref='e2')
+        snapshot = json.loads(json.dumps(model.snapshot()))
+        restored = SelfModel.from_snapshot(snapshot)
+        self.assertEqual(model.belief_revision_history, restored.belief_revision_history)
+        snapshot['belief_revisions'][0]['sequence'] = 2
+        with self.assertRaisesRegex(ValueError, 'contiguous'):
+            SelfModel.from_snapshot(snapshot)
+
+    def test_legacy_snapshot_without_belief_revisions_restores(self):
+        state = SelfModel().update({'x': 1}, cycle_id='c1', evidence_refs={'x': 'e1'})
+        state.pop('belief_revisions', None)
+        restored = SelfModel.from_snapshot(state)
+        self.assertEqual([], restored.belief_revision_history)
     def test_unknown_belief_can_be_invalidated(self):
         model = SelfModel()
         model.update(
