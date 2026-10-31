@@ -127,12 +127,22 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             store.close()
 
     def test_causal_bridge_rejects_interval_crossing_zero_without_mutation(self):
-        store = self._causal_store(treatment=0.55, control=0.50, n=6)
+        from machina.causal_learning import CausalExperimentStore
+        store = CausalExperimentStore(Path(self.tmp.name) / "causal-uncertain.sqlite3")
+        store.register_experiment(
+            "exp-1", design="randomized", treatment_name="new_strategy",
+            control_name="baseline", protocol_ref="protocol:uncertain",
+        )
+        for index in range(12):
+            treatment = 0.9 if index % 2 == 0 else 0.1
+            store.record_trial("exp-1", "treatment", treatment, evidence_ref=f"et-{index}", trial_id=f"t-{index}")
+            store.record_trial("exp-1", "control", 0.5, evidence_ref=f"ec-{index}", trial_id=f"c-{index}")
         try:
             result = self.bridge.update_belief_from_causal_experiment(
                 store, "exp-1", belief_property="uncertain_effect", cycle_id="cycle-reject",
             )
             self.assertFalse(result["accepted"])
+            self.assertIn("interval does not exclude zero", result["reason"])
             self.assertFalse(result["self_model_updated"])
             self.assertNotIn("uncertain_effect", self.model.beliefs)
         finally:
