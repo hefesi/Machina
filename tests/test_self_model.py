@@ -188,6 +188,14 @@ class SelfModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'contiguous'):
             SelfModel.from_snapshot(snapshot)
 
+    def test_normal_update_after_revision_keeps_snapshot_loadable(self):
+        model = SelfModel()
+        model.update({'x': 1}, cycle_id='c1', evidence_refs={'x': 'e1'}, statuses={'x': 'inferred'})
+        model.revise_belief('x', 2, cycle_id='c2', reason='revision', source='test', evidence_ref='e2')
+        model.update({'x': 3}, cycle_id='c3', evidence_refs={'x': 'e3'}, statuses={'x': 'inferred'})
+        restored = SelfModel.from_snapshot(json.loads(json.dumps(model.snapshot())))
+        self.assertEqual(3, restored.beliefs['x']['value'])
+        self.assertEqual(1, len(restored.belief_revision_history))
     def test_legacy_snapshot_without_belief_revisions_restores(self):
         state = SelfModel().update({'x': 1}, cycle_id='c1', evidence_refs={'x': 'e1'})
         state.pop('belief_revisions', None)
