@@ -90,8 +90,8 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
         for index in range(n):
             if design == "matched":
                 context = f"context-{index}"
-                store.record_trial("exp-1", "treatment", treatment, evidence_ref=f"et-{index}", trial_id=f"t-{index}", context_key=context)
-                store.record_trial("exp-1", "control", control, evidence_ref=f"ec-{index}", trial_id=f"c-{index}", context_key=context)
+                store.record_trial("exp-1", "treatment", treatment, evidence_ref=f"et-{index}{suffix}", trial_id=f"t-{index}{suffix}", context_key=context)
+                store.record_trial("exp-1", "control", control, evidence_ref=f"ec-{index}{suffix}", trial_id=f"c-{index}{suffix}", context_key=context)
             else:
                 store.record_trial("exp-1", "treatment", treatment, evidence_ref=f"et-{index}", trial_id=f"t-{index}")
                 store.record_trial("exp-1", "control", control, evidence_ref=f"ec-{index}", trial_id=f"c-{index}")
