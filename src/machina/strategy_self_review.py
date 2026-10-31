@@ -122,6 +122,19 @@ class StrategySelfReviewStore:
         refs = [self._text(item, "evidence_ref") for item in evidence_refs]
         if len(set(refs)) != len(refs):
             raise ValueError("pattern evidence_refs must be unique")
+        episodes = autobiographical_report.get("episodes")
+        if not isinstance(episodes, list):
+            raise ValueError("autobiographical_report must contain episodes")
+        grounded_refs = {
+            item.get("evidence_ref") for item in episodes
+            if isinstance(item, Mapping)
+            and item.get("goal_id") == goal
+            and item.get("strategy") == method
+            and item.get("status") == "evaluated"
+            and isinstance(item.get("evidence_ref"), str)
+        }
+        if not set(refs).issubset(grounded_refs):
+            raise ValueError("pattern evidence_refs must be grounded in evaluated matching episodes")
         if pattern.get("interpretation") != "repeated_descriptive_pattern_not_causal":
             raise ValueError("matching pattern must be explicitly descriptive and non-causal")
         if pattern.get("pattern") not in {
