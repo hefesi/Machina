@@ -346,19 +346,37 @@ class SelfModelLearningBridge:
             "confidence_semantics": "heuristic evidence-support score; not probability of truth",
             "counterfactual_scope": estimate.get("counterfactual_scope"),
         }
-        state = self.self_model.update(
-            {prop: belief},
-            cycle_id=cycle_id,
-            evidence_refs={prop: evidence_ref},
-            statuses={prop: "inferred"},
-            confidences={prop: support_score},
-        )
+        contradiction = False
+        if existing:
+            old_value = existing.get('value')
+            old_effect = old_value.get('effect_treatment_minus_control') if isinstance(old_value, dict) else None
+            contradiction = (
+                isinstance(old_effect, (int, float)) and not isinstance(old_effect, bool)
+                and float(old_effect) * float(effect) < 0.0
+            )
+            revision = self.self_model.revise_belief(
+                prop, belief, cycle_id=cycle_id,
+                reason='A new eligible causal experiment supplied distinct evidence for this belief.',
+                source='causal_experiment_bridge', evidence_ref=evidence_ref,
+                status='inferred', confidence=support_score,
+                contradicts_previous=contradiction,
+            )
+            state = self.self_model.snapshot()
+        else:
+            revision = None
+            state = self.self_model.update(
+                {prop: belief}, cycle_id=cycle_id,
+                evidence_refs={prop: evidence_ref},
+                statuses={prop: 'inferred'},
+                confidences={prop: support_score},
+            )
         return {
-            "accepted": True, "already_applied": False,
-            "self_model": state, "belief_property": prop,
-            "belief": state["beliefs"][prop],
-            "evidence_ref": evidence_ref, "status": "inferred",
-            "self_model_updated": True,
+            'accepted': True, 'already_applied': False,
+            'self_model': state, 'belief_property': prop,
+            'belief': state['beliefs'][prop],
+            'evidence_ref': evidence_ref, 'status': 'inferred',
+            'revision': revision, 'contradicts_previous': contradiction,
+            'self_model_updated': True,
         }
 
     def update_capability(
