@@ -24,6 +24,129 @@ class SelfModelLearningBridge:
         self.learner = learner
 
 
+    def review_curiosity_investigation(
+        self, investigation_store: Any, investigation_id: str, *,
+        review_id: str, cycle_id: str,
+        evidence_assessments: Mapping[str, Mapping[str, Any]],
+        apply_to_self_model: bool = False,
+        minimum_assessments: int = 2,
+    ) -> dict[str, Any]:
+        """Assess caller-classified evidence and optionally revise one self-belief.
+
+        Each assessment must explicitly classify a stored evidence reference as
+        support, contradict, or neutral. Text findings are never classified by
+        this method. The immutable report is persisted before any optional
+        self-model update; this is not a cross-database transaction.
+        """
+        import math
+        from .curiosity import CuriosityInvestigationStore
+
+        if not isinstance(investigation_store, CuriosityInvestigationStore):
+            raise TypeError("investigation_store must be a CuriosityInvestigationStore")
+        if not isinstance(apply_to_self_model, bool):
+            raise ValueError("apply_to_self_model must be a boolean")
+        if isinstance(minimum_assessments, bool) or not isinstance(minimum_assessments, int) or minimum_assessments < 1:
+            raise ValueError("minimum_assessments must be a positive integer")
+        if not isinstance(evidence_assessments, Mapping):
+            raise ValueError("evidence_assessments must be a mapping")
+        investigation = investigation_store.get_investigation(investigation_id)
+        prior = investigation_store.find_review(review_id)
+        if prior is not None:
+            if prior["investigation_id"] != investigation_id:
+                raise ValueError("review_id belongs to a different investigation")
+            report = prior["report"]
+            return {**report, "already_reviewed": True, "self_model_updated": False}
+
+        evidence_by_ref = {item["evidence_ref"]: item for item in investigation["evidence"]}
+        normalized = []
+        for raw_ref, raw_assessment in evidence_assessments.items():
+            if not isinstance(raw_ref, str) or raw_ref not in evidence_by_ref:
+                raise ValueError("every assessment must reference evidence stored in this investigation")
+            if not isinstance(raw_assessment, Mapping):
+                raise ValueError("each evidence assessment must be a mapping")
+            classification = raw_assessment.get("classification")
+            if classification not in {"support", "contradict", "neutral"}:
+                raise ValueError("classification must be support, contradict, or neutral")
+            rationale = raw_assessment.get("rationale")
+            if not isinstance(rationale, str) or not rationale.strip():
+                raise ValueError("each assessment requires a non-empty rationale")
+            confidence = raw_assessment.get("confidence", 0.5)
+            if isinstance(confidence, bool):
+                raise ValueError("assessment confidence must be finite and in [0, 1]")
+            try:
+                confidence = float(confidence)
+            except (TypeError, ValueError) as exc:
+                raise ValueError("assessment confidence must be finite and in [0, 1]") from exc
+            if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+                raise ValueError("assessment confidence must be finite and in [0, 1]")
+            normalized.append({
+                "evidence_ref": raw_ref, "finding": evidence_by_ref[raw_ref]["finding"],
+                "classification": classification, "confidence": confidence,
+                "rationale": rationale.strip(),
+            })
+        if len({item["evidence_ref"] for item in normalized}) != len(normalized):
+            raise ValueError("evidence references must be unique")
+        counts = {label: sum(item["classification"] == label for item in normalized)
+                  for label in ("support", "contradict", "neutral")}
+        decisive = counts["support"] + counts["contradict"]
+        if decisive == 0:
+            assessment = "insufficient"
+        elif counts["support"] and counts["contradict"]:
+            assessment = "mixed"
+        elif counts["support"]:
+            assessment = "supported"
+        else:
+            assessment = "contradicted"
+        confidence_mean = (
+            sum(item["confidence"] for item in normalized) / len(normalized)
+            if normalized else 0.0
+        )
+        report = {
+            "review_id": review_id, "investigation_id": investigation_id,
+            "belief_property": investigation["gap_property"],
+            "hypothesis": investigation["hypothesis"], "assessment": assessment,
+            "counts": counts, "assessed_evidence_count": len(normalized),
+            "evidence_assessments": normalized, "mean_assessor_confidence": confidence_mean,
+            "minimum_assessments": minimum_assessments,
+            "sufficient_evidence": len(normalized) >= minimum_assessments and decisive > 0,
+            "cycle_id": cycle_id, "apply_to_self_model_requested": apply_to_self_model,
+            "self_model_updated": False,
+            "interpretation_limit": "Caller-authored classifications; not independently verified truth or proof of consciousness.",
+        }
+        if apply_to_self_model and report["sufficient_evidence"]:
+            prop = investigation["gap_property"]
+            previous = self.self_model.beliefs.get(prop)
+            evidence_ref = "curiosity-review:" + review_id
+            value = {
+                "kind": "curiosity_hypothesis_review", "hypothesis": investigation["hypothesis"],
+                "assessment": assessment, "counts": counts,
+                "evidence_refs": [item["evidence_ref"] for item in normalized],
+                "review_id": review_id,
+            }
+            score = min(0.8, confidence_mean * (len(normalized) / (len(normalized) + 2.0)))
+            contradicts = assessment == "contradicted" or (
+                assessment == "mixed" and previous is not None
+                and isinstance(previous.get("value"), dict)
+                and previous["value"].get("assessment") == "supported"
+            )
+            if previous is not None:
+                self.self_model.revise_belief(
+                    prop, value, cycle_id=cycle_id,
+                    reason="An explicit review assessed the stored investigation evidence.",
+                    source="curiosity_investigation_review", evidence_ref=evidence_ref,
+                    status="inferred", confidence=score, contradicts_previous=contradicts,
+                )
+            else:
+                self.self_model.update(
+                    {prop: value}, cycle_id=cycle_id,
+                    evidence_refs={prop: evidence_ref}, statuses={prop: "inferred"},
+                    confidences={prop: score},
+                )
+            report["self_model_updated"] = True
+            report["belief_revision_count"] = len(self.self_model.belief_revision_history)
+        investigation_store.record_review(review_id, investigation_id, report)
+        return {**report, "already_reviewed": False}
+
     def propose_curiosity_goals(
         self, gap_mappings: Mapping[str, Mapping[str, Any]], *,
         include_inferred: bool = True, maximum_belief_confidence: float = 0.65,
