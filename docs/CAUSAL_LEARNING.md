@@ -38,3 +38,28 @@ references must be audited by the integrating application.
 
 This module is a measurement primitive. It does not automatically update
 self-beliefs, alter autonomy scores, select goals, or authorize actions.
+
+
+## Causal experiment → inferred self-belief bridge
+
+`SelfModelLearningBridge.update_belief_from_causal_experiment()` is an
+explicit, opt-in projection of one experiment report into one operational
+self-belief. It accepts only reports classified as randomized or matched
+comparisons, requires the configured minimum sample, requires the approximate
+95% interval to exclude zero, and applies a minimum absolute effect threshold.
+Observational associations and insufficient/uncertain results are rejected
+without mutating the self-model.
+
+Accepted beliefs are always marked `inferred`, never `observed`. The belief
+stores the group-level effect, interval, standard error, sample counts,
+declared design, protocol reference, and trial evidence references. The
+confidence field is an evidence-support heuristic based on sample size; it is
+not a probability that the claim is true and is not a statistical confidence
+level. Reapplying the same experiment evidence to the same property is
+idempotent.
+
+The bridge does not validate the experiment's random assignment or protocol
+adherence, does not infer individual counterfactuals, and does not alter
+autonomy, goals, MNN weights, or action permissions. A downstream consumer
+must independently decide whether and how inferred beliefs may influence
+behavior.
