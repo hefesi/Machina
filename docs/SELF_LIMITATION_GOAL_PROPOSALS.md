@@ -42,3 +42,17 @@ proof of subjective awareness, consciousness, or metaphysical free will.
 
 Focused tests cover observed evidence, inferred opt-in, unknown/stale rejection,
 confidence thresholds, and provenance preservation.
+
+## Bounded selection integration
+
+`SelfModelLearningBridge.select_goal_from_limitations(controller, goal_mappings)`
+composes proposal and selection. It requires an actual `AutonomyController`,
+runs the same evidence gates, and passes only internal candidates to
+`controller.choose()`. It returns the decision, selected candidate ID, and
+the matching provenance record.
+
+The helper intentionally has no external-approval parameter. It does not call
+an executor, change self-model state, or claim that a selected goal has been
+completed. If no admissible limitation exists, the selection is `None`.
+Optional drive adjustments, recency penalties, and commitment alignment are
+passed explicitly to the controller and remain subject to its validation.
