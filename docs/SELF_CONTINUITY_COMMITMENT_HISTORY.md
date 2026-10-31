@@ -25,7 +25,8 @@ removes a commitment from the active set but retains its final value in the
 revision history. Retirement is not deletion of history.
 
 Snapshots are JSON-compatible and detached from internal state.
-`from_snapshot()` validates schema and sequence continuity. The continuity
+`from_snapshot()` validates schema and sequence continuity, and verifies that the
+active commitment map agrees with the latest revision for every changed commitment. The continuity
 report now checks whether both event and commitment histories extend a prior
 snapshot.
 
