@@ -149,10 +149,11 @@ class SelfContinuity:
                 raise ValueError("event_history sequence is invalid")
             _required(item.get("event"), "event_history event")
             _required(item.get("source"), "event_history source")
+        latest_revisions: dict[str, Any] = {}
         for index, item in enumerate(instance.commitment_history, start=1):
             if not isinstance(item, Mapping) or item.get("sequence") != index:
                 raise ValueError("commitment_history sequence is invalid")
-            _required(item.get("name"), "commitment_history name")
+            name = _required(item.get("name"), "commitment_history name")
             _required(item.get("reason"), "commitment_history reason")
             _required(item.get("source"), "commitment_history source")
             previous = item.get("previous_value")
@@ -161,6 +162,13 @@ class SelfContinuity:
                 _required(previous, "previous commitment value")
             if current is not None:
                 _required(current, "new commitment value")
+            latest_revisions[name] = current
+        for name, latest_value in latest_revisions.items():
+            if latest_value is None:
+                if name in instance.commitments:
+                    raise ValueError(f"retired commitment {name!r} is still active")
+            elif instance.commitments.get(name) != latest_value:
+                raise ValueError(f"active commitment {name!r} disagrees with its latest revision")
         return instance
 
     def continuity_report(self, previous: "SelfContinuity") -> dict[str, Any]:
