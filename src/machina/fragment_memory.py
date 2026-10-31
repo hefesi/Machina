@@ -1171,6 +1171,7 @@ class FragmentMemory:
         limit: int = 5,
         include_related: bool = True,
         context: str | None = None,
+        kinds: tuple[str, ...] | list[str] | None = None,
     ) -> list[MemoryFragment]:
         """Retrieve fragments by lexical overlap and optionally one-hop associations.
 
@@ -1178,6 +1179,7 @@ class FragmentMemory:
         related fragment may be returned as context even when its own wording
         does not overlap the query. An optional explicit context applies a
         separate task-relative score without changing global importance.
+        The optional kinds filter restricts direct and associated results.
         Retrieval never deletes or rewrites memory.
         """
         self._ensure_open()
@@ -1192,11 +1194,26 @@ class FragmentMemory:
 
         if context is not None and (not isinstance(context, str) or not context.strip()):
             raise ValueError("context must be a non-empty string when provided")
+        if kinds is not None:
+            if isinstance(kinds, (str, bytes)) or not isinstance(kinds, (tuple, list)):
+                raise ValueError("kinds must be a sequence of non-empty strings or None")
+            if not kinds or not all(isinstance(kind, str) and kind.strip() for kind in kinds):
+                raise ValueError("kinds must contain non-empty strings")
+            normalized_kinds = tuple(dict.fromkeys(kind.strip() for kind in kinds))
+        else:
+            normalized_kinds = None
         context_key = context.strip().casefold() if context is not None else None
         query_tokens = tokens(query)
         if not query_tokens:
             return []
-        rows = self._db.execute("SELECT * FROM memory_fragments").fetchall()
+        if normalized_kinds is None:
+            rows = self._db.execute("SELECT * FROM memory_fragments").fetchall()
+        else:
+            placeholders = ",".join("?" for _ in normalized_kinds)
+            rows = self._db.execute(
+                f"SELECT * FROM memory_fragments WHERE kind IN ({placeholders})",
+                normalized_kinds,
+            ).fetchall()
         context_scores: dict[str, float] = {}
         if context_key is not None:
             context_scores = {

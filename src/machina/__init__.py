@@ -45,6 +45,8 @@ from .knowledge import DuplicateKnowledgeError, KnowledgeDocument, KnowledgeHit,
 from .mnn_action_learning import MNNActionLearner
 from .mnn_agent import MNNLearningAgent
 from .mnn_concept_review import ConceptReview, MNNConceptReviewer
+from .mnn_knowledge_lifecycle import MNNKnowledgeLifecycle, MNNKnowledgeLifecycleResult
+from .mnn_knowledge_use_feedback import KnowledgeUseFeedbackResult, MNNKnowledgeUseFeedback
 from .mnn_concept_advisor import ConceptRecommendation, MNNConceptAdvisor
 from .mnn_concepts import ConceptHypothesis, MNNConceptBuilder
 from .mnn_contextual_outcome_policy import MNNContextualOutcomePolicy
@@ -59,8 +61,16 @@ from .mnn_strategy_evaluation import MNNStrategyExperimentEvaluator
 from .mnn_strategy_context_memory import MNNStrategyContextMemory
 from .mnn_strategy_decision_advisor import MNNStrategyDecisionAdvisor
 from .mnn_strategy_feedback import MNNStrategyFeedbackAdapter, StrategyFeedback, StrategyLearningResult
+from .mnn_strategy_learning_cycle import MNNStrategyLearningCycle
+from .mnn_strategy_outcome_journal import MNNStrategyOutcomeJournal
+from .mnn_strategy_event_bridge import MNNStrategyEventBridge
+from .mnn_event_memory_projector import MNNEventMemoryProjector, MNNEventProjectionResult
+from .mnn_autobiographical_recall import MNNAutobiographicalEpisode, MNNAutobiographicalRecall
+from .mnn_autobiographical_strategy_advisor import MNNAutobiographicalStrategyAdvisor
 from .mnn_synaptic_consolidation import MNNSynapticConsolidator
 from .mnn_short_term_plasticity import MNNShortTermPlasticity
+from .mnn_plasticity_control import MNNPlasticityController, MNNPlasticityProposal
+from .mnn_experience_plasticity_advisor import MNNExperiencePlasticityAdvisor, MNNExperiencePlasticityProposal
 
 __all__ = [
     "Artifact",
@@ -150,6 +160,10 @@ __all__ = [
     "MNNConceptBuilder",
     "ConceptReview",
     "MNNConceptReviewer",
+    "MNNKnowledgeLifecycle",
+    "MNNKnowledgeLifecycleResult",
+    "KnowledgeUseFeedbackResult",
+    "MNNKnowledgeUseFeedback",
     "ConceptRecommendation",
     "MNNConceptAdvisor",
     "MNNContextualOutcomePolicy",
@@ -162,10 +176,22 @@ __all__ = [
     "MNNStrategyContextMemory",
     "MNNStrategyDecisionAdvisor",
     "MNNStrategyFeedbackAdapter",
+    "MNNStrategyLearningCycle",
+    "MNNStrategyOutcomeJournal",
+    "MNNStrategyEventBridge",
+    "MNNEventMemoryProjector",
+    "MNNEventProjectionResult",
+    "MNNAutobiographicalEpisode",
+    "MNNAutobiographicalRecall",
+    "MNNAutobiographicalStrategyAdvisor",
     "StrategyFeedback",
     "StrategyLearningResult",
     "MNNSynapticConsolidator",
     "MNNShortTermPlasticity",
+    "MNNPlasticityController",
+    "MNNPlasticityProposal",
+    "MNNExperiencePlasticityAdvisor",
+    "MNNExperiencePlasticityProposal",
     "MNNExperienceCycle",
     "AutobiographicalLearningSignal",
     "MNNAutobiographicalLearningAdvisor",

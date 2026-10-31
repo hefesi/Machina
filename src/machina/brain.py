@@ -25,6 +25,7 @@ from .deliberation import InternalDeliberator
 from .mnn_memory_retrieval_feedback import MNNMemoryRetrievalFeedback
 from .homeostasis import HomeostaticProposal
 from .self_history_influence import SelfHistoryInfluence
+from .mnn_strategy_event_bridge import MNNStrategyEventBridge
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +74,7 @@ class VirtualBrain:
         internal_deliberator: InternalDeliberator | None = None,
     ) -> None:
         self.store = EventStore(storage_path)
+        self.strategy_events = MNNStrategyEventBridge(self.store)
         self.cognition = cognition or DeterministicCognition()
         self.agency = agency or FirstCandidateAgency()
         self.action_executor = action_executor or AcknowledgeExecutor()
