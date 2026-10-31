@@ -113,6 +113,60 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
         finally:
             store.close()
 
+    def test_follow_up_curiosity_proposes_only_recorded_unknowns_and_deduplicates(self):
+        from machina.curiosity import CuriosityInvestigationStore
+        store = CuriosityInvestigationStore(Path(self.tmp.name) / "followups.sqlite3")
+        try:
+            store.start_investigation(
+                "inv-parent", gap_property="memory_recall", question="Does indexing improve recall?",
+                hypothesis="Indexing improves recall", selection_reason="test", cycle_id="c1", goal_id="g1",
+            )
+            store.close_investigation(
+                "inv-parent", outcome="partially_answered", answer_summary="Some evidence gathered",
+                remaining_unknowns=["Does recall remain stable after restart?", "What is the memory cost?"],
+                cycle_id="c2",
+            )
+            mappings = {
+                "Does recall remain stable after restart?": {"information_gain": 0.9, "impact": 0.8},
+                "What is the memory cost?": {"question": "Measure memory cost under load", "risk": 0.01},
+            }
+            result = self.bridge.propose_follow_up_curiosity_goals(store, "inv-parent", mappings)
+            self.assertEqual(2, len(result["goals"]))
+            self.assertTrue(all(not goal.requires_external_action for goal in result["goals"]))
+            self.assertEqual("Does recall remain stable after restart?", result["goals"][0].description)
+            self.assertEqual("inv-parent", result["provenance"][0]["source_investigation_id"])
+            store.start_investigation(
+                "inv-child", gap_property="memory_recall",
+                question="Does recall remain stable after restart?", hypothesis="Recall remains stable",
+                selection_reason="follow-up", cycle_id="c3", goal_id="g2",
+            )
+            deduped = self.bridge.propose_follow_up_curiosity_goals(store, "inv-parent", mappings)
+            self.assertEqual(1, len(deduped["goals"]))
+            self.assertEqual("prior_investigation_exists", deduped["suppressed"][0]["reason"])
+        finally:
+            store.close()
+
+    def test_follow_up_curiosity_requires_closed_investigation_and_known_unknowns(self):
+        from machina.curiosity import CuriosityInvestigationStore
+        store = CuriosityInvestigationStore(Path(self.tmp.name) / "followups-invalid.sqlite3")
+        try:
+            store.start_investigation(
+                "inv-open", gap_property="capability", question="Can it do X?", hypothesis="It can do X",
+                selection_reason="test", cycle_id="c1", goal_id="g1",
+            )
+            with self.assertRaisesRegex(ValueError, "closed investigation"):
+                self.bridge.propose_follow_up_curiosity_goals(store, "inv-open", {})
+            store.close_investigation(
+                "inv-open", outcome="unanswered", answer_summary="No conclusive answer",
+                remaining_unknowns=["What evidence would resolve this?"], cycle_id="c2",
+            )
+            with self.assertRaisesRegex(ValueError, "remaining_unknowns"):
+                self.bridge.propose_follow_up_curiosity_goals(
+                    store, "inv-open", {"Invented question": {"information_gain": 0.8}}
+                )
+        finally:
+            store.close()
+
     def test_curiosity_proposes_only_unknown_stale_and_low_confidence_gaps(self):
         self.model.update(
             {"known": "settled", "uncertain": "tentative", "outdated": "old"},
