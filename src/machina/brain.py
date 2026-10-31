@@ -1401,7 +1401,7 @@ class VirtualBrain:
                 "change": change,
                 "evidence_refs": [evaluation.id, validation.id],
                 "reason": f"Outcome evaluation applied reward {reward}.",
-                "created_by": "MNNCognitionAdapter",
+                "created_by": type(self.cognition).__name__,
             },
             input_refs=[evaluation.id, validation.id],
             source_refs=evaluation.source_refs,
