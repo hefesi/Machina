@@ -20,6 +20,7 @@ from .goal_constraints import GoalConflictResolver, GoalConstraintAssessment, Go
 from .adaptive_planning import AdaptivePlanReviewer, PlanRevision
 from .goal_outcome_learning import GoalOutcomeLearner
 from .experience_memory import ExperienceMemoryStore
+from .strategy_self_review import StrategySelfReviewStore
 from .curiosity import CuriosityInvestigationStore
 from .deliberation import DeliberationDecision, InternalDeliberator
 from .mnn import Connection, MNN, Unit
@@ -88,6 +89,7 @@ __all__ = [
     "PlanRevision",
     "GoalOutcomeLearner",
     "ExperienceMemoryStore",
+    "StrategySelfReviewStore",
     "CuriosityInvestigationStore",
     "DeliberationDecision",
     "InternalDeliberator",
