@@ -63,6 +63,8 @@ Nenhum componente deve gravar silenciosamente no banco de outro domínio. A coor
 
 ### 2.1 — Percepção e representação interna
 
+**Implementado nesta etapa:** `NormalizedPerception` preserva conteúdo normalizado, payload bruto, modalidade, fonte/confiabilidade, timestamp, confiança, referência ao dado bruto e trilha de transformações. `VirtualBrain.start_cycle` aceita esse contrato e registra os metadados no artefato de observação; a entrada legada continua compatível. Isso padroniza a fronteira perceptiva, mas ainda não constitui o workspace interno unificado descrito abaixo.
+
 - Definir contrato de percepção normalizada, sem exigir dependência de câmera, áudio ou LLM.
 - Preservar payload original, modalidade, fonte, timestamp, confiança e transformação aplicada.
 - Criar uma representação interna versionada que agregue observação, objetivo ativo, contexto recuperado, incertezas, drives e snapshot MNN.
@@ -122,7 +124,7 @@ Este fluxo demonstra integração funcional, memória, adaptação e autonomia o
 
 - [x] Branch de trabalho criada a partir da `main`.
 - [x] Fluxo existente e lacunas iniciais inspecionados.
-- [ ] Contrato de percepção e representação interna implementados.
+- [x] Contrato de percepção normalizada implementado e integrado à ingestão do `VirtualBrain`; representação interna unificada ainda pendente.
 - [ ] Composição MNN + VirtualBrain formalizada.
 - [ ] Ponte motivação/curiosidade/objetivos implementada.
 - [ ] Experimentos ponta a ponta e recuperação adicionados.
