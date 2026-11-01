@@ -11,7 +11,7 @@ import re
 from collections.abc import Mapping
 
 from .components import CognitionEngine, DeterministicCognition, _text
-from .contracts import Artifact
+from .contracts import Artifact, ContractKind
 from .mnn_organism import MNNOrganism
 
 
