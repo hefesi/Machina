@@ -171,6 +171,7 @@ __all__ = [
     "RewardModulator",
     "Unit",
     "VirtualBrain",
+    "CausalExperimentStore",
     "ConsolidatedMemory",
     "MNNMemoryConsolidator",
     "ConceptHypothesis",
