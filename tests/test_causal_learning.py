@@ -3,6 +3,9 @@ import unittest
 from pathlib import Path
 
 from machina.causal_learning import CausalExperimentStore
+from machina.contracts import Artifact, ContractKind, EpistemicStatus
+from machina.event_store import EventStore
+from machina.mnn_strategy_event_bridge import MNNStrategyEventBridge
 
 
 class CausalExperimentStoreTests(unittest.TestCase):
@@ -82,6 +85,48 @@ class CausalExperimentStoreTests(unittest.TestCase):
             self._register()
         with self.assertRaisesRegex(ValueError, "unknown"):
             self.store.report("missing")
+
+    def test_confirmed_strategy_events_project_idempotently_into_causal_trials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            event_store = EventStore(Path(directory) / "events.sqlite3")
+            cycle_id = "cycle-causal-projection"
+            event_store.start_cycle(cycle_id)
+            bridge = MNNStrategyEventBridge(event_store)
+            bridge.record_proposal(
+                cycle_id,
+                {"status": "proposed", "action": "retrieve", "context": "same task", "evidence_ids": ["obs-1"]},
+                expected_reward=0.6,
+                proposal_id="proposal-1",
+            )
+            outcome = bridge.record_outcome(
+                cycle_id,
+                "proposal-1",
+                execution_confirmed=True,
+                executed_action="retrieve",
+                observed_reward=0.9,
+                operation_id="operation-1",
+            )
+            self._register("randomized")
+            projected = self.store.record_strategy_outcome(
+                "retrieval-v1", "treatment", outcome
+            )
+            replayed = self.store.record_strategy_outcome(
+                "retrieval-v1", "treatment", outcome
+            )
+            self.assertEqual(projected["trial_id"], replayed["trial_id"])
+            self.assertEqual(1, self.store.report("retrieval-v1")["treatment"]["n"])
+            self.assertEqual(outcome.artifact.id, projected["evidence_ref"])
+            with self.assertRaisesRegex(ValueError, "different trial data"):
+                self.store.record_strategy_outcome(
+                    "retrieval-v1", "control", outcome
+                )
+            event_store.close()
+
+    def test_unconfirmed_or_non_strategy_events_cannot_be_projected(self):
+        self._register()
+        wrong = object()
+        with self.assertRaisesRegex(ValueError, "strategy.outcome.recorded"):
+            self.store.record_strategy_outcome("retrieval-v1", "treatment", wrong)
 
     def test_report_threshold_must_be_at_least_two(self):
         self._register()
