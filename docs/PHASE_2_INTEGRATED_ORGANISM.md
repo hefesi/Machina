@@ -135,3 +135,8 @@ Este fluxo demonstra integração funcional, memória, adaptação e autonomia o
 - [x] Feedback motivacional agora é aplicado após avaliação por meio de `motivation.feedback_applied`; fulfillment é explícito, validado e persistido com snapshot, permitindo retomada sem duplicar a atualização.
 - [ ] Experimentos ponta a ponta e recuperação adicionados.
 - [ ] Suíte completa e CI validados.
+
+
+## Orientação causal na deliberação
+
+`VirtualBrain` pode receber um `CausalExperimentStore` externo e, por ciclo, um `strategy_experiment_id`. Quando solicitado, calcula uma orientação limitada (`hold`, favorecer tratamento para revisão humana ou favorecer controle para revisão humana) e a incorpora ao registro de deliberação e ao histórico persistente. A orientação não altera pesos, objetivos, recompensas ou políticas; o registro exige `policy_mutated=false` e aprovação humana/externa. A deliberação preserva a orientação como contexto auditável, não como verdade causal nem como ordem automática. O store é fornecido e gerenciado externamente pelo chamador.
