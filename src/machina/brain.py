@@ -585,12 +585,12 @@ class VirtualBrain:
             if validation is None or change.get("validation_ref") != validation.id:
                 errors.append("MNN plasticity is not linked to the cycle validation")
             expected_inputs = [evaluation.id, validation.id] if evaluation and validation else []
-            if plasticity_event.input_refs != expected_inputs:
+            if plasticity_event.input_refs != tuple(expected_inputs):
                 errors.append("MNN plasticity causal inputs do not match evaluation and validation")
             if not isinstance(change.get("evidence_refs"), list) or not set(expected_inputs).issubset(change.get("evidence_refs", [])):
                 errors.append("MNN plasticity is missing evaluated evidence references")
             snapshot = change.get("snapshot", {})
-            if not isinstance(snapshot, Mapping) or "network" not in snapshot:
+            if not isinstance(snapshot, Mapping) or not ({"network", "units"} & set(snapshot)):
                 errors.append("MNN plasticity does not contain a restorable organism snapshot")
 
         motivation_feedback = by_type.get("motivation.feedback_applied")
@@ -598,7 +598,7 @@ class VirtualBrain:
             evaluation = by_type.get("evaluation.completed")
             if evaluation is None or motivation_feedback.data.get("evaluation_ref") != evaluation.id:
                 errors.append("motivation feedback is not linked to the cycle evaluation")
-            if motivation_feedback.input_refs != ([evaluation.id] if evaluation else []):
+            if motivation_feedback.input_refs != ((evaluation.id,) if evaluation else ()):
                 errors.append("motivation feedback causal inputs do not match evaluation")
             if motivation_feedback.data.get("timestep") != motivation_feedback.data.get("previous_timestep", -1) + 1:
                 errors.append("motivation feedback timestep is not a single-step transition")
