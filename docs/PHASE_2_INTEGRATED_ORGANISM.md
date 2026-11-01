@@ -63,6 +63,8 @@ Nenhum componente deve gravar silenciosamente no banco de outro domínio. A coor
 
 ### 2.1 — Percepção e representação interna
 
+**Feedback motivacional:** `VirtualBrain` aceita um `MotivationSystem` compartilhado com o organismo. Após `evaluation.completed`, o chamador pode fornecer um mapa explícito `motivational_fulfillment` por drive. O sistema calcula um snapshot candidato, persiste `motivation.feedback_applied` e só então restaura o estado vivo. Em retomadas, o snapshot já persistido é reaplicado sem avançar o timestep novamente. Sucesso de execução, sozinho, não significa satisfação de um drive; sem fulfillment explícito, ocorre apenas a dinâmica de recuperação configurada. O evento guarda referência à avaliação, valores aplicados, urgências e snapshot completo.
+
 **Integração de curiosidade:** investigações abertas persistidas são consultadas antes da deliberação; sua quantidade eleva, sem sobrescrever outros sinais, `unresolved_questions`, permitindo que o gerador proponha um objetivo interno de investigação. As IDs das investigações são preservadas em `goal.deliberated`. Isso não cria ações externas automaticamente nem encerra investigações sem evidência.
 
 **Implementado nesta etapa:** `NormalizedPerception` preserva conteúdo normalizado, payload bruto, modalidade, fonte/confiabilidade, timestamp, confiança, referência ao dado bruto e trilha de transformações. `VirtualBrain.start_cycle` aceita esse contrato e registra os metadados no artefato de observação; a entrada legada continua compatível. `InternalStateSnapshot` (`machina.internal_state.v1`) compõe a percepção, referências de memória recuperada, objetivo ativo, entendimento, incertezas e telemetria MNN disponível em um snapshot serializável e versionado, incorporado ao workspace após cognição. O snapshot é uma representação operacional por ciclo, não uma alegação de experiência subjetiva.
@@ -130,6 +132,6 @@ Este fluxo demonstra integração funcional, memória, adaptação e autonomia o
 - [x] Snapshot interno versionado integrado ao workspace após cognição, com referências perceptivas, objetivo, memórias recuperadas, entendimento, incertezas e sinal MNN disponível.
 - [ ] Composição MNN + VirtualBrain formalizada.
 - [x] Investigações de curiosidade abertas agora alimentam `AutonomyContext.unresolved_questions` e deixam suas referências registradas no artefato `goal.deliberated`.
-- [ ] Atualização de fulfillment motivacional baseada em resultados avaliados ainda pendente.
+- [x] Feedback motivacional agora é aplicado após avaliação por meio de `motivation.feedback_applied`; fulfillment é explícito, validado e persistido com snapshot, permitindo retomada sem duplicar a atualização.
 - [ ] Experimentos ponta a ponta e recuperação adicionados.
 - [ ] Suíte completa e CI validados.
