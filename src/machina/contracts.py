@@ -255,7 +255,7 @@ REQUIRED_DATA_FIELDS: dict[str, frozenset[str]] = {
     ),
     ContractKind.CYCLE_STATUS: frozenset({"status", "checkpoint"}),
     ContractKind.CURIOSITY_RECORD: frozenset({"operation", "investigation_id", "record"}),
-    ContractKind.MOTIVATION_STATE: frozenset({"evaluation_ref", "success", "fulfillment", "previous_timestep", "timestep", "effective_urgencies", "motivation_snapshot", "interpretation"}),
+    ContractKind.MOTIVATION_STATE: frozenset({"evaluation_ref", "success", "requested_fulfillment", "fulfillment", "previous_timestep", "timestep", "effective_urgencies", "motivation_snapshot", "interpretation"}),
     ContractKind.FAILURE: frozenset({"stage", "error_type", "message"}),
 }
 
