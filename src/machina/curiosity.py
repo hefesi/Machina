@@ -271,6 +271,14 @@ class CuriosityInvestigationStore:
         result["closed_cycle_id"] = closure["cycle_id"] if closure else None
         return result
 
+    def open_investigations(self) -> list[dict[str, Any]]:
+        """Return all open investigations in creation order for goal generation."""
+        rows = self._db.execute(
+            "SELECT investigation_id FROM curiosity_investigations "
+            "WHERE status='open' ORDER BY rowid"
+        ).fetchall()
+        return [self.get_investigation(row["investigation_id"]) for row in rows]
+
     def history(self, *, gap_property: str | None = None) -> list[dict[str, Any]]:
         query = "SELECT investigation_id FROM curiosity_investigations"
         params: tuple[Any, ...] = ()
