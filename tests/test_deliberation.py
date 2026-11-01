@@ -55,6 +55,29 @@ class InternalDeliberatorTests(unittest.TestCase):
             self.assertEqual(0, store.summary()["completed"])
             store.close()
 
+    def test_explicit_feedback_is_combined_with_temporal_motivation(self):
+        class Motivation:
+            def temporal_urgencies(self):
+                return {"curiosity": 0.8}
+
+            def temporal_autonomy_adjustments(self):
+                return {"curiosity": 0.09}
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            deliberator = InternalDeliberator(AutonomyController(), store)
+            result = deliberator.deliberate(
+                AutonomyContext(),
+                motivation=Motivation(),
+                drive_adjustments={"curiosity": 0.10},
+            )
+            selected = next(
+                item for item in result.autonomy.alternatives
+                if item["goal"]["goal_id"] == "sustain_drive:curiosity"
+            )
+            self.assertAlmostEqual(0.15, selected["score"]["feedback_adjustment"])
+            store.close()
+
     def test_open_goal_limit_is_validated(self):
         with tempfile.TemporaryDirectory() as directory:
             store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
