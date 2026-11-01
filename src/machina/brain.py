@@ -176,6 +176,15 @@ class VirtualBrain:
             success_criteria=success_criteria,
             priority=priority,
         )
+        raw_fulfillment = goal_data.get("motivational_fulfillment", {})
+        if not isinstance(raw_fulfillment, Mapping):
+            raise ValueError("motivational_fulfillment must be a mapping")
+        if self.motivation_system is not None:
+            goal_data["motivational_fulfillment"] = self.motivation_system.validate_fulfillment(
+                raw_fulfillment
+            )
+        elif raw_fulfillment:
+            raise ValueError("motivational_fulfillment requires a configured MotivationSystem")
         goal_artifact = Artifact.create(
             ContractKind.GOAL,
             cycle_id=cycle_id,
@@ -243,6 +252,8 @@ class VirtualBrain:
             if self.motivation_system is not None and self.motivation_system is not motivation:
                 raise ValueError("deliberation motivation must match the brain motivation_system")
             self.motivation_system = motivation
+        if motivational_fulfillment is not None and not isinstance(motivational_fulfillment, Mapping):
+            raise ValueError("motivational_fulfillment must be a mapping")
         validated_fulfillment = (
             self.motivation_system.validate_fulfillment(motivational_fulfillment)
             if self.motivation_system is not None
