@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -278,6 +278,26 @@ class VirtualBrain:
                 "evidence_refs": list(self_history_influence.evidence_refs),
                 "rationale": list(self_history_influence.rationale),
             }
+        open_investigations = (
+            self.curiosity_store.open_investigations()
+            if self.curiosity_store is not None else []
+        )
+        # Open investigations become explicit curiosity pressure in the goal
+        # generator. The caller's other context signals remain unchanged.
+        if open_investigations:
+            context = replace(
+                context,
+                unresolved_questions=max(
+                    context.unresolved_questions, len(open_investigations)
+                ),
+            )
+        curiosity_trace = {
+            "open_investigation_refs": [
+                item["investigation_id"] for item in open_investigations
+            ],
+            "unresolved_question_count": len(open_investigations),
+            "policy": "open_investigations_raise_curiosity_goal_pressure",
+        }
         deliberation = self.internal_deliberator.deliberate(
             context,
             motivation=motivation,
@@ -316,6 +336,7 @@ class VirtualBrain:
                 "deliberation": deliberation.to_dict(),
                 "homeostatic_regulation": homeostasis_trace,
                 "self_history_influence": self_history_trace,
+                "curiosity_context": curiosity_trace,
             },
             input_refs=[active_goal.id],
             source_refs=active_goal.source_refs,
