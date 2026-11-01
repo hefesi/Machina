@@ -22,6 +22,7 @@ from .goal_outcome_learning import GoalOutcomeLearner
 from .experience_memory import ExperienceMemoryStore
 from .strategy_self_review import StrategySelfReviewStore
 from .curiosity import CuriosityInvestigationStore
+from .causal_learning import CausalExperimentStore
 from .deliberation import DeliberationDecision, InternalDeliberator
 from .mnn import Connection, MNN, Unit
 from .mnn_motivation import MotivationalDrive, MotivationSystem
