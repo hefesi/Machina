@@ -90,7 +90,7 @@ class CausalExperimentStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             event_store = EventStore(Path(directory) / "events.sqlite3")
             cycle_id = "cycle-causal-projection"
-            event_store.start_cycle(cycle_id)
+            event_store.create_cycle(cycle_id)
             bridge = MNNStrategyEventBridge(event_store)
             bridge.record_proposal(
                 cycle_id,
