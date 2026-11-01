@@ -64,6 +64,15 @@ class MNNOrganismCognitionAdapterTests(unittest.TestCase):
                 if event.event_type == "mnn.plasticity_applied"
             )
             self.assertEqual(plasticity.data["change"]["reward"], 1.0)
+            self.assertEqual(plasticity.data["change"]["prediction_error"], 0.0)
+            self.assertEqual(
+                plasticity.data["change"]["evaluation_ref"],
+                next(e.artifact.id for e in result.events if e.event_type == "evaluation.completed"),
+            )
+            self.assertEqual(
+                plasticity.data["change"]["validation_ref"],
+                next(e.artifact.id for e in result.events if e.event_type == "consolidation.validated"),
+            )
             self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
             brain.store.verify_integrity()
             brain.close()
@@ -130,9 +139,18 @@ class MNNOrganismCognitionAdapterTests(unittest.TestCase):
                 if event.event_type == "mnn.plasticity_applied"
             )
             self.assertEqual(update.data["change"]["reward"], -1.0)
+            self.assertEqual(update.data["change"]["prediction_error"], 1.0)
             self.assertEqual(
                 update.data["change"]["validation_status"],
                 "rejected",
+            )
+            self.assertIn(
+                update.data["change"]["evaluation_ref"],
+                update.input_refs,
+            )
+            self.assertIn(
+                update.data["change"]["validation_ref"],
+                update.input_refs,
             )
             self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
             brain.close()

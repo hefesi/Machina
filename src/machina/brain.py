@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -27,6 +27,10 @@ from .homeostasis import HomeostaticProposal
 from .self_history_influence import SelfHistoryInfluence
 from .mnn_strategy_event_bridge import MNNStrategyEventBridge
 from .curiosity import CuriosityInvestigationStore
+from .perception import NormalizedPerception
+from .internal_state import InternalStateSnapshot
+from .mnn_motivation import MotivationSystem
+from .causal_learning import CausalExperimentStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +78,8 @@ class VirtualBrain:
         fragment_memory_path: str | Path | None = None,
         internal_deliberator: InternalDeliberator | None = None,
         curiosity_investigation_path: str | Path | None = None,
+        motivation_system: MotivationSystem | None = None,
+        causal_experiment_store: CausalExperimentStore | None = None,
     ) -> None:
         self.store = EventStore(storage_path)
         self.strategy_events = MNNStrategyEventBridge(self.store)
@@ -82,6 +88,12 @@ class VirtualBrain:
         self.action_executor = action_executor or AcknowledgeExecutor()
         self.learning = learning or OutcomeLearner()
         self.internal_deliberator = internal_deliberator
+        if motivation_system is not None and not isinstance(motivation_system, MotivationSystem):
+            raise TypeError("motivation_system must be a MotivationSystem")
+        self.motivation_system = motivation_system
+        if causal_experiment_store is not None and not isinstance(causal_experiment_store, CausalExperimentStore):
+            raise TypeError("causal_experiment_store must be a CausalExperimentStore")
+        self.causal_experiment_store = causal_experiment_store
         self.curiosity_store = (
             CuriosityInvestigationStore(curiosity_investigation_path)
             if curiosity_investigation_path is not None else None
@@ -121,7 +133,26 @@ class VirtualBrain:
 
         cycle_id = new_id("cycle")
         self.store.create_cycle(cycle_id)
-        source_data = dict(source or {})
+        perception = observation if isinstance(observation, NormalizedPerception) else None
+        if perception is not None:
+            if source is not None or modality != "event":
+                raise ValueError("source and modality must be supplied by NormalizedPerception")
+            source_data = dict(perception.source)
+            modality = perception.modality
+            observed_content = perception.content
+            observed_at = perception.observed_at
+            observation_confidence = float(perception.confidence)
+            raw_payload = perception.raw_payload
+            raw_reference = perception.raw_reference
+            transformations = list(perception.transformations)
+        else:
+            source_data = dict(source or {})
+            observed_content = observation
+            observed_at = now_utc()
+            observation_confidence = 1.0
+            raw_payload = observation
+            raw_reference = None
+            transformations = []
         source_data.setdefault("id", new_id("source"))
         source_data.setdefault("type", "user")
         source_data.setdefault("name", "user")
@@ -131,16 +162,18 @@ class VirtualBrain:
             cycle_id=cycle_id,
             producer="perception",
             data={
-                "content": observation,
+                "content": observed_content,
                 "source": source_data,
                 "modality": modality,
-                "observed_at": now_utc(),
+                "observed_at": observed_at,
                 "reliability": source_data["reliability"],
-                "raw_reference": None,
+                "raw_reference": raw_reference,
+                "raw_payload": raw_payload,
+                "transformations": transformations,
             },
             source_refs=[str(source_data["id"])],
             epistemic_status=EpistemicStatus.OBSERVED,
-            confidence=1.0,
+            confidence=observation_confidence,
         )
         goal_data = self._goal_data(
             objective,
@@ -148,6 +181,15 @@ class VirtualBrain:
             success_criteria=success_criteria,
             priority=priority,
         )
+        raw_fulfillment = goal_data.get("motivational_fulfillment", {})
+        if not isinstance(raw_fulfillment, Mapping):
+            raise ValueError("motivational_fulfillment must be a mapping")
+        if self.motivation_system is not None:
+            goal_data["motivational_fulfillment"] = self.motivation_system.validate_fulfillment(
+                raw_fulfillment
+            )
+        elif raw_fulfillment:
+            raise ValueError("motivational_fulfillment requires a configured MotivationSystem")
         goal_artifact = Artifact.create(
             ContractKind.GOAL,
             cycle_id=cycle_id,
@@ -197,6 +239,8 @@ class VirtualBrain:
         homeostatic_proposal: HomeostaticProposal | None = None,
         self_history_influence: SelfHistoryInfluence | None = None,
         recent_goal_ids: Sequence[str] = (),
+        motivational_fulfillment: Mapping[str, float] | None = None,
+        strategy_experiment_id: str | None = None,
         **cycle_kwargs: Any,
     ) -> CycleResult:
         """Select an internal goal, journal its rationale, then run one brain cycle.
@@ -208,6 +252,23 @@ class VirtualBrain:
         """
         if self.internal_deliberator is None:
             raise RuntimeError("run_deliberated_cycle requires internal_deliberator")
+        if motivation is None:
+            motivation = self.motivation_system
+        if motivation is not None:
+            if not isinstance(motivation, MotivationSystem):
+                raise TypeError("motivation must be a MotivationSystem")
+            if self.motivation_system is not None and self.motivation_system is not motivation:
+                raise ValueError("deliberation motivation must match the brain motivation_system")
+            self.motivation_system = motivation
+        if motivational_fulfillment is not None and not isinstance(motivational_fulfillment, Mapping):
+            raise ValueError("motivational_fulfillment must be a mapping")
+        validated_fulfillment = (
+            self.motivation_system.validate_fulfillment(motivational_fulfillment)
+            if self.motivation_system is not None
+            else dict(motivational_fulfillment or {})
+        )
+        if self.motivation_system is None and validated_fulfillment:
+            raise ValueError("motivational_fulfillment requires a configured MotivationSystem")
         combined_adjustments = dict(drive_adjustments or {})
         homeostasis_trace = None
         if homeostatic_proposal is not None:
@@ -255,11 +316,39 @@ class VirtualBrain:
                 "evidence_refs": list(self_history_influence.evidence_refs),
                 "rationale": list(self_history_influence.rationale),
             }
+        open_investigations = (
+            self.curiosity_store.open_investigations()
+            if self.curiosity_store is not None else []
+        )
+        # Open investigations become explicit curiosity pressure in the goal
+        # generator. The caller's other context signals remain unchanged.
+        if open_investigations:
+            context = replace(
+                context,
+                unresolved_questions=max(
+                    context.unresolved_questions, len(open_investigations)
+                ),
+            )
+        curiosity_trace = {
+            "open_investigation_refs": [
+                item["investigation_id"] for item in open_investigations
+            ],
+            "unresolved_question_count": len(open_investigations),
+            "policy": "open_investigations_raise_curiosity_goal_pressure",
+        }
+        strategy_guidance = None
+        if strategy_experiment_id is not None:
+            if self.causal_experiment_store is None:
+                raise RuntimeError("strategy_experiment_id requires causal_experiment_store")
+            strategy_guidance = self.causal_experiment_store.strategy_guidance(
+                strategy_experiment_id
+            )
         deliberation = self.internal_deliberator.deliberate(
             context,
             motivation=motivation,
             drive_adjustments=combined_adjustments,
             recent_goal_ids=recent_goal_ids,
+            strategy_guidance=strategy_guidance,
         )
         selected = deliberation.selected_goal
         if selected is None:
@@ -274,6 +363,7 @@ class VirtualBrain:
                 "success_criteria": [],
                 "internal_goal_id": selected.goal_id,
                 "persistent_goal_record_id": deliberation.persistent_record_id,
+                "motivational_fulfillment": validated_fulfillment,
             },
             **cycle_kwargs,
         )
@@ -293,6 +383,8 @@ class VirtualBrain:
                 "deliberation": deliberation.to_dict(),
                 "homeostatic_regulation": homeostasis_trace,
                 "self_history_influence": self_history_trace,
+                "curiosity_context": curiosity_trace,
+                "strategy_guidance": strategy_guidance,
             },
             input_refs=[active_goal.id],
             source_refs=active_goal.source_refs,
@@ -498,6 +590,37 @@ class VirtualBrain:
             if experience.id not in proposal.data["source_experience_refs"]:
                 errors.append("learning proposal does not preserve source experience")
 
+        plasticity_event = by_type.get("mnn.plasticity_applied")
+        if plasticity_event:
+            evaluation = by_type.get("evaluation.completed")
+            validation = by_type.get("consolidation.validated")
+            change = plasticity_event.data.get("change", {})
+            if evaluation is None or change.get("evaluation_ref") != evaluation.id:
+                errors.append("MNN plasticity is not linked to the cycle evaluation")
+            if validation is None or change.get("validation_ref") != validation.id:
+                errors.append("MNN plasticity is not linked to the cycle validation")
+            expected_inputs = [evaluation.id, validation.id] if evaluation and validation else []
+            if plasticity_event.input_refs != tuple(expected_inputs):
+                errors.append("MNN plasticity causal inputs do not match evaluation and validation")
+            if not isinstance(change.get("evidence_refs"), list) or not set(expected_inputs).issubset(change.get("evidence_refs", [])):
+                errors.append("MNN plasticity is missing evaluated evidence references")
+            snapshot = change.get("snapshot", {})
+            if not isinstance(snapshot, Mapping) or not ({"network", "units"} & set(snapshot)):
+                errors.append("MNN plasticity does not contain a restorable organism snapshot")
+
+        motivation_feedback = by_type.get("motivation.feedback_applied")
+        if motivation_feedback:
+            evaluation = by_type.get("evaluation.completed")
+            if evaluation is None or motivation_feedback.data.get("evaluation_ref") != evaluation.id:
+                errors.append("motivation feedback is not linked to the cycle evaluation")
+            if motivation_feedback.input_refs != ((evaluation.id,) if evaluation else ()):
+                errors.append("motivation feedback causal inputs do not match evaluation")
+            if motivation_feedback.data.get("timestep") != motivation_feedback.data.get("previous_timestep", -1) + 1:
+                errors.append("motivation feedback timestep is not a single-step transition")
+            snapshot = motivation_feedback.data.get("motivation_snapshot", {})
+            if snapshot.get("timestep") != motivation_feedback.data.get("timestep"):
+                errors.append("motivation feedback snapshot does not match its recorded timestep")
+
         if validation:
             approved = validation.data["status"] == "approved"
             has_memory = "memory.consolidated" in by_type
@@ -580,7 +703,7 @@ class VirtualBrain:
             enriched_workspace = self._stage(
                 cycle_id,
                 "workspace.cognition_updated",
-                lambda: self._enriched_workspace(workspace, cognitive_result),
+                lambda: self._enriched_workspace(workspace, retrieval, cognitive_result),
             )
             if self._stop_if_requested(cycle_id, "workspace.cognition_updated", stop_after):
                 return None
@@ -658,6 +781,16 @@ class VirtualBrain:
             )
             if self._stop_if_requested(cycle_id, "evaluation.completed", stop_after):
                 return None
+
+            if self.motivation_system is not None:
+                feedback = self._stage(
+                    cycle_id,
+                    "motivation.feedback_applied",
+                    lambda: self._motivation_feedback(evaluation, goal),
+                )
+                self._restore_motivation_snapshot(feedback.data["motivation_snapshot"])
+                if self._stop_if_requested(cycle_id, "motivation.feedback_applied", stop_after):
+                    return None
 
             proposal = self._stage(
                 cycle_id,
@@ -748,6 +881,14 @@ class VirtualBrain:
                     "epistemic_status": "observed",
                 },
                 "uncertainties": [],
+                "internal_state": InternalStateSnapshot(
+                    cycle_id=observation.cycle_id,
+                    observation_ref=observation.id,
+                    modality=str(observation.data["modality"]),
+                    source_ref=str(source["id"]),
+                    perception_confidence=float(observation.confidence or 1.0),
+                    active_goal_ref=goal.id,
+                ).to_dict(),
             },
             input_refs=[observation.id, goal.id],
             source_refs=[str(source["id"])],
@@ -876,13 +1017,46 @@ class VirtualBrain:
             confidence=0.7,
         )
 
-    def _enriched_workspace(self, workspace: Artifact, result: Artifact) -> Artifact:
+    def _enriched_workspace(
+        self, workspace: Artifact, retrieval: Artifact, result: Artifact
+    ) -> Artifact:
         data = dict(workspace.data)
         data["cognitive_result_ref"] = result.id
         data["cognitive_state"] = {
             "understanding": result.data["understanding"],
             "uncertainty": result.data["uncertainty"],
         }
+        fragment_context = retrieval.data.get("fragment_context", [])
+        memory_refs = list(dict.fromkeys([
+            *[
+                str(item) for item in retrieval.data.get("memory_ids", [])
+                if isinstance(item, str)
+            ],
+            *[
+                str(item["fragment_id"])
+                for item in fragment_context
+                if isinstance(item, Mapping) and isinstance(item.get("fragment_id"), str)
+            ],
+        ]))
+        mnn_signal = result.data.get("mnn_signal", {})
+        if not isinstance(mnn_signal, Mapping):
+            mnn_signal = {}
+        state = InternalStateSnapshot.from_dict(data["internal_state"])
+        data["internal_state"] = InternalStateSnapshot(
+            cycle_id=state.cycle_id,
+            observation_ref=state.observation_ref,
+            modality=state.modality,
+            source_ref=state.source_ref,
+            perception_confidence=state.perception_confidence,
+            active_goal_ref=state.active_goal_ref,
+            retrieved_memory_refs=tuple(memory_refs),
+            cognitive_result_ref=result.id,
+            understanding=result.data["understanding"],
+            uncertainties=(result.data["uncertainty"],),
+            mnn_signal=dict(mnn_signal),
+        ).to_dict()
+        data["retrieved_memory_ids"] = memory_refs
+        data["uncertainties"] = [result.data["uncertainty"]]
         return Artifact.create(
             ContractKind.WORKSPACE_STATE,
             cycle_id=workspace.cycle_id,
@@ -1348,6 +1522,55 @@ class VirtualBrain:
             source_refs=experience.source_refs,
             epistemic_status=EpistemicStatus.OBSERVED,
             confidence=1.0,
+        )
+
+    def _restore_motivation_snapshot(self, snapshot: Mapping[str, Any]) -> None:
+        """Restore persisted drive values without breaking organism object identity."""
+        if self.motivation_system is None:
+            raise RuntimeError("motivation feedback requires a configured MotivationSystem")
+        restored = MotivationSystem.from_snapshot(snapshot)
+        self.motivation_system.drives = restored.drives
+        self.motivation_system.conflicts = restored.conflicts
+        self.motivation_system.cooperations = restored.cooperations
+        self.motivation_system.conflict_gain = restored.conflict_gain
+        self.motivation_system.cooperation_gain = restored.cooperation_gain
+        self.motivation_system.timestep = restored.timestep
+
+    def _motivation_feedback(self, evaluation: Artifact, goal: Artifact) -> Artifact:
+        """Propose one outcome-grounded drive update without mutating live state."""
+        if self.motivation_system is None:
+            raise RuntimeError("motivation feedback requires a configured MotivationSystem")
+        requested_fulfillment = self.motivation_system.validate_fulfillment(
+            goal.data.get("motivational_fulfillment", {})
+        )
+        # Do not relieve a drive for an unsuccessful action. The caller may
+        # predeclare expected fulfillment, but evaluation gates its application.
+        fulfillment = requested_fulfillment if evaluation.data["success"] else {}
+        candidate = MotivationSystem.from_snapshot(self.motivation_system.snapshot())
+        previous_timestep = candidate.timestep
+        effective = candidate.step(fulfillment)
+        return Artifact.create(
+            ContractKind.MOTIVATION_STATE,
+            cycle_id=evaluation.cycle_id,
+            producer="motivation_feedback",
+            data={
+                "evaluation_ref": evaluation.id,
+                "success": bool(evaluation.data["success"]),
+                "requested_fulfillment": requested_fulfillment,
+                "fulfillment": fulfillment,
+                "previous_timestep": previous_timestep,
+                "timestep": candidate.timestep,
+                "effective_urgencies": effective,
+                "motivation_snapshot": candidate.snapshot(),
+                "interpretation": (
+                    "Explicit caller-supplied fulfillment is applied after evaluation; "
+                    "success alone never implies drive satisfaction."
+                ),
+            },
+            input_refs=[evaluation.id],
+            source_refs=evaluation.source_refs,
+            epistemic_status=EpistemicStatus.INTERPRETED,
+            confidence=evaluation.confidence,
         )
 
     def _evaluation(self, experience: Artifact, result: Artifact) -> Artifact:

@@ -11,7 +11,7 @@ import re
 from collections.abc import Mapping
 
 from .components import CognitionEngine, DeterministicCognition, _text
-from .contracts import Artifact
+from .contracts import Artifact, ContractKind
 from .mnn import MNN
 
 
@@ -60,7 +60,23 @@ class MNNCognitionAdapter:
         then commits the saved snapshot back into the adapter. This ordering
         avoids changing in-memory weights if the journal append fails.
         """
-        succeeded = bool(evaluation.data["success"])
+        if evaluation.kind != ContractKind.EVALUATION:
+            raise ValueError("evaluation must be an EVALUATION artifact")
+        if validation.kind != ContractKind.VALIDATION_RESULT:
+            raise ValueError("validation must be a VALIDATION_RESULT artifact")
+        if evaluation.cycle_id != validation.cycle_id or evaluation.id not in validation.input_refs:
+            raise ValueError("validation must preserve the evaluated outcome in the same cycle")
+        succeeded = evaluation.data.get("success")
+        if not isinstance(succeeded, bool):
+            raise ValueError("evaluation success must be an explicit boolean")
+        prediction_error = evaluation.data.get("prediction_error")
+        if (
+            isinstance(prediction_error, bool)
+            or not isinstance(prediction_error, (int, float))
+            or not math.isfinite(prediction_error)
+            or not 0.0 <= prediction_error <= 1.0
+        ):
+            raise ValueError("prediction_error must be finite and within [0, 1]")
         reward = 1.0 if succeeded else -1.0
         candidate = MNN.from_snapshot(self.network.snapshot())
         weight_deltas = candidate.apply_hebbian(
@@ -70,7 +86,13 @@ class MNNCognitionAdapter:
         return {
             "success": succeeded,
             "reward": reward,
+            "prediction_error": float(prediction_error),
+            "expected_outcome": evaluation.data["expected_outcome"],
+            "actual_outcome": evaluation.data["actual_outcome"],
+            "evaluation_ref": evaluation.id,
+            "validation_ref": validation.id,
             "validation_status": validation.data["status"],
+            "evidence_refs": [evaluation.id, validation.id, *evaluation.source_refs],
             "weight_deltas": weight_deltas,
             "snapshot": candidate.snapshot(),
         }
