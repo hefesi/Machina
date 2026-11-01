@@ -917,11 +917,17 @@ class VirtualBrain:
             "uncertainty": result.data["uncertainty"],
         }
         fragment_context = retrieval.data.get("fragment_context", [])
-        memory_refs = [
-            str(item["fragment_id"])
-            for item in fragment_context
-            if isinstance(item, Mapping) and isinstance(item.get("fragment_id"), str)
-        ]
+        memory_refs = list(dict.fromkeys([
+            *[
+                str(item) for item in retrieval.data.get("memory_ids", [])
+                if isinstance(item, str)
+            ],
+            *[
+                str(item["fragment_id"])
+                for item in fragment_context
+                if isinstance(item, Mapping) and isinstance(item.get("fragment_id"), str)
+            ],
+        ]))
         mnn_signal = result.data.get("mnn_signal", {})
         if not isinstance(mnn_signal, Mapping):
             mnn_signal = {}
