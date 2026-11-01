@@ -147,6 +147,17 @@ class MNNOrganismRuntimeTests(unittest.TestCase):
                 control_name="baseline",
                 protocol_ref="protocol:observational-v1",
             )
+            for index in range(5):
+                causal.record_trial(
+                    "strategy-observation", "treatment", 0.9,
+                    evidence_ref=f"treatment-evidence-{index}",
+                    trial_id=f"treatment-trial-{index}",
+                )
+                causal.record_trial(
+                    "strategy-observation", "control", 0.2,
+                    evidence_ref=f"control-evidence-{index}",
+                    trial_id=f"control-trial-{index}",
+                )
             brain = VirtualBrain(
                 Path(directory) / "brain.sqlite",
                 cognition=runtime.cognition,
