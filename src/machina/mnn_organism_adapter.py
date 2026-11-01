@@ -176,4 +176,15 @@ class MNNOrganismCognitionAdapter:
         self.organism.continuity = restored.continuity
         self.organism.chemical_inputs = restored.chemical_inputs
         self.organism.learning_rate = restored.learning_rate
-        self.organism.motivation = restored.motivation
+        if self.organism.motivation is not None and restored.motivation is not None:
+            # Preserve the shared MotivationSystem object held by VirtualBrain
+            # and MNNOrganismRuntime while restoring its journaled values.
+            live = self.organism.motivation
+            live.drives = restored.motivation.drives
+            live.conflicts = restored.motivation.conflicts
+            live.cooperations = restored.motivation.cooperations
+            live.conflict_gain = restored.motivation.conflict_gain
+            live.cooperation_gain = restored.motivation.cooperation_gain
+            live.timestep = restored.motivation.timestep
+        else:
+            self.organism.motivation = restored.motivation
