@@ -133,6 +133,25 @@ class CausalExperimentStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "minimum_per_arm"):
             self.store.report("retrieval-v1", minimum_per_arm=1)
 
+    def test_strategy_guidance_only_recommends_when_interval_excludes_zero(self):
+        self._register("randomized")
+        for index in range(20):
+            self.store.record_trial("retrieval-v1", "treatment", .9, evidence_ref=f"et{index}", trial_id=f"gt{index}")
+            self.store.record_trial("retrieval-v1", "control", .2, evidence_ref=f"ec{index}", trial_id=f"gc{index}")
+        guidance = self.store.strategy_guidance("retrieval-v1")
+        self.assertEqual("favor_treatment_for_human_review", guidance["guidance"])
+        self.assertFalse(guidance["policy_mutated"])
+        self.assertTrue(guidance["requires_human_or_external_policy_approval"])
+
+    def test_strategy_guidance_holds_for_observational_or_insufficient_data(self):
+        self._register("observational")
+        for index in range(6):
+            self.store.record_trial("retrieval-v1", "treatment", .9, evidence_ref=f"ot{index}", trial_id=f"ot{index}")
+            self.store.record_trial("retrieval-v1", "control", .2, evidence_ref=f"oc{index}", trial_id=f"oc{index}")
+        guidance = self.store.strategy_guidance("retrieval-v1")
+        self.assertEqual("hold", guidance["guidance"])
+        self.assertEqual("observational_data_cannot_authorize_policy_changes", guidance["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()
