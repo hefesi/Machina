@@ -125,9 +125,11 @@ Para validação local isolada, executar também os testes específicos de organ
 
 - Snapshot `Machina-main.zip` (commit `3e31f320e4f46b713703ae601992c255805feb72`): 570 testes aprovados com `PYTHONPATH=src`; a instalação editável local também foi exercitada com `--no-build-isolation`, em Python 3.13.5.
 - Snapshot `Machina-feature-mnn-organism-brain-bridge.zip` (commit `b0f83afa7ca0968f7cacd7760f9cbf1c6b9325fd`): 604 testes aprovados com `PYTHONPATH=src`, em Python 3.13.5.
-- Os dois snapshots são anteriores ao HEAD remoto atual (`032fbdd`). Esses resultados não substituem uma execução sobre o HEAD atual.
-- A tentativa de instalação editável com isolamento de build não pôde ser concluída neste ambiente porque não há acesso à rede para obter dependências de build. A instalação local sem isolamento funcionou usando setuptools já disponível; isso não prova uma instalação limpa em ambiente novo.
-- A configuração versionada de CI usa Python 3.12, `pip install -e .` e `unittest discover`. Não foi possível confirmar um status de workflow associado ao HEAD atual; não declarar CI verde sem essa evidência.
+- Os dois snapshots são anteriores ao HEAD remoto atual (`032fbdd`).
+- No PR #89, o commit de integração `9f4cf7def0699753f2ba5d054be2760ea06b4e91`, incorporado ao HEAD atual pelo merge `032fbdd`, passou no workflow Python Tests: **665 testes aprovados** em Python 3.12.15. O job executou `pip install -e .` e `python -m unittest discover -s tests -v`.
+- O workflow Autonomy learning validation também concluiu com sucesso no mesmo commit, incluindo demos e testes de autonomia, aprendizagem contínua, generalização, confiança/abstenção e D08.
+- Execuções: [Python tests](https://github.com/hefesi/Machina/actions/runs/41334697971) · [Autonomy learning validation](https://github.com/hefesi/Machina/actions/runs/41334697854).
+- A tentativa de instalação editável com isolamento de build não pôde ser concluída neste ambiente local porque não há acesso à rede para obter dependências de build. A instalação local sem isolamento funcionou com setuptools já disponível. A instalação limpa, porém, foi confirmada pelo runner hospedado do GitHub no workflow Python Tests.
 
 ## Critérios de conclusão da Fase 1
 
