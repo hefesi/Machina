@@ -110,6 +110,49 @@ class AutonomyControllerTests(unittest.TestCase):
         self.assertEqual("risk_above_limit", decision.rejected[0]["reason"])
         self.assertIn("total", decision.alternatives[0]["score"])
 
+
+    def test_persistent_commitment_alignment_can_change_internal_goal_choice(self):
+        explore = GoalCandidate(
+            "explore", "Investigate a new topic", "curiosity",
+            0.5, 0.6, 0.8, 0.2, 0.05,
+        )
+        preserve = GoalCandidate(
+            "preserve", "Review and preserve important memories", "continuity",
+            0.5, 0.6, 0.8, 0.2, 0.05,
+        )
+        baseline = self.controller.choose([explore, preserve])
+        committed = self.controller.choose(
+            [explore, preserve],
+            commitment_alignment={"preserve": 1.0},
+            commitment_weight=0.15,
+        )
+        self.assertEqual("explore", baseline.selected_goal.goal_id)
+        self.assertEqual("preserve", committed.selected_goal.goal_id)
+        selected = committed.alternatives[0]["score"]
+        self.assertEqual(1.0, selected["commitment_alignment"])
+        self.assertEqual(0.15, selected["commitment_adjustment"])
+
+    def test_commitment_alignment_is_bounded_and_explicit(self):
+        goal = GoalCandidate("reflect", "Reflect", "self_reflection", .5, .5, .5, .2, .01)
+        for invalid in (-0.1, 1.1, float("nan"), True):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    self.controller.choose([goal], commitment_alignment={"reflect": invalid})
+        with self.assertRaises(ValueError):
+            self.controller.choose([goal], commitment_weight=0.16)
+
+    def test_commitment_alignment_never_bypasses_external_action_authorization(self):
+        goal = GoalCandidate(
+            "send_email", "Send an email", "communication",
+            1.0, 1.0, 1.0, 0.0, 0.0, requires_external_action=True,
+        )
+        decision = self.controller.choose(
+            [goal], commitment_alignment={"send_email": 1.0},
+            commitment_weight=0.15,
+        )
+        self.assertIsNone(decision.selected_goal)
+        self.assertEqual("external_action_not_authorized", decision.rejected[0]["reason"])
+
     def test_duplicate_ids_and_invalid_context_are_rejected(self):
         goal = GoalCandidate("same", "First", "test", .2, .2, .2, .2, .2)
         duplicate = GoalCandidate("same", "Second", "test", .3, .3, .3, .3, .3)

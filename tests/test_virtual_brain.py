@@ -279,6 +279,69 @@ class VirtualBrainLoopTests(unittest.TestCase):
         brain.close()
 
 
+    def test_curiosity_investigation_is_linked_to_brain_journal_and_survives_restart(self) -> None:
+        curiosity_path = Path(self.temporary_directory.name) / "curiosity.sqlite"
+        brain = VirtualBrain(
+            self.database_path,
+            curiosity_investigation_path=curiosity_path,
+        )
+        cycle = brain.run_cycle("An unresolved memory question.", "Record the context.")
+        started = brain.start_curiosity_investigation(
+            cycle.cycle_id, "brain-investigation-1",
+            gap_property="memory_recall",
+            question="Which fragments improve recall?",
+            hypothesis="Temporal indexing may improve retrieval.",
+            selection_reason="High information gain with low external risk.",
+            goal_id="curiosity:memory-recall",
+        )
+        self.assertEqual("open", started["status"])
+        evidence = brain.record_curiosity_evidence(
+            cycle.cycle_id, "brain-investigation-1",
+            evidence_ref="experiment:recall-01",
+            finding="Indexed fragments ranked higher in this test.",
+        )
+        self.assertEqual("experiment:recall-01", evidence["evidence_ref"])
+        closed = brain.close_curiosity_investigation(
+            cycle.cycle_id, "brain-investigation-1",
+            outcome="partially_answered",
+            answer_summary="Initial evidence supports further testing.",
+            remaining_unknowns=["Performance on longer histories"],
+        )
+        self.assertEqual("partially_answered", closed["outcome"])
+        self.assertTrue(brain.audit_cycle(cycle.cycle_id).valid)
+        event_types = [event.event_type for event in brain.store.events_for_cycle(cycle.cycle_id)]
+        self.assertEqual(1, event_types.count("curiosity.investigation_started"))
+        self.assertEqual(1, event_types.count("curiosity.evidence_recorded"))
+        self.assertEqual(1, event_types.count("curiosity.investigation_closed"))
+        brain.close()
+
+        restarted = VirtualBrain(
+            self.database_path,
+            curiosity_investigation_path=curiosity_path,
+        )
+        history = restarted.curiosity_store.history()
+        self.assertEqual("brain-investigation-1", history[0]["investigation_id"])
+        self.assertEqual("experiment:recall-01", history[0]["evidence"][0]["evidence_ref"])
+        journal_events = restarted.store.events_for_cycle(cycle.cycle_id)
+        self.assertEqual(
+            ["curiosity.investigation_started", "curiosity.evidence_recorded", "curiosity.investigation_closed"],
+            [event.event_type for event in journal_events if event.event_type.startswith("curiosity.")],
+        )
+        restarted.close()
+
+    def test_curiosity_journaling_requires_explicit_store_configuration(self) -> None:
+        brain = VirtualBrain(self.database_path)
+        cycle = brain.run_cycle("Context", "Complete a simple cycle.")
+        with self.assertRaisesRegex(RuntimeError, "curiosity investigation memory is disabled"):
+            brain.start_curiosity_investigation(
+                cycle.cycle_id, "missing-store",
+                gap_property="test", question="Why?",
+                hypothesis="Unknown", selection_reason="Explore uncertainty",
+                goal_id="curiosity:test",
+            )
+        brain.close()
+
+
 
 if __name__ == "__main__":
     unittest.main()
