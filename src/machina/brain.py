@@ -740,9 +740,7 @@ class VirtualBrain:
                     "motivation.feedback_applied",
                     lambda: self._motivation_feedback(evaluation, goal),
                 )
-                self.motivation_system = MotivationSystem.from_snapshot(
-                    feedback.data["motivation_snapshot"]
-                )
+                self._restore_motivation_snapshot(feedback.data["motivation_snapshot"])
                 if self._stop_if_requested(cycle_id, "motivation.feedback_applied", stop_after):
                     return None
 
@@ -1477,6 +1475,18 @@ class VirtualBrain:
             epistemic_status=EpistemicStatus.OBSERVED,
             confidence=1.0,
         )
+
+    def _restore_motivation_snapshot(self, snapshot: Mapping[str, Any]) -> None:
+        """Restore persisted drive values without breaking organism object identity."""
+        if self.motivation_system is None:
+            raise RuntimeError("motivation feedback requires a configured MotivationSystem")
+        restored = MotivationSystem.from_snapshot(snapshot)
+        self.motivation_system.drives = restored.drives
+        self.motivation_system.conflicts = restored.conflicts
+        self.motivation_system.cooperations = restored.cooperations
+        self.motivation_system.conflict_gain = restored.conflict_gain
+        self.motivation_system.cooperation_gain = restored.cooperation_gain
+        self.motivation_system.timestep = restored.timestep
 
     def _motivation_feedback(self, evaluation: Artifact, goal: Artifact) -> Artifact:
         """Propose one outcome-grounded drive update without mutating live state."""
