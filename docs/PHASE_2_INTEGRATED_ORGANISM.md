@@ -63,6 +63,8 @@ Nenhum componente deve gravar silenciosamente no banco de outro domínio. A coor
 
 ### 2.1 — Percepção e representação interna
 
+**Integração de curiosidade:** investigações abertas persistidas são consultadas antes da deliberação; sua quantidade eleva, sem sobrescrever outros sinais, `unresolved_questions`, permitindo que o gerador proponha um objetivo interno de investigação. As IDs das investigações são preservadas em `goal.deliberated`. Isso não cria ações externas automaticamente nem encerra investigações sem evidência.
+
 **Implementado nesta etapa:** `NormalizedPerception` preserva conteúdo normalizado, payload bruto, modalidade, fonte/confiabilidade, timestamp, confiança, referência ao dado bruto e trilha de transformações. `VirtualBrain.start_cycle` aceita esse contrato e registra os metadados no artefato de observação; a entrada legada continua compatível. `InternalStateSnapshot` (`machina.internal_state.v1`) compõe a percepção, referências de memória recuperada, objetivo ativo, entendimento, incertezas e telemetria MNN disponível em um snapshot serializável e versionado, incorporado ao workspace após cognição. O snapshot é uma representação operacional por ciclo, não uma alegação de experiência subjetiva.
 
 - Definir contrato de percepção normalizada, sem exigir dependência de câmera, áudio ou LLM.
@@ -127,6 +129,7 @@ Este fluxo demonstra integração funcional, memória, adaptação e autonomia o
 - [x] Contrato de percepção normalizada integrado à ingestão do `VirtualBrain`.
 - [x] Snapshot interno versionado integrado ao workspace após cognição, com referências perceptivas, objetivo, memórias recuperadas, entendimento, incertezas e sinal MNN disponível.
 - [ ] Composição MNN + VirtualBrain formalizada.
-- [ ] Ponte motivação/curiosidade/objetivos implementada.
+- [x] Investigações de curiosidade abertas agora alimentam `AutonomyContext.unresolved_questions` e deixam suas referências registradas no artefato `goal.deliberated`.
+- [ ] Atualização de fulfillment motivacional baseada em resultados avaliados ainda pendente.
 - [ ] Experimentos ponta a ponta e recuperação adicionados.
 - [ ] Suíte completa e CI validados.
