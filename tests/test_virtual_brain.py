@@ -89,6 +89,32 @@ class VirtualBrainLoopTests(unittest.TestCase):
         self.assertTrue(restarted.audit_cycle(cycle_id).valid)
         restarted.close()
 
+    def test_failed_action_does_not_apply_predeclared_fulfillment(self) -> None:
+        motivation = MotivationSystem(drives=[
+            MotivationalDrive("curiosity", level=0.7, setpoint=0.2, recovery_rate=0.0)
+        ])
+        brain = VirtualBrain(
+            self.database_path,
+            motivation_system=motivation,
+            action_executor=FailingExecutor(),
+        )
+        result = brain.run_cycle(
+            "Observation",
+            {
+                "description": "Attempt a task that fails.",
+                "motivational_fulfillment": {"curiosity": 1.0},
+            },
+        )
+        feedback = next(
+            event.artifact for event in result.events
+            if event.event_type == "motivation.feedback_applied"
+        )
+        self.assertFalse(feedback.data["success"])
+        self.assertEqual({"curiosity": 1.0}, feedback.data["requested_fulfillment"])
+        self.assertEqual({}, feedback.data["fulfillment"])
+        self.assertAlmostEqual(0.7, brain.motivation_system.drives["curiosity"].level)
+        brain.close()
+
     def test_motivation_does_not_infer_fulfillment_from_success(self) -> None:
         motivation = MotivationSystem(drives=[
             MotivationalDrive("curiosity", level=0.7, setpoint=0.2, recovery_rate=0.0)
