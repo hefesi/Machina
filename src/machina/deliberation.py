@@ -109,7 +109,10 @@ class InternalDeliberator:
 
         adjustments = dict(drive_adjustments or {})
         if motivation is not None and hasattr(motivation, "temporal_autonomy_adjustments"):
-            adjustments.update(motivation.temporal_autonomy_adjustments())
+            temporal_adjustments = motivation.temporal_autonomy_adjustments()
+            for drive, adjustment in temporal_adjustments.items():
+                combined = float(adjustments.get(drive, 0.0)) + float(adjustment)
+                adjustments[drive] = max(-0.3, min(0.3, combined))
 
         decision = self.controller.choose(
             candidates_by_id.values(),
