@@ -40,6 +40,32 @@ class MNNOrganismRuntime:
             return {}
         return motivation.autonomy_adjustments(gain=gain)
 
+    def run_deliberated_cycle(
+        self,
+        brain: Any,
+        observation: Any,
+        context: Any,
+        **cycle_kwargs: Any,
+    ) -> Any:
+        """Run one VirtualBrain cycle using this runtime's shared MNN state.
+
+        The brain must have been constructed with this runtime's exact
+        cognition and agency adapters, preventing split-organism wiring.
+        """
+        if getattr(brain, "cognition", None) is not self.cognition:
+            raise ValueError("brain cognition must be this runtime's cognition adapter")
+        if getattr(brain, "agency", None) is not self.agency:
+            raise ValueError("brain agency must be this runtime's agency adapter")
+        if "motivation" in cycle_kwargs or "drive_adjustments" in cycle_kwargs:
+            raise TypeError("motivation and drive_adjustments are supplied by the runtime")
+        return brain.run_deliberated_cycle(
+            observation,
+            context,
+            motivation=self.motivation,
+            drive_adjustments=self.drive_adjustments(),
+            **cycle_kwargs,
+        )
+
     def ranked_drives(self) -> list[tuple[str, float]]:
         """Expose current motivational urgency without mutating organism state."""
         motivation = self.organism.motivation
