@@ -33,6 +33,31 @@ class NormalizedPerceptionTests(unittest.TestCase):
             finally:
                 brain.close()
 
+    def test_workspace_builds_unified_internal_state_after_cognition(self):
+        with tempfile.TemporaryDirectory() as directory:
+            brain = VirtualBrain(f"{directory}/brain.sqlite3")
+            try:
+                perception = NormalizedPerception(
+                    content={"intent": "inspect"},
+                    raw_payload={"text": "inspect the room"},
+                    modality="text",
+                    source={"type": "sensor", "name": "test-sensor", "reliability": 0.9},
+                    confidence=0.88,
+                )
+                cycle_id = brain.start_cycle(perception, "Inspect safely")
+                brain.advance(cycle_id, stop_after="decision.requested")
+                workspace = brain._required(cycle_id, "workspace.cognition_updated")
+                state = workspace.data["internal_state"]
+                self.assertEqual("machina.internal_state.v1", state["schema_version"])
+                self.assertEqual(cycle_id, state["cycle_id"])
+                self.assertEqual("text", state["modality"])
+                self.assertEqual(0.88, state["perception_confidence"])
+                self.assertEqual(workspace.data["cognitive_result_ref"], state["cognitive_result_ref"])
+                self.assertEqual(workspace.data["retrieved_memory_ids"], state["retrieved_memory_refs"])
+                self.assertEqual({"intent": "inspect"}, state["understanding"])
+            finally:
+                brain.close()
+
     def test_contract_rejects_invalid_confidence_and_non_json_payload(self):
         with self.assertRaises(ValueError):
             NormalizedPerception(content="x", modality="text", source={}, confidence=1.2)
