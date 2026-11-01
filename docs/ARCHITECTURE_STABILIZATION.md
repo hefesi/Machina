@@ -1,5 +1,7 @@
 # Fase 1 — estabilização arquitetural
 
+> Estado remoto verificado em 1º de novembro de 2026. A `main` aponta para `032fbdddb43b5a4227577a19f67bb19f4964d5f2`, merge do PR #89, que integrou a MNN Organism Bridge à arquitetura atual. Esta documentação está sendo preparada em uma branch de estabilização; ainda não representa uma fase concluída.
+
 > Documento de referência da arquitetura implementada na branch `main`. Este documento descreve responsabilidades e limites verificáveis do código; não afirma que o sistema possua consciência, experiência subjetiva ou livre-arbítrio.
 
 ## Estado e escopo
@@ -92,10 +94,10 @@ EventStore / next cycle
 
 ## Política de branches
 
-A comparação das 89 branches não-main com `main` identificou dois grupos:
+A listagem atual do GitHub retornou **90 branches no total, incluindo `main` (89 branches não-main)**. A classificação anterior apontou 68 branches com commits exclusivos e 21 sem commits exclusivos; esse resultado é uma fotografia anterior e precisa ser recalculado contra o HEAD atual antes de orientar exclusões. O nome da branch ou a contagem de commits não é evidência suficiente de redundância.
 
-- **68 branches com commits exclusivos**: preservar e revisar por conteúdo. O número de commits à frente não mede valor nem significa que toda a branch deva ser mesclada.
-- **21 branches sem commits exclusivos**: estão apenas atrás de `main` na comparação de commits. São candidatas técnicas à limpeza, sujeitas a verificar referências externas, PRs, tags e necessidade histórica antes de excluir.
+- **Branches com commits exclusivos**: preservar até revisar conteúdo, testes, PRs e funcionalidades já incorporadas por outros caminhos.
+- **Branches sem commits exclusivos**: candidatas técnicas à limpeza, somente após verificar referências externas, PRs, tags e necessidade histórica.
 
 Nenhuma branch foi apagada nesta etapa. Não fazer merge em massa. Para cada branch com commits exclusivos:
 
@@ -121,16 +123,17 @@ Para validação local isolada, executar também os testes específicos de organ
 
 ### Evidência desta auditoria
 
-- Arquivo `Machina-main.zip`: 570 testes aprovados com instalação editável e `unittest discover`, em Python 3.13.5.
-- Arquivo `Machina-feature-mnn-organism-brain-bridge.zip`: 604 testes aprovados com instalação editável e `unittest discover`, em Python 3.13.5.
-- Esses resultados pertencem aos arquivos anexados e não substituem uma execução sobre o commit remoto atual da `main`.
-- A configuração versionada de CI usa Python 3.12, `pip install -e .` e `unittest discover`. O status do workflow associado ao HEAD atual deve ser verificado no GitHub Actions.
+- Snapshot `Machina-main.zip` (commit `3e31f320e4f46b713703ae601992c255805feb72`): 570 testes aprovados com `PYTHONPATH=src`; a instalação editável local também foi exercitada com `--no-build-isolation`, em Python 3.13.5.
+- Snapshot `Machina-feature-mnn-organism-brain-bridge.zip` (commit `b0f83afa7ca0968f7cacd7760f9cbf1c6b9325fd`): 604 testes aprovados com `PYTHONPATH=src`, em Python 3.13.5.
+- Os dois snapshots são anteriores ao HEAD remoto atual (`032fbdd`). Esses resultados não substituem uma execução sobre o HEAD atual.
+- A tentativa de instalação editável com isolamento de build não pôde ser concluída neste ambiente porque não há acesso à rede para obter dependências de build. A instalação local sem isolamento funcionou usando setuptools já disponível; isso não prova uma instalação limpa em ambiente novo.
+- A configuração versionada de CI usa Python 3.12, `pip install -e .` e `unittest discover`. Não foi possível confirmar um status de workflow associado ao HEAD atual; não declarar CI verde sem essa evidência.
 
 ## Critérios de conclusão da Fase 1
 
-- [ ] Bridge exercitado ponta a ponta com persistência, retomada, feedback e falhas.
-- [ ] 89 branches classificadas por commits exclusivos e recursos ainda ausentes; branches candidatas revisadas antes de exclusão.
-- [ ] Documentação de arquitetura e limites atualizada e ligada ao índice principal.
+- [x] Bridge integrada à `main` pelo PR #89; a documentação específica da integração está versionada. A validação ponta a ponta no HEAD atual ainda precisa ser repetida.
+- [ ] 89 branches não-main classificadas novamente contra o HEAD atual, incluindo recursos exclusivos, PRs e referências antes de exclusão.
+- [ ] Documentação de arquitetura e limites ligada ao índice principal (`README.md` nesta branch; aguarda revisão/merge).
 - [ ] Suíte executada no HEAD remoto atual, em Python 3.12, com CI verde.
 - [ ] Instalação limpa reproduzível em ambiente novo.
 - [ ] Nenhuma regressão conhecida nos contratos, API pública ou invariantes de persistência.
