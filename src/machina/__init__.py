@@ -78,10 +78,12 @@ from .mnn_short_term_plasticity import MNNShortTermPlasticity
 from .mnn_plasticity_control import MNNPlasticityController, MNNPlasticityProposal
 from .mnn_experience_plasticity_advisor import MNNExperiencePlasticityAdvisor, MNNExperiencePlasticityProposal
 from .perception import NormalizedPerception
+from .internal_state import InternalStateSnapshot
 
 __all__ = [
     "Artifact",
     "NormalizedPerception",
+    "InternalStateSnapshot",
     "ChemicalEvent",
     "ChemicalParameters",
     "ChemicalSignaling",
