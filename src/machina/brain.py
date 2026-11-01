@@ -1507,9 +1507,12 @@ class VirtualBrain:
         """Propose one outcome-grounded drive update without mutating live state."""
         if self.motivation_system is None:
             raise RuntimeError("motivation feedback requires a configured MotivationSystem")
-        fulfillment = self.motivation_system.validate_fulfillment(
+        requested_fulfillment = self.motivation_system.validate_fulfillment(
             goal.data.get("motivational_fulfillment", {})
         )
+        # Do not relieve a drive for an unsuccessful action. The caller may
+        # predeclare expected fulfillment, but evaluation gates its application.
+        fulfillment = requested_fulfillment if evaluation.data["success"] else {}
         candidate = MotivationSystem.from_snapshot(self.motivation_system.snapshot())
         previous_timestep = candidate.timestep
         effective = candidate.step(fulfillment)
@@ -1520,6 +1523,7 @@ class VirtualBrain:
             data={
                 "evaluation_ref": evaluation.id,
                 "success": bool(evaluation.data["success"]),
+                "requested_fulfillment": requested_fulfillment,
                 "fulfillment": fulfillment,
                 "previous_timestep": previous_timestep,
                 "timestep": candidate.timestep,
