@@ -246,6 +246,8 @@ class VirtualBrain:
         """
         if self.internal_deliberator is None:
             raise RuntimeError("run_deliberated_cycle requires internal_deliberator")
+        if motivation is None:
+            motivation = self.motivation_system
         if motivation is not None:
             if not isinstance(motivation, MotivationSystem):
                 raise TypeError("motivation must be a MotivationSystem")
@@ -572,6 +574,19 @@ class VirtualBrain:
         if proposal and experience:
             if experience.id not in proposal.data["source_experience_refs"]:
                 errors.append("learning proposal does not preserve source experience")
+
+        motivation_feedback = by_type.get("motivation.feedback_applied")
+        if motivation_feedback:
+            evaluation = by_type.get("evaluation.completed")
+            if evaluation is None or motivation_feedback.data.get("evaluation_ref") != evaluation.id:
+                errors.append("motivation feedback is not linked to the cycle evaluation")
+            if motivation_feedback.input_refs != ([evaluation.id] if evaluation else []):
+                errors.append("motivation feedback causal inputs do not match evaluation")
+            if motivation_feedback.data.get("timestep") != motivation_feedback.data.get("previous_timestep", -1) + 1:
+                errors.append("motivation feedback timestep is not a single-step transition")
+            snapshot = motivation_feedback.data.get("motivation_snapshot", {})
+            if snapshot.get("timestep") != motivation_feedback.data.get("timestep"):
+                errors.append("motivation feedback snapshot does not match its recorded timestep")
 
         if validation:
             approved = validation.data["status"] == "approved"
