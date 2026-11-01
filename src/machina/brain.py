@@ -28,6 +28,7 @@ from .self_history_influence import SelfHistoryInfluence
 from .mnn_strategy_event_bridge import MNNStrategyEventBridge
 from .curiosity import CuriosityInvestigationStore
 from .perception import NormalizedPerception
+from .internal_state import InternalStateSnapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -602,7 +603,7 @@ class VirtualBrain:
             enriched_workspace = self._stage(
                 cycle_id,
                 "workspace.cognition_updated",
-                lambda: self._enriched_workspace(workspace, cognitive_result),
+                lambda: self._enriched_workspace(workspace, retrieval, cognitive_result),
             )
             if self._stop_if_requested(cycle_id, "workspace.cognition_updated", stop_after):
                 return None
@@ -770,6 +771,14 @@ class VirtualBrain:
                     "epistemic_status": "observed",
                 },
                 "uncertainties": [],
+                "internal_state": InternalStateSnapshot(
+                    cycle_id=observation.cycle_id,
+                    observation_ref=observation.id,
+                    modality=str(observation.data["modality"]),
+                    source_ref=str(source["id"]),
+                    perception_confidence=float(observation.confidence or 1.0),
+                    active_goal_ref=goal.id,
+                ).to_dict(),
             },
             input_refs=[observation.id, goal.id],
             source_refs=[str(source["id"])],
@@ -898,13 +907,40 @@ class VirtualBrain:
             confidence=0.7,
         )
 
-    def _enriched_workspace(self, workspace: Artifact, result: Artifact) -> Artifact:
+    def _enriched_workspace(
+        self, workspace: Artifact, retrieval: Artifact, result: Artifact
+    ) -> Artifact:
         data = dict(workspace.data)
         data["cognitive_result_ref"] = result.id
         data["cognitive_state"] = {
             "understanding": result.data["understanding"],
             "uncertainty": result.data["uncertainty"],
         }
+        fragment_context = retrieval.data.get("fragment_context", [])
+        memory_refs = [
+            str(item["fragment_id"])
+            for item in fragment_context
+            if isinstance(item, Mapping) and isinstance(item.get("fragment_id"), str)
+        ]
+        mnn_signal = result.data.get("mnn_signal", {})
+        if not isinstance(mnn_signal, Mapping):
+            mnn_signal = {}
+        state = InternalStateSnapshot.from_dict(data["internal_state"])
+        data["internal_state"] = InternalStateSnapshot(
+            cycle_id=state.cycle_id,
+            observation_ref=state.observation_ref,
+            modality=state.modality,
+            source_ref=state.source_ref,
+            perception_confidence=state.perception_confidence,
+            active_goal_ref=state.active_goal_ref,
+            retrieved_memory_refs=tuple(memory_refs),
+            cognitive_result_ref=result.id,
+            understanding=result.data["understanding"],
+            uncertainties=(result.data["uncertainty"],),
+            mnn_signal=dict(mnn_signal),
+        ).to_dict()
+        data["retrieved_memory_ids"] = memory_refs
+        data["uncertainties"] = [result.data["uncertainty"]]
         return Artifact.create(
             ContractKind.WORKSPACE_STATE,
             cycle_id=workspace.cycle_id,
