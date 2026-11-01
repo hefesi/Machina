@@ -27,6 +27,7 @@ from .homeostasis import HomeostaticProposal
 from .self_history_influence import SelfHistoryInfluence
 from .mnn_strategy_event_bridge import MNNStrategyEventBridge
 from .curiosity import CuriosityInvestigationStore
+from .perception import NormalizedPerception
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,7 +122,26 @@ class VirtualBrain:
 
         cycle_id = new_id("cycle")
         self.store.create_cycle(cycle_id)
-        source_data = dict(source or {})
+        perception = observation if isinstance(observation, NormalizedPerception) else None
+        if perception is not None:
+            if source is not None or modality != "event":
+                raise ValueError("source and modality must be supplied by NormalizedPerception")
+            source_data = dict(perception.source)
+            modality = perception.modality
+            observed_content = perception.content
+            observed_at = perception.observed_at
+            observation_confidence = float(perception.confidence)
+            raw_payload = perception.raw_payload
+            raw_reference = perception.raw_reference
+            transformations = list(perception.transformations)
+        else:
+            source_data = dict(source or {})
+            observed_content = observation
+            observed_at = now_utc()
+            observation_confidence = 1.0
+            raw_payload = observation
+            raw_reference = None
+            transformations = []
         source_data.setdefault("id", new_id("source"))
         source_data.setdefault("type", "user")
         source_data.setdefault("name", "user")
@@ -131,16 +151,18 @@ class VirtualBrain:
             cycle_id=cycle_id,
             producer="perception",
             data={
-                "content": observation,
+                "content": observed_content,
                 "source": source_data,
                 "modality": modality,
-                "observed_at": now_utc(),
+                "observed_at": observed_at,
                 "reliability": source_data["reliability"],
-                "raw_reference": None,
+                "raw_reference": raw_reference,
+                "raw_payload": raw_payload,
+                "transformations": transformations,
             },
             source_refs=[str(source_data["id"])],
             epistemic_status=EpistemicStatus.OBSERVED,
-            confidence=1.0,
+            confidence=observation_confidence,
         )
         goal_data = self._goal_data(
             objective,
