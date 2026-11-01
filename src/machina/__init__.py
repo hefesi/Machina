@@ -29,6 +29,7 @@ from .mnn_organism import (DecisionAssessment, DecisionOption, MNNOrganism, Memo
 from .mnn_adapter import MNNCognitionAdapter
 from .mnn_organism_adapter import MNNOrganismCognitionAdapter
 from .mnn_organism_agency import MNNOrganismAgencyAdapter
+from .mnn_organism_runtime import MNNOrganismRuntime, build_mnn_organism_runtime
 from .self_model import SelfModel
 from .self_state_dynamics import SelfStateDynamicsAnalyzer, SelfStateTransition
 from .self_history_influence import SelfHistoryInfluence, SelfHistoryInfluenceAdapter, SelfHistoryRule
@@ -135,6 +136,8 @@ __all__ = [
     "MNNCognitionAdapter",
     "MNNOrganismCognitionAdapter",
     "MNNOrganismAgencyAdapter",
+    "MNNOrganismRuntime",
+    "build_mnn_organism_runtime",
     "SelfModel",
     "SelfStateDynamicsAnalyzer",
     "SelfStateTransition",
