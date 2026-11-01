@@ -54,7 +54,7 @@ class NormalizedPerceptionTests(unittest.TestCase):
                 self.assertEqual(0.88, state["perception_confidence"])
                 self.assertEqual(workspace.data["cognitive_result_ref"], state["cognitive_result_ref"])
                 self.assertEqual(workspace.data["retrieved_memory_ids"], state["retrieved_memory_refs"])
-                self.assertEqual("inspect", state["understanding"]["summary"])
+                self.assertEqual('{"intent": "inspect"}', state["understanding"]["summary"])
             finally:
                 brain.close()
 
