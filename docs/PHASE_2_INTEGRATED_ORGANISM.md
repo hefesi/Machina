@@ -63,7 +63,7 @@ Nenhum componente deve gravar silenciosamente no banco de outro domínio. A coor
 
 ### 2.1 — Percepção e representação interna
 
-**Feedback motivacional:** `VirtualBrain` aceita um `MotivationSystem` compartilhado com o organismo. Após `evaluation.completed`, o chamador pode fornecer um mapa explícito `motivational_fulfillment` por drive. O sistema calcula um snapshot candidato, persiste `motivation.feedback_applied` e só então restaura o estado vivo. Em retomadas, o snapshot já persistido é reaplicado sem avançar o timestep novamente. Sucesso de execução, sozinho, não significa satisfação de um drive: o chamador precisa declarar o fulfillment esperado. Esse valor só é aplicado se a avaliação confirmar sucesso; em falhas, o fulfillment efetivo é zero. Sem fulfillment explícito, ocorre apenas a dinâmica de recuperação configurada. O evento guarda referência à avaliação, valores aplicados, urgências e snapshot completo.
+**Feedback motivacional:** `VirtualBrain` aceita um `MotivationSystem` compartilhado com o organismo. Após `evaluation.completed`, o chamador pode fornecer um mapa explícito `motivational_fulfillment` por drive. O sistema calcula um snapshot candidato, persiste `motivation.feedback_applied` e só então restaura o estado vivo. Em retomadas, o snapshot já persistido é reaplicado sem avançar o timestep novamente. O adapter MNN também adia o avanço motivacional durante a etapa de cognição para evitar dois ticks no mesmo ciclo; a restauração preserva a identidade do `MotivationSystem` compartilhado pelo organismo e pelo cérebro. Sucesso de execução, sozinho, não significa satisfação de um drive: o chamador precisa declarar o fulfillment esperado. Esse valor só é aplicado se a avaliação confirmar sucesso; em falhas, o fulfillment efetivo é zero. Sem fulfillment explícito, ocorre apenas a dinâmica de recuperação configurada. O evento guarda referência à avaliação, valores aplicados, urgências e snapshot completo.
 
 **Integração de curiosidade:** investigações abertas persistidas são consultadas antes da deliberação; sua quantidade eleva, sem sobrescrever outros sinais, `unresolved_questions`, permitindo que o gerador proponha um objetivo interno de investigação. As IDs das investigações são preservadas em `goal.deliberated`. Isso não cria ações externas automaticamente nem encerra investigações sem evidência.
 
@@ -130,7 +130,7 @@ Este fluxo demonstra integração funcional, memória, adaptação e autonomia o
 - [x] Fluxo existente e lacunas iniciais inspecionados.
 - [x] Contrato de percepção normalizada integrado à ingestão do `VirtualBrain`.
 - [x] Snapshot interno versionado integrado ao workspace após cognição, com referências perceptivas, objetivo, memórias recuperadas, entendimento, incertezas e sinal MNN disponível.
-- [ ] Composição MNN + VirtualBrain formalizada.
+- [x] Composição MNN + VirtualBrain formalizada por `MNNOrganismRuntime`, com identidade compartilhada entre adapters e `MotivationSystem`.
 - [x] Investigações de curiosidade abertas agora alimentam `AutonomyContext.unresolved_questions` e deixam suas referências registradas no artefato `goal.deliberated`.
 - [x] Feedback motivacional agora é aplicado após avaliação por meio de `motivation.feedback_applied`; fulfillment é explícito, validado e persistido com snapshot, permitindo retomada sem duplicar a atualização.
 - [ ] Experimentos ponta a ponta e recuperação adicionados.
