@@ -71,6 +71,76 @@ class SelfModelTests(unittest.TestCase):
         snapshot["beliefs"]["available"]["value"] = True
         self.assertFalse(restored.beliefs["available"]["value"])
 
+
+    def test_self_prediction_is_compared_with_evidence_backed_outcome(self):
+        model = SelfModel()
+        prediction = model.predict(
+            "runtime_available", True,
+            prediction_ref="prediction-1", cycle_id="cycle-1",
+            confidence=0.8, horizon="next_cycle",
+        )
+        self.assertEqual("prediction-1", prediction["prediction_ref"])
+        evaluation = model.evaluate_prediction(
+            "prediction-1", True, cycle_id="cycle-2",
+            evidence_ref="runtime-check-2",
+        )
+        self.assertTrue(evaluation["matched"])
+        self.assertEqual(0.0, evaluation["error"])
+        self.assertEqual("runtime-check-2", evaluation["evidence_ref"])
+
+    def test_prediction_error_is_recorded_for_mismatch(self):
+        model = SelfModel()
+        model.predict(
+            "memory_count", 5, prediction_ref="prediction-2",
+            cycle_id="cycle-1",
+        )
+        evaluation = model.evaluate_prediction(
+            "prediction-2", 3, cycle_id="cycle-2",
+            evidence_ref="memory-audit-2",
+        )
+        self.assertFalse(evaluation["matched"])
+        self.assertEqual(1.0, evaluation["error"])
+        self.assertEqual(1, len(model.prediction_errors))
+
+    def test_predictions_cannot_be_duplicated_or_evaluated_twice(self):
+        model = SelfModel()
+        model.predict("ready", True, prediction_ref="p1", cycle_id="c1")
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            model.predict("ready", False, prediction_ref="p1", cycle_id="c1")
+        model.evaluate_prediction("p1", True, cycle_id="c2", evidence_ref="e2")
+        with self.assertRaisesRegex(ValueError, "already evaluated"):
+            model.evaluate_prediction("p1", True, cycle_id="c3", evidence_ref="e3")
+        with self.assertRaisesRegex(ValueError, "unknown"):
+            model.evaluate_prediction("missing", True, cycle_id="c3", evidence_ref="e3")
+
+    def test_prediction_history_survives_snapshot_round_trip(self):
+        model = SelfModel()
+        model.predict(
+            "runtime_available", True, prediction_ref="p1",
+            cycle_id="c1", confidence=0.7,
+        )
+        model.evaluate_prediction(
+            "p1", False, cycle_id="c2", evidence_ref="runtime-check",
+        )
+        snapshot = json.loads(json.dumps(model.snapshot()))
+        restored = SelfModel.from_snapshot(snapshot)
+        self.assertEqual(model.snapshot(), restored.snapshot())
+        snapshot["predictions"][0]["predicted_value"] = False
+        self.assertIs(True, restored.prediction_history["predictions"][0]["predicted_value"])
+
+    def test_prediction_validation_rejects_invalid_confidence_and_corrupt_restore(self):
+        model = SelfModel()
+        with self.assertRaises(ValueError):
+            model.predict("ready", True, prediction_ref="p1", cycle_id="c1", confidence=1.5)
+        model.predict("ready", True, prediction_ref="p1", cycle_id="c1")
+        snapshot = model.snapshot()
+        snapshot["prediction_evaluations"] = [{
+            "prediction_ref": "unknown", "error": 0.0, "matched": True,
+            "evidence_ref": "e1", "evaluation_cycle_id": "c2",
+        }]
+        with self.assertRaisesRegex(ValueError, "unknown or repeated"):
+            SelfModel.from_snapshot(snapshot)
+
     def test_rejects_unknown_schema_and_malformed_snapshot(self):
         with self.assertRaisesRegex(ValueError, "unsupported"):
             SelfModel.from_snapshot({"schema_version": 99})
@@ -82,6 +152,55 @@ class SelfModelTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             SelfModel.from_snapshot(state)
 
+    def test_explicit_belief_revision_preserves_previous_state(self):
+        model = SelfModel()
+        model.update({'strategy_effect': {'effect': 0.2}}, cycle_id='cycle-1',
+                     evidence_refs={'strategy_effect': 'experiment-1'},
+                     statuses={'strategy_effect': 'inferred'},
+                     confidences={'strategy_effect': 0.6})
+        revision = model.revise_belief(
+            'strategy_effect', {'effect': -0.1}, cycle_id='cycle-2',
+            reason='A replication produced an opposite estimate.',
+            source='replication', evidence_ref='experiment-2',
+            status='inferred', confidence=0.7, contradicts_previous=True,
+        )
+        self.assertEqual(1, revision['sequence'])
+        self.assertEqual({'effect': 0.2}, revision['previous']['value'])
+        self.assertEqual({'effect': -0.1}, model.beliefs['strategy_effect']['value'])
+        self.assertTrue(model.belief_revision_history[0]['contradicts_previous'])
+
+    def test_belief_revision_requires_existing_belief_and_new_evidence(self):
+        model = SelfModel()
+        with self.assertRaisesRegex(ValueError, 'missing belief'):
+            model.revise_belief('missing', 1, cycle_id='c2', reason='r', source='test', evidence_ref='e2')
+        model.update({'x': 1}, cycle_id='c1', evidence_refs={'x': 'e1'})
+        with self.assertRaisesRegex(ValueError, 'must be new'):
+            model.revise_belief('x', 2, cycle_id='c2', reason='r', source='test', evidence_ref='e1')
+
+    def test_belief_revision_history_survives_snapshot_restore_and_is_validated(self):
+        model = SelfModel()
+        model.update({'x': 1}, cycle_id='c1', evidence_refs={'x': 'e1'}, statuses={'x': 'inferred'})
+        model.revise_belief('x', 2, cycle_id='c2', reason='new evidence', source='test', evidence_ref='e2')
+        snapshot = json.loads(json.dumps(model.snapshot()))
+        restored = SelfModel.from_snapshot(snapshot)
+        self.assertEqual(model.belief_revision_history, restored.belief_revision_history)
+        snapshot['belief_revisions'][0]['sequence'] = 2
+        with self.assertRaisesRegex(ValueError, 'contiguous'):
+            SelfModel.from_snapshot(snapshot)
+
+    def test_normal_update_after_revision_keeps_snapshot_loadable(self):
+        model = SelfModel()
+        model.update({'x': 1}, cycle_id='c1', evidence_refs={'x': 'e1'}, statuses={'x': 'inferred'})
+        model.revise_belief('x', 2, cycle_id='c2', reason='revision', source='test', evidence_ref='e2')
+        model.update({'x': 3}, cycle_id='c3', evidence_refs={'x': 'e3'}, statuses={'x': 'inferred'})
+        restored = SelfModel.from_snapshot(json.loads(json.dumps(model.snapshot())))
+        self.assertEqual(3, restored.beliefs['x']['value'])
+        self.assertEqual(1, len(restored.belief_revision_history))
+    def test_legacy_snapshot_without_belief_revisions_restores(self):
+        state = SelfModel().update({'x': 1}, cycle_id='c1', evidence_refs={'x': 'e1'})
+        state.pop('belief_revisions', None)
+        restored = SelfModel.from_snapshot(state)
+        self.assertEqual([], restored.belief_revision_history)
     def test_unknown_belief_can_be_invalidated(self):
         model = SelfModel()
         model.update(
@@ -109,6 +228,56 @@ class SelfModelTests(unittest.TestCase):
                         {"measurement": value}, cycle_id="cycle-1",
                         evidence_refs={"measurement": "sensor-1"},
                     )
+
+
+    def test_calibration_report_measures_accuracy_confidence_and_coverage(self):
+        model = SelfModel()
+        model.predict("runtime", True, prediction_ref="p1", cycle_id="c1", confidence=0.9, horizon="short")
+        model.predict("runtime", True, prediction_ref="p2", cycle_id="c1", confidence=0.6, horizon="short")
+        model.predict("runtime", False, prediction_ref="p3", cycle_id="c1", confidence=0.6, horizon="long")
+        model.predict("memory", 4, prediction_ref="p4", cycle_id="c1", confidence=0.8, horizon="short")
+        model.evaluate_prediction("p1", True, cycle_id="c2", evidence_ref="e1")
+        model.evaluate_prediction("p2", False, cycle_id="c2", evidence_ref="e2")
+        model.evaluate_prediction("p3", False, cycle_id="c2", evidence_ref="e3")
+        report = model.calibration_report()
+        overall = report["overall"]
+        self.assertEqual((4, 3, 1), (overall["emitted"], overall["evaluated"], overall["pending"]))
+        self.assertAlmostEqual(0.75, overall["coverage"])
+        self.assertAlmostEqual(2 / 3, overall["accuracy"])
+        self.assertAlmostEqual(0.7, overall["mean_confidence"])
+        self.assertAlmostEqual(0.7 - 2 / 3, overall["calibration_gap"])
+        self.assertEqual(3, report["by_property"]["runtime"]["evaluated"])
+        self.assertEqual(1, report["by_horizon"]["long"]["evaluated"])
+
+    def test_calibration_report_filters_property_and_horizon(self):
+        model = SelfModel()
+        model.predict("runtime", True, prediction_ref="p1", cycle_id="c1", confidence=0.8, horizon="short")
+        model.predict("runtime", True, prediction_ref="p2", cycle_id="c1", confidence=0.7, horizon="long")
+        model.predict("memory", 2, prediction_ref="p3", cycle_id="c1", confidence=0.6, horizon="short")
+        model.evaluate_prediction("p1", True, cycle_id="c2", evidence_ref="e1")
+        model.evaluate_prediction("p2", False, cycle_id="c2", evidence_ref="e2")
+        report = model.calibration_report(property_name="runtime", horizon="short")
+        self.assertEqual({"property": "runtime", "horizon": "short"}, report["filters"])
+        self.assertEqual(1, report["overall"]["emitted"])
+        self.assertEqual(1, report["overall"]["evaluated"])
+        self.assertEqual(1.0, report["overall"]["accuracy"])
+        self.assertEqual(["runtime"], list(report["by_property"]))
+
+    def test_empty_calibration_report_is_explicit_and_does_not_claim_zero_accuracy(self):
+        report = SelfModel().calibration_report()
+        self.assertEqual(0, report["overall"]["emitted"])
+        self.assertEqual(0, report["overall"]["evaluated"])
+        self.assertIsNone(report["overall"]["coverage"])
+        self.assertIsNone(report["overall"]["accuracy"])
+        self.assertIsNone(report["overall"]["mean_confidence"])
+        self.assertIsNone(report["overall"]["calibration_gap"])
+
+    def test_calibration_report_survives_snapshot_restore(self):
+        model = SelfModel()
+        model.predict("ready", True, prediction_ref="p1", cycle_id="c1", confidence=0.75)
+        model.evaluate_prediction("p1", True, cycle_id="c2", evidence_ref="e1")
+        restored = SelfModel.from_snapshot(json.loads(json.dumps(model.snapshot())))
+        self.assertEqual(model.calibration_report(), restored.calibration_report())
 
 
 if __name__ == "__main__":
