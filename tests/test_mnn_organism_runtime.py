@@ -53,11 +53,13 @@ class MNNOrganismRuntimeTests(unittest.TestCase):
         self.assertEqual(runtime.ranked_drives()[0][0], "curiosity")
 
     def test_runtime_without_motivation_returns_empty_signals(self):
-        organism = MNNOrganism("runtime-no-motivation", network=MNN())
+        network = MNN()
+        network.add_unit(Unit("sensor", activation="identity"))
+        organism = MNNOrganism("runtime-no-motivation", network=network)
         runtime = build_mnn_organism_runtime(
             organism,
-            input_features={"unit_0": "text_length"},
-            target_unit="unit_0",
+            input_features={"sensor": "text_length"},
+            target_unit="sensor",
         )
         self.assertIsNone(runtime.motivation)
         self.assertEqual(runtime.drive_adjustments(), {})
