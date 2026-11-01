@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
+from pathlib import Path
 
 from machina import (
     MNN,
@@ -9,6 +11,11 @@ from machina import (
     MotivationSystem,
     Unit,
     build_mnn_organism_runtime,
+    AutonomyContext,
+    AutonomyController,
+    InternalDeliberator,
+    PersistentGoalStore,
+    VirtualBrain,
 )
 
 
@@ -64,6 +71,42 @@ class MNNOrganismRuntimeTests(unittest.TestCase):
         self.assertIsNone(runtime.motivation)
         self.assertEqual(runtime.drive_adjustments(), {})
         self.assertEqual(runtime.ranked_drives(), [])
+
+    def test_runtime_completes_integrated_cycle_with_one_motivational_tick(self):
+        with tempfile.TemporaryDirectory() as directory:
+            organism = self.make_organism()
+            runtime = build_mnn_organism_runtime(
+                organism,
+                input_features={"sensor": "text_length"},
+                target_unit="memory",
+            )
+            shared_motivation = organism.motivation
+            goals = PersistentGoalStore(Path(directory) / "goals.sqlite")
+            brain = VirtualBrain(
+                Path(directory) / "brain.sqlite",
+                cognition=runtime.cognition,
+                agency=runtime.agency,
+                internal_deliberator=InternalDeliberator(AutonomyController(), goals),
+            )
+            result = runtime.run_deliberated_cycle(
+                brain,
+                "Inspect this integrated cognitive cycle.",
+                AutonomyContext(unresolved_questions=1),
+                motivational_fulfillment={"curiosity": 0.5},
+            )
+            self.assertEqual("completed", result.status)
+            self.assertIs(organism.motivation, shared_motivation)
+            self.assertIs(brain.motivation_system, shared_motivation)
+            self.assertIs(runtime.motivation, shared_motivation)
+            self.assertEqual(1, shared_motivation.timestep)
+            feedback = next(
+                event.artifact for event in result.events
+                if event.event_type == "motivation.feedback_applied"
+            )
+            self.assertEqual({"curiosity": 0.5}, feedback.data["fulfillment"])
+            self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+            brain.close()
+            goals.close()
 
     def test_factory_rejects_non_organism(self):
         with self.assertRaises(TypeError):
