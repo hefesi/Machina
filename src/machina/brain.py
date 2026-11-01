@@ -30,6 +30,7 @@ from .curiosity import CuriosityInvestigationStore
 from .perception import NormalizedPerception
 from .internal_state import InternalStateSnapshot
 from .mnn_motivation import MotivationSystem
+from .causal_learning import CausalExperimentStore
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +79,7 @@ class VirtualBrain:
         internal_deliberator: InternalDeliberator | None = None,
         curiosity_investigation_path: str | Path | None = None,
         motivation_system: MotivationSystem | None = None,
+        causal_experiment_store: CausalExperimentStore | None = None,
     ) -> None:
         self.store = EventStore(storage_path)
         self.strategy_events = MNNStrategyEventBridge(self.store)
@@ -89,6 +91,9 @@ class VirtualBrain:
         if motivation_system is not None and not isinstance(motivation_system, MotivationSystem):
             raise TypeError("motivation_system must be a MotivationSystem")
         self.motivation_system = motivation_system
+        if causal_experiment_store is not None and not isinstance(causal_experiment_store, CausalExperimentStore):
+            raise TypeError("causal_experiment_store must be a CausalExperimentStore")
+        self.causal_experiment_store = causal_experiment_store
         self.curiosity_store = (
             CuriosityInvestigationStore(curiosity_investigation_path)
             if curiosity_investigation_path is not None else None
@@ -235,6 +240,7 @@ class VirtualBrain:
         self_history_influence: SelfHistoryInfluence | None = None,
         recent_goal_ids: Sequence[str] = (),
         motivational_fulfillment: Mapping[str, float] | None = None,
+        strategy_experiment_id: str | None = None,
         **cycle_kwargs: Any,
     ) -> CycleResult:
         """Select an internal goal, journal its rationale, then run one brain cycle.
@@ -330,11 +336,19 @@ class VirtualBrain:
             "unresolved_question_count": len(open_investigations),
             "policy": "open_investigations_raise_curiosity_goal_pressure",
         }
+        strategy_guidance = None
+        if strategy_experiment_id is not None:
+            if self.causal_experiment_store is None:
+                raise RuntimeError("strategy_experiment_id requires causal_experiment_store")
+            strategy_guidance = self.causal_experiment_store.strategy_guidance(
+                strategy_experiment_id
+            )
         deliberation = self.internal_deliberator.deliberate(
             context,
             motivation=motivation,
             drive_adjustments=combined_adjustments,
             recent_goal_ids=recent_goal_ids,
+            strategy_guidance=strategy_guidance,
         )
         selected = deliberation.selected_goal
         if selected is None:
@@ -370,6 +384,7 @@ class VirtualBrain:
                 "homeostatic_regulation": homeostasis_trace,
                 "self_history_influence": self_history_trace,
                 "curiosity_context": curiosity_trace,
+                "strategy_guidance": strategy_guidance,
             },
             input_refs=[active_goal.id],
             source_refs=active_goal.source_refs,
