@@ -52,7 +52,8 @@ class VirtualBrainLoopTests(unittest.TestCase):
                 )
             ])
 
-        brain = VirtualBrain(self.database_path, motivation_system=make_motivation())
+        original_motivation = make_motivation()
+        brain = VirtualBrain(self.database_path, motivation_system=original_motivation)
         cycle_id = brain.start_cycle(
             "An observed outcome.",
             {
@@ -63,6 +64,7 @@ class VirtualBrainLoopTests(unittest.TestCase):
         self.assertIsNone(brain.advance(cycle_id, stop_after="motivation.feedback_applied"))
         self.assertEqual(1, brain.motivation_system.timestep)
         self.assertAlmostEqual(0.6, brain.motivation_system.drives["curiosity"].level)
+        self.assertIs(original_motivation, brain.motivation_system)
         feedback_events = [
             event for event in brain.store.events_for_cycle(cycle_id)
             if event.event_type == "motivation.feedback_applied"
