@@ -63,7 +63,7 @@ Nenhum componente deve gravar silenciosamente no banco de outro domínio. A coor
 
 ### 2.1 — Percepção e representação interna
 
-**Implementado nesta etapa:** `NormalizedPerception` preserva conteúdo normalizado, payload bruto, modalidade, fonte/confiabilidade, timestamp, confiança, referência ao dado bruto e trilha de transformações. `VirtualBrain.start_cycle` aceita esse contrato e registra os metadados no artefato de observação; a entrada legada continua compatível. Isso padroniza a fronteira perceptiva, mas ainda não constitui o workspace interno unificado descrito abaixo.
+**Implementado nesta etapa:** `NormalizedPerception` preserva conteúdo normalizado, payload bruto, modalidade, fonte/confiabilidade, timestamp, confiança, referência ao dado bruto e trilha de transformações. `VirtualBrain.start_cycle` aceita esse contrato e registra os metadados no artefato de observação; a entrada legada continua compatível. `InternalStateSnapshot` (`machina.internal_state.v1`) compõe a percepção, referências de memória recuperada, objetivo ativo, entendimento, incertezas e telemetria MNN disponível em um snapshot serializável e versionado, incorporado ao workspace após cognição. O snapshot é uma representação operacional por ciclo, não uma alegação de experiência subjetiva.
 
 - Definir contrato de percepção normalizada, sem exigir dependência de câmera, áudio ou LLM.
 - Preservar payload original, modalidade, fonte, timestamp, confiança e transformação aplicada.
@@ -124,7 +124,8 @@ Este fluxo demonstra integração funcional, memória, adaptação e autonomia o
 
 - [x] Branch de trabalho criada a partir da `main`.
 - [x] Fluxo existente e lacunas iniciais inspecionados.
-- [x] Contrato de percepção normalizada implementado e integrado à ingestão do `VirtualBrain`; representação interna unificada ainda pendente.
+- [x] Contrato de percepção normalizada integrado à ingestão do `VirtualBrain`.
+- [x] Snapshot interno versionado integrado ao workspace após cognição, com referências perceptivas, objetivo, memórias recuperadas, entendimento, incertezas e sinal MNN disponível.
 - [ ] Composição MNN + VirtualBrain formalizada.
 - [ ] Ponte motivação/curiosidade/objetivos implementada.
 - [ ] Experimentos ponta a ponta e recuperação adicionados.
