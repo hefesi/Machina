@@ -286,3 +286,50 @@ class CausalExperimentStore:
                 "The unobserved outcome for an individual unit is not directly knowable.",
             ],
         }
+
+
+    def strategy_guidance(
+        self,
+        experiment_id: str,
+        *,
+        minimum_per_arm: int = 5,
+    ) -> dict[str, Any]:
+        """Return bounded decision support without mutating strategy policy.
+
+        Only randomized or matched comparisons with an interval excluding zero
+        can produce a directional recommendation. Observational associations,
+        small samples, and inconclusive intervals always return hold.
+        The caller remains responsible for policy approval and deployment.
+        """
+        report = self.report(experiment_id, minimum_per_arm=minimum_per_arm)
+        estimate = report["estimate"]
+        guidance = "hold"
+        reason = "evidence_is_insufficient_or_not_identifying"
+        interval = (
+            estimate.get("confidence_interval_95_normal_approx")
+            if isinstance(estimate, dict) else None
+        )
+        if report["classification"] == "observational_association":
+            reason = "observational_data_cannot_authorize_policy_changes"
+        elif isinstance(interval, list) and len(interval) == 2:
+            lower, upper = interval
+            if lower > 0:
+                guidance = "favor_treatment_for_human_review"
+                reason = "approximate_interval_is_above_zero"
+            elif upper < 0:
+                guidance = "favor_control_for_human_review"
+                reason = "approximate_interval_is_below_zero"
+            else:
+                reason = "approximate_interval_includes_zero"
+        return {
+            "experiment_id": report["experiment"]["experiment_id"],
+            "guidance": guidance,
+            "reason": reason,
+            "classification": report["classification"],
+            "treatment": report["treatment"],
+            "control": report["control"],
+            "estimate": estimate,
+            "policy_mutated": False,
+            "requires_human_or_external_policy_approval": True,
+            "limitations": list(report["limitations"]),
+        }
