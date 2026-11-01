@@ -29,6 +29,7 @@ from .mnn_strategy_event_bridge import MNNStrategyEventBridge
 from .curiosity import CuriosityInvestigationStore
 from .perception import NormalizedPerception
 from .internal_state import InternalStateSnapshot
+from .mnn_motivation import MotivationSystem
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +77,7 @@ class VirtualBrain:
         fragment_memory_path: str | Path | None = None,
         internal_deliberator: InternalDeliberator | None = None,
         curiosity_investigation_path: str | Path | None = None,
+        motivation_system: MotivationSystem | None = None,
     ) -> None:
         self.store = EventStore(storage_path)
         self.strategy_events = MNNStrategyEventBridge(self.store)
@@ -84,6 +86,9 @@ class VirtualBrain:
         self.action_executor = action_executor or AcknowledgeExecutor()
         self.learning = learning or OutcomeLearner()
         self.internal_deliberator = internal_deliberator
+        if motivation_system is not None and not isinstance(motivation_system, MotivationSystem):
+            raise TypeError("motivation_system must be a MotivationSystem")
+        self.motivation_system = motivation_system
         self.curiosity_store = (
             CuriosityInvestigationStore(curiosity_investigation_path)
             if curiosity_investigation_path is not None else None
@@ -220,6 +225,7 @@ class VirtualBrain:
         homeostatic_proposal: HomeostaticProposal | None = None,
         self_history_influence: SelfHistoryInfluence | None = None,
         recent_goal_ids: Sequence[str] = (),
+        motivational_fulfillment: Mapping[str, float] | None = None,
         **cycle_kwargs: Any,
     ) -> CycleResult:
         """Select an internal goal, journal its rationale, then run one brain cycle.
@@ -231,6 +237,19 @@ class VirtualBrain:
         """
         if self.internal_deliberator is None:
             raise RuntimeError("run_deliberated_cycle requires internal_deliberator")
+        if motivation is not None:
+            if not isinstance(motivation, MotivationSystem):
+                raise TypeError("motivation must be a MotivationSystem")
+            if self.motivation_system is not None and self.motivation_system is not motivation:
+                raise ValueError("deliberation motivation must match the brain motivation_system")
+            self.motivation_system = motivation
+        validated_fulfillment = (
+            self.motivation_system.validate_fulfillment(motivational_fulfillment)
+            if self.motivation_system is not None
+            else dict(motivational_fulfillment or {})
+        )
+        if self.motivation_system is None and validated_fulfillment:
+            raise ValueError("motivational_fulfillment requires a configured MotivationSystem")
         combined_adjustments = dict(drive_adjustments or {})
         homeostasis_trace = None
         if homeostatic_proposal is not None:
@@ -317,6 +336,7 @@ class VirtualBrain:
                 "success_criteria": [],
                 "internal_goal_id": selected.goal_id,
                 "persistent_goal_record_id": deliberation.persistent_record_id,
+                "motivational_fulfillment": validated_fulfillment,
             },
             **cycle_kwargs,
         )
@@ -702,6 +722,18 @@ class VirtualBrain:
             )
             if self._stop_if_requested(cycle_id, "evaluation.completed", stop_after):
                 return None
+
+            if self.motivation_system is not None:
+                feedback = self._stage(
+                    cycle_id,
+                    "motivation.feedback_applied",
+                    lambda: self._motivation_feedback(evaluation, goal),
+                )
+                self.motivation_system = MotivationSystem.from_snapshot(
+                    feedback.data["motivation_snapshot"]
+                )
+                if self._stop_if_requested(cycle_id, "motivation.feedback_applied", stop_after):
+                    return None
 
             proposal = self._stage(
                 cycle_id,
@@ -1433,6 +1465,39 @@ class VirtualBrain:
             source_refs=experience.source_refs,
             epistemic_status=EpistemicStatus.OBSERVED,
             confidence=1.0,
+        )
+
+    def _motivation_feedback(self, evaluation: Artifact, goal: Artifact) -> Artifact:
+        """Propose one outcome-grounded drive update without mutating live state."""
+        if self.motivation_system is None:
+            raise RuntimeError("motivation feedback requires a configured MotivationSystem")
+        fulfillment = self.motivation_system.validate_fulfillment(
+            goal.data.get("motivational_fulfillment", {})
+        )
+        candidate = MotivationSystem.from_snapshot(self.motivation_system.snapshot())
+        previous_timestep = candidate.timestep
+        effective = candidate.step(fulfillment)
+        return Artifact.create(
+            ContractKind.MOTIVATION_STATE,
+            cycle_id=evaluation.cycle_id,
+            producer="motivation_feedback",
+            data={
+                "evaluation_ref": evaluation.id,
+                "success": bool(evaluation.data["success"]),
+                "fulfillment": fulfillment,
+                "previous_timestep": previous_timestep,
+                "timestep": candidate.timestep,
+                "effective_urgencies": effective,
+                "motivation_snapshot": candidate.snapshot(),
+                "interpretation": (
+                    "Explicit caller-supplied fulfillment is applied after evaluation; "
+                    "success alone never implies drive satisfaction."
+                ),
+            },
+            input_refs=[evaluation.id],
+            source_refs=evaluation.source_refs,
+            epistemic_status=EpistemicStatus.INTERPRETED,
+            confidence=evaluation.confidence,
         )
 
     def _evaluation(self, experience: Artifact, result: Artifact) -> Artifact:
