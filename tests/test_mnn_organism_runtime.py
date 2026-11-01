@@ -104,6 +104,18 @@ class MNNOrganismRuntimeTests(unittest.TestCase):
                 if event.event_type == "motivation.feedback_applied"
             )
             self.assertEqual({"curiosity": 0.5}, feedback.data["fulfillment"])
+            plasticity = next(
+                event.artifact for event in result.events
+                if event.event_type == "mnn.plasticity_applied"
+            )
+            self.assertEqual(
+                [next(e.artifact.id for e in result.events if e.event_type == "evaluation.completed"),
+                 next(e.artifact.id for e in result.events if e.event_type == "consolidation.validated")],
+                list(plasticity.input_refs),
+            )
+            self.assertIn("prediction_error", plasticity.data["change"])
+            self.assertIn("actual_outcome", plasticity.data["change"])
+            self.assertEqual("approved", plasticity.data["change"]["validation_status"])
             self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
             brain.close()
             goals.close()
