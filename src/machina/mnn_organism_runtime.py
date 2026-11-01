@@ -56,6 +56,10 @@ class MNNOrganismRuntime:
             raise ValueError("brain cognition must be this runtime's cognition adapter")
         if getattr(brain, "agency", None) is not self.agency:
             raise ValueError("brain agency must be this runtime's agency adapter")
+        if self.motivation is not None:
+            if getattr(brain, "motivation_system", None) not in (None, self.motivation):
+                raise ValueError("brain motivation_system must be this runtime's motivation system")
+            brain.motivation_system = self.motivation
         if "motivation" in cycle_kwargs or "drive_adjustments" in cycle_kwargs:
             raise TypeError("motivation and drive_adjustments are supplied by the runtime")
         return brain.run_deliberated_cycle(
