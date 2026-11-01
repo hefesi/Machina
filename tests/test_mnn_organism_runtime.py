@@ -16,6 +16,8 @@ from machina import (
     InternalDeliberator,
     PersistentGoalStore,
     VirtualBrain,
+    NormalizedPerception,
+    CausalExperimentStore,
 )
 
 
@@ -127,6 +129,83 @@ class MNNOrganismRuntimeTests(unittest.TestCase):
                 input_features={"sensor": "text_length"},
                 target_unit="sensor",
             )
+
+    def test_full_organism_cycle_from_normalized_perception_through_curiosity_and_causal_guidance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            organism = self.make_organism()
+            runtime = build_mnn_organism_runtime(
+                organism,
+                input_features={"sensor": "text_length"},
+                target_unit="memory",
+            )
+            goals = PersistentGoalStore(Path(directory) / "goals.sqlite")
+            causal = CausalExperimentStore(Path(directory) / "causal.sqlite")
+            causal.register_experiment(
+                "strategy-observation",
+                design="observational",
+                treatment_name="memory-guided",
+                control_name="baseline",
+                protocol_ref="protocol:observational-v1",
+            )
+            brain = VirtualBrain(
+                Path(directory) / "brain.sqlite",
+                cognition=runtime.cognition,
+                agency=runtime.agency,
+                internal_deliberator=InternalDeliberator(AutonomyController(), goals),
+                curiosity_investigation_path=Path(directory) / "curiosity.sqlite",
+                causal_experiment_store=causal,
+            )
+            try:
+                brain.curiosity_store.start_investigation(
+                    "open-question-1",
+                    gap_property="navigation_uncertainty",
+                    question="Which route is safer?",
+                    hypothesis="The route with fewer obstacles is safer.",
+                    selection_reason="Unresolved perception uncertainty.",
+                    cycle_id="seed-cycle",
+                    goal_id="seed-goal",
+                )
+                perception = NormalizedPerception(
+                    content={"intent": "route_assessment", "text": "Compare the safer route and inspect obstacles."},
+                    raw_payload={"transcript": "Compare the safer route and inspect obstacles."},
+                    modality="audio_transcript",
+                    source={"type": "microphone", "name": "test-mic", "reliability": 0.94},
+                    confidence=0.87,
+                    raw_reference="capture:integrated-e2e",
+                    transformations=("speech_to_text", "intent_extraction"),
+                )
+                result = runtime.run_deliberated_cycle(
+                    brain,
+                    perception,
+                    AutonomyContext(unresolved_questions=0),
+                    strategy_experiment_id="strategy-observation",
+                    motivational_fulfillment={"curiosity": 0.4},
+                )
+                self.assertEqual("completed", result.status)
+                events = {event.event_type: event.artifact for event in result.events}
+                observed = events["observation.received"]
+                self.assertEqual("audio_transcript", observed.data["modality"])
+                self.assertEqual("capture:integrated-e2e", observed.data["raw_reference"])
+                self.assertEqual(0.87, observed.confidence)
+                state = events["workspace.cognition_updated"].data["internal_state"]
+                self.assertEqual(result.cycle_id, state["cycle_id"])
+                self.assertIn("cognitive_result_ref", state)
+                self.assertEqual(1, state["mnn_signal"]["timestep"])
+                self.assertEqual(["open-question-1"], events["goal.deliberated"].data["curiosity_context"]["open_investigation_refs"])
+                guidance = events["goal.deliberated"].data["strategy_guidance"]
+                self.assertEqual("hold", guidance["guidance"])
+                self.assertEqual("observational_association", guidance["classification"])
+                self.assertFalse(guidance["policy_mutated"])
+                self.assertEqual(1, organism.motivation.timestep)
+                self.assertIn("decision.made", events)
+                self.assertIn("action.result", events)
+                self.assertIn("evaluation.completed", events)
+                self.assertIn("mnn.plasticity_applied", events)
+                self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+            finally:
+                brain.close()
+                goals.close()
+                causal.close()
 
 
 if __name__ == "__main__":
