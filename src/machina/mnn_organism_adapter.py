@@ -113,7 +113,10 @@ class MNNOrganismCognitionAdapter:
             unit_id: features[feature]
             for unit_id, feature in self.input_features.items()
         }
-        step = self.organism.step(inputs=inputs)
+        # VirtualBrain applies evaluated motivational feedback once, after
+        # action evaluation. Keep cognition's MNN tick from advancing drives
+        # a second time within the same integrated cycle.
+        step = self.organism.step(inputs=inputs, advance_motivation=False)
 
         understanding = dict(result.get("understanding", {}))
         understanding["mnn_signal"] = {
