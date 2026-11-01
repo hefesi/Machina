@@ -155,6 +155,61 @@ class CausalExperimentStore:
             "context_key": context, "trial_id": token,
         }
 
+    def record_strategy_outcome(
+        self,
+        experiment_id: str,
+        arm: str,
+        outcome_event: object,
+        *,
+        context_key: str | None = None,
+    ) -> dict[str, Any]:
+        """Project one confirmed EventStore strategy outcome into this analysis ledger.
+
+        EventStore remains authoritative. Replaying the same event is idempotent;
+        a different payload reusing its operation ID is rejected.
+        """
+        event_type = getattr(outcome_event, "event_type", None)
+        artifact = getattr(outcome_event, "artifact", None)
+        cycle_id = getattr(outcome_event, "cycle_id", None)
+        if event_type != "strategy.outcome.recorded" or artifact is None:
+            raise ValueError("outcome_event must be a strategy.outcome.recorded event")
+        if artifact.kind != "strategy_outcome":
+            raise ValueError("outcome event must contain a strategy_outcome artifact")
+        data = artifact.data
+        if data.get("execution_confirmed") is not True:
+            raise ValueError("strategy outcome must confirm execution")
+        operation_id = self._label(data.get("operation_id"), "operation_id")
+        observed = data.get("observed_reward")
+        evidence = self._label(artifact.id, "evidence_ref")
+        key = self._label(experiment_id, "experiment_id")
+        group = self._label(arm, "arm")
+        experiment = self.experiment(key)
+        if experiment["design"] == "matched" and context_key is None:
+            raise ValueError("matched strategy outcomes require context_key")
+        if experiment["design"] != "matched" and context_key is not None:
+            raise ValueError("context_key is only valid for matched experiments")
+        trial_id = f"{key}:{operation_id}"
+        existing = self._db.execute(
+            "SELECT * FROM causal_trials WHERE trial_id = ?", (trial_id,)
+        ).fetchone()
+        expected_context = None if context_key is None else self._label(context_key, "context_key")
+        if existing is not None:
+            row = dict(existing)
+            expected = (key, group, float(observed), evidence, expected_context)
+            actual = (
+                row["experiment_id"], row["arm"], row["outcome"],
+                row["evidence_ref"], row["context_key"],
+            )
+            if actual != expected:
+                raise ValueError("operation_id was already projected with different trial data")
+            return row
+        return self.record_trial(
+            key, group, observed,
+            evidence_ref=evidence,
+            trial_id=trial_id,
+            context_key=expected_context,
+        )
+
     @staticmethod
     def _mean_variance(values: list[float]) -> tuple[float | None, float | None]:
         if not values:
