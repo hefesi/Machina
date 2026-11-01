@@ -29,6 +29,7 @@ class DeliberationDecision:
     rationale: str
     history_record_id: int | None = None
     previous_goal_id: str | None = None
+    strategy_guidance: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -40,6 +41,7 @@ class DeliberationDecision:
             "rationale": self.rationale,
             "history_record_id": self.history_record_id,
             "previous_goal_id": self.previous_goal_id,
+            "strategy_guidance": self.strategy_guidance,
             "interpretation": (
                 "A bounded, deterministic operational deliberation record; "
                 "selection is not evidence of subjective experience."
@@ -87,11 +89,19 @@ class InternalDeliberator:
         drive_adjustments: dict[str, float] | None = None,
         recent_goal_ids: tuple[str, ...] | list[str] = (),
         open_goal_limit: int = 20,
+        strategy_guidance: dict[str, Any] | None = None,
     ) -> DeliberationDecision:
         """Run one cycle and return the selected focus with score rationale."""
         if isinstance(open_goal_limit, bool) or not isinstance(open_goal_limit, int) or open_goal_limit < 1:
             raise ValueError("open_goal_limit must be a positive integer")
 
+        if strategy_guidance is not None:
+            if not isinstance(strategy_guidance, dict):
+                raise ValueError("strategy_guidance must be a mapping")
+            if strategy_guidance.get("policy_mutated") is not False:
+                raise ValueError("strategy guidance must be advisory and non-mutating")
+            if strategy_guidance.get("requires_human_or_external_policy_approval") is not True:
+                raise ValueError("strategy guidance must require external policy approval")
         history = self.goals.recent_deliberations(3)
         previous_goal_id = history[0]["selected_goal_id"] if history else None
         historical_goal_ids = [item["selected_goal_id"] for item in history if isinstance(item.get("selected_goal_id"), str)]
@@ -148,6 +158,7 @@ class InternalDeliberator:
             "cycles_since_reflection": context.cycles_since_reflection,
             "cycles_since_memory_review": context.cycles_since_memory_review,
             "memory_count": context.memory_count,
+            "strategy_guidance": strategy_guidance,
             "important_memory_count": context.important_memory_count,
         }
         history_record_id = self.goals.record_deliberation(
@@ -166,4 +177,5 @@ class InternalDeliberator:
             rationale=rationale,
             history_record_id=history_record_id,
             previous_goal_id=previous_goal_id,
+            strategy_guidance=dict(strategy_guidance) if strategy_guidance is not None else None,
         )
