@@ -575,6 +575,24 @@ class VirtualBrain:
             if experience.id not in proposal.data["source_experience_refs"]:
                 errors.append("learning proposal does not preserve source experience")
 
+        plasticity_event = by_type.get("mnn.plasticity_applied")
+        if plasticity_event:
+            evaluation = by_type.get("evaluation.completed")
+            validation = by_type.get("consolidation.validated")
+            change = plasticity_event.data.get("change", {})
+            if evaluation is None or change.get("evaluation_ref") != evaluation.id:
+                errors.append("MNN plasticity is not linked to the cycle evaluation")
+            if validation is None or change.get("validation_ref") != validation.id:
+                errors.append("MNN plasticity is not linked to the cycle validation")
+            expected_inputs = [evaluation.id, validation.id] if evaluation and validation else []
+            if plasticity_event.input_refs != expected_inputs:
+                errors.append("MNN plasticity causal inputs do not match evaluation and validation")
+            if not isinstance(change.get("evidence_refs"), list) or not set(expected_inputs).issubset(change.get("evidence_refs", [])):
+                errors.append("MNN plasticity is missing evaluated evidence references")
+            snapshot = change.get("snapshot", {})
+            if not isinstance(snapshot, Mapping) or "network" not in snapshot:
+                errors.append("MNN plasticity does not contain a restorable organism snapshot")
+
         motivation_feedback = by_type.get("motivation.feedback_applied")
         if motivation_feedback:
             evaluation = by_type.get("evaluation.completed")
