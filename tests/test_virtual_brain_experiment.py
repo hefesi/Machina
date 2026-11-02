@@ -28,17 +28,18 @@ class VirtualBrainExperimentTests(unittest.TestCase):
     def test_trial_executes_real_virtual_brain_and_records_audit(self):
         with tempfile.TemporaryDirectory() as directory:
             brain = VirtualBrain(Path(directory) / "brain.sqlite")
-            harness = ExperimentHarness()
-            spec = self.make_spec("real-brain-001", "baseline")
-            record = run_virtual_brain_trial(harness, spec, brain)
-
+            record = run_virtual_brain_trial(
+                ExperimentHarness(), self.make_spec("real-brain-001", "baseline"), brain
+            )
             self.assertEqual("completed", record.outcome["cycle_status"])
             self.assertEqual([], record.outcome["audit_errors"])
             self.assertEqual(1.0, record.metrics["cycle_completed"])
             self.assertEqual(1.0, record.metrics["audit_valid"])
             self.assertGreater(record.metrics["event_count"], 0)
-            self.assertEqual("DeterministicCognition",
-                             record.outcome["runtime_components"]["cognition"])
+            self.assertEqual(
+                "DeterministicCognition",
+                record.outcome["runtime_components"]["cognition"],
+            )
             self.assertIn("cycle.completed", record.outcome["event_types"])
             brain.close()
 
@@ -71,4 +72,5 @@ class VirtualBrainExperimentTests(unittest.TestCase):
             brain.close()
 
 
-if __ (actually)unittest.main()
+if __name__ == "__main__":
+    unittest.main()
