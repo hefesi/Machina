@@ -99,7 +99,7 @@ Exemplo conceitual de uso:
 
 ## Experimento de continuidade após interrupção
 
-`src/machina/continuity_experiment.py` implementa uma intervenção operacional direta: inicia um ciclo, pausa após um checkpoint durável (por padrão `memory.retrieved`), fecha a conexão SQLite, reabre o VirtualBrain e retoma o mesmo ciclo. O ensaio verifica persistência dos eventos anteriores à interrupção, conclusão única, auditoria do ciclo e integridade da cadeia de hashes do journal.
+`src/machina/continuity_experiment.py` implementa uma intervenção operacional direta: inicia um ciclo, pausa após um checkpoint durável (por padrão `workspace.updated`), fecha a conexão SQLite, reabre o VirtualBrain e retoma o mesmo ciclo. O ensaio verifica persistência dos eventos anteriores à interrupção, conclusão única, auditoria do ciclo e integridade da cadeia de hashes do journal.
 
 Este teste mede **continuidade funcional do processo e do estado persistido**. Não mede continuidade de experiência subjetiva entre execuções. A interpretação deve permanecer limitada a recuperação de estado, coerência do ciclo e ausência de duplicação de eventos terminais.
 
