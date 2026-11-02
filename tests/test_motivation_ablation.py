@@ -22,7 +22,7 @@ class MotivationAblationTests(unittest.TestCase):
         on = result["trials"]["motivation_on"]
         self.assertEqual(0.0, off["metrics"]["motivational_goal_selected"])
         self.assertEqual(1.0, on["metrics"]["motivational_goal_selected"])
-        self.assertEqual("inspect_internal_state", off["outcome"]["decision"]["selected_goal"]["goal_id"])
+        self.assertEqual("establish_memory_baseline", off["outcome"]["decision"]["selected_goal"]["goal_id"])
         self.assertEqual("sustain_drive:exploration", on["outcome"]["decision"]["selected_goal"]["goal_id"])
         self.assertEqual(1.0, result["comparison"]["delta_treatment_minus_baseline"])
 
