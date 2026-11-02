@@ -102,3 +102,12 @@ Exemplo conceitual de uso:
 `src/machina/continuity_experiment.py` implementa uma intervenção operacional direta: inicia um ciclo, pausa após um checkpoint durável (por padrão `memory.retrieved`), fecha a conexão SQLite, reabre o VirtualBrain e retoma o mesmo ciclo. O ensaio verifica persistência dos eventos anteriores à interrupção, conclusão única, auditoria do ciclo e integridade da cadeia de hashes do journal.
 
 Este teste mede **continuidade funcional do processo e do estado persistido**. Não mede continuidade de experiência subjetiva entre execuções. A interpretação deve permanecer limitada a recuperação de estado, coerência do ciclo e ausência de duplicação de eventos terminais.
+
+
+## Intervenção causal inicial: rota de memória do MNN
+
+`src/machina/mnn_memory_ablation.py` implementa uma ablação executável sobre o MNN real. As duas condições recebem a mesma observação, consulta, topologia, evento químico e orçamento. Ambas mantêm o mesmo arquivo de memória episódica pré-carregado. A condição de tratamento habilita apenas a recuperação lexical e o roteamento do sinal recuperado para a unidade neural `memory_context`; a condição de controle não injeta esse sinal.
+
+A medição ocorre no segundo tick porque a MNN atualiza unidades sincronamente: a ativação roteada no primeiro tick só pode influenciar unidades downstream no tick seguinte. O ensaio registra sinal, quantidade de evidências, ativação do integrador e classes reais dos componentes.
+
+**Escopo causal:** esse desenho testa o efeito funcional da rota explícita recuperação→entrada neural sob as condições controladas declaradas. Não testa semântica, inteligência geral, experiência subjetiva ou consciência. A recuperação é lexical e a arquitetura determinística; os resultados devem ser replicados com tarefas variadas e controles adicionais antes de qualquer generalização.
