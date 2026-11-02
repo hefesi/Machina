@@ -40,8 +40,17 @@ def run_interruption_resume_trial(
             if paused is not None:
                 raise RuntimeError("expected cycle to pause at the requested checkpoint")
             events_before_restart = first.store.events_for_cycle(cycle_id)
-            if not events_before_restart or events_before_restart[-1].event_type != checkpoint:
-                raise RuntimeError("requested checkpoint was not durably reached")
+            pause_status = first.store.latest_artifact(cycle_id, "cycle.paused")
+            reached_checkpoint = any(
+                event.event_type == checkpoint for event in events_before_restart
+            )
+            if (
+                not reached_checkpoint
+                or pause_status is None
+                or pause_status.data.get("checkpoint") != checkpoint
+                or events_before_restart[-1].event_type != "cycle.paused"
+            ):
+                raise RuntimeError("requested checkpoint was not durably reached and paused")
             if first.store.latest_artifact(cycle_id, "cycle.completed") is not None:
                 raise RuntimeError("cycle unexpectedly completed before restart")
             first.store.verify_integrity()
