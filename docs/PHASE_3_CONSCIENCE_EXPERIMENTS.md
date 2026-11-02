@@ -95,3 +95,10 @@ Exemplo conceitual de uso:
 ## Persistência verificável dos resultados
 
 `src/machina/experiment_ledger.py` persiste TrialRecord em JSONL, sincroniza o arquivo com `fsync`, verifica o hash de cada registro ao reabrir e rejeita IDs duplicados ou resultados conflitantes. A idempotência evita acrescentar novamente um trial já registrado. O ledger é destinado a um único processo escritor: não implementa bloqueio distribuído ou escrita concorrente entre processos. Recomenda-se versionar/arquivar os arquivos de resultados junto ao commit e manter cópias de segurança.
+
+
+## Experimento de continuidade após interrupção
+
+`src/machina/continuity_experiment.py` implementa uma intervenção operacional direta: inicia um ciclo, pausa após um checkpoint durável (por padrão `memory.retrieved`), fecha a conexão SQLite, reabre o VirtualBrain e retoma o mesmo ciclo. O ensaio verifica persistência dos eventos anteriores à interrupção, conclusão única, auditoria do ciclo e integridade da cadeia de hashes do journal.
+
+Este teste mede **continuidade funcional do processo e do estado persistido**. Não mede continuidade de experiência subjetiva entre execuções. A interpretação deve permanecer limitada a recuperação de estado, coerência do ciclo e ausência de duplicação de eventos terminais.
