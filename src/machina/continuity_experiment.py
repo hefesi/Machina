@@ -17,7 +17,7 @@ def run_interruption_resume_trial(
     spec: ExperimentSpec,
     storage_path: str | Path,
     *,
-    checkpoint: str = "memory.retrieved",
+    checkpoint: str = "workspace.updated",
 ) -> TrialRecord:
     """Pause a real cycle at a durable checkpoint, reopen SQLite, then resume."""
     if not isinstance(harness, ExperimentHarness):
