@@ -133,8 +133,12 @@ Este fluxo demonstra integração funcional, memória, adaptação e autonomia o
 - [x] Composição MNN + VirtualBrain formalizada por `MNNOrganismRuntime`, com identidade compartilhada entre adapters e `MotivationSystem`.
 - [x] Investigações de curiosidade abertas agora alimentam `AutonomyContext.unresolved_questions` e deixam suas referências registradas no artefato `goal.deliberated`.
 - [x] Feedback motivacional agora é aplicado após avaliação por meio de `motivation.feedback_applied`; fulfillment é explícito, validado e persistido com snapshot, permitindo retomada sem duplicar a atualização.
-- [ ] Experimentos ponta a ponta e recuperação adicionados.
-- [ ] Suíte completa e CI validados.
+- [x] Experimentos ponta a ponta e recuperação adicionados: ciclo completo de percepção normalizada até decisão, ação, avaliação, plasticidade e auditoria; retomada/idempotência cobertas pelos testes de integração.
+- [x] Suíte completa e CI validados: GitHub Actions executou 689 testes no commit `9ccb05ce87b43016f0da6c10631b35512a49ce7d`, todos aprovados em 2 de novembro de 2026.
+
+### Validação de integração — 2 de novembro de 2026
+
+O primeiro CI da PR #91 encontrou um erro de propagação: o adaptador MNN colocava `mnn_signal` dentro de `understanding`, enquanto o workspace procurava apenas no nível superior. O workspace agora aceita ambos os formatos, preservando compatibilidade. O CI subsequente concluiu com sucesso (689 testes). A PR permanece aberta em draft para revisão; nenhum merge foi realizado.
 
 
 ## Orientação causal na deliberação
