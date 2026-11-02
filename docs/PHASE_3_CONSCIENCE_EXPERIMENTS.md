@@ -90,3 +90,8 @@ Exemplo conceitual de uso:
 - analisar deltas por seed e replicar em outro conjunto de entradas.
 
 **Limite atual:** o protocolo garante pareamento, ciclo real e rastreabilidade dos componentes. Ele não consegue provar sozinho que uma configuração removeu um mecanismo: essa validade depende da implementação da `brain_factory` e deve ser demonstrada por testes específicos de cada intervenção. Não interpretar configurações diferentes como ablações válidas apenas porque receberam nomes diferentes.
+
+
+## Persistência verificável dos resultados
+
+`src/machina/experiment_ledger.py` persiste TrialRecord em JSONL, sincroniza o arquivo com `fsync`, verifica o hash de cada registro ao reabrir e rejeita IDs duplicados ou resultados conflitantes. A idempotência evita acrescentar novamente um trial já registrado. O ledger é destinado a um único processo escritor: não implementa bloqueio distribuído ou escrita concorrente entre processos. Recomenda-se versionar/arquivar os arquivos de resultados junto ao commit e manter cópias de segurança.
