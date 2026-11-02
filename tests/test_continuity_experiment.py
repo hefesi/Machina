@@ -19,7 +19,7 @@ class InterruptionResumeExperimentTests(unittest.TestCase):
                 "observation": "A persistent observation across restart.",
                 "objective": "Complete the same cognitive cycle after restart.",
             },
-            configuration={"checkpoint": "memory.retrieved"},
+            configuration={"checkpoint": "workspace.updated"},
             code_revision="test-revision",
             budget={"cycles": 1, "restarts": 1},
         )
