@@ -111,3 +111,12 @@ Este teste mede **continuidade funcional do processo e do estado persistido**. N
 A medição ocorre no segundo tick porque a MNN atualiza unidades sincronamente: a ativação roteada no primeiro tick só pode influenciar unidades downstream no tick seguinte. O ensaio registra sinal, quantidade de evidências, ativação do integrador e classes reais dos componentes.
 
 **Escopo causal:** esse desenho testa o efeito funcional da rota explícita recuperação→entrada neural sob as condições controladas declaradas. Não testa semântica, inteligência geral, experiência subjetiva ou consciência. A recuperação é lexical e a arquitetura determinística; os resultados devem ser replicados com tarefas variadas e controles adicionais antes de qualquer generalização.
+
+
+## Ablação de motivação na seleção autônoma
+
+`src/machina/motivation_ablation.py` compara a política real `AutonomyController` com e sem um `MotivationSystem` persistente. O contexto, a política e o orçamento de geração/seleção são iguais; a intervenção habilita um drive com pressão temporal explícita. O ensaio registra a lista de alternativas, o objetivo selecionado, a urgência e as classes dos componentes. Mede influência funcional de uma variável motivacional na seleção interna, não desejo subjetivo ou livre-arbítrio.
+
+## Ablação de continuidade do Self na política
+
+`src/machina/self_continuity_ablation.py` mantém o mesmo registro `SelfContinuity` e os mesmos candidatos nas duas condições. O tratamento habilita um sinal de alinhamento entre compromisso persistente e candidato; o controle omite esse sinal. A avaliação de alinhamento é fornecida explicitamente por um avaliador externo baseado em evidências, não inferida automaticamente pelo controlador a partir do texto. O teste mede sensibilidade funcional da política a compromissos persistentes; não comprova identidade subjetiva.
