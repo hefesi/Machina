@@ -31,7 +31,7 @@ class InterruptionResumeExperimentTests(unittest.TestCase):
                 self.make_spec(),
                 Path(directory) / "continuity.sqlite",
             )
-            self.assertEqual("completed", record.outcome["event_types"][-1] and "completed")
+            self.assertEqual("cycle.completed", record.outcome["event_types"][-1])
             self.assertEqual(1.0, record.metrics["checkpoint_reached"])
             self.assertGreater(record.metrics["events_persisted_before_restart"], 0)
             self.assertEqual(1.0, record.metrics["audit_valid"])
