@@ -55,6 +55,29 @@ class InternalDeliberatorTests(unittest.TestCase):
             self.assertEqual(0, store.summary()["completed"])
             store.close()
 
+    def test_explicit_feedback_is_combined_with_temporal_motivation(self):
+        class Motivation:
+            def temporal_urgencies(self):
+                return {"curiosity": 0.8}
+
+            def temporal_autonomy_adjustments(self):
+                return {"curiosity": 0.09}
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            deliberator = InternalDeliberator(AutonomyController(), store)
+            result = deliberator.deliberate(
+                AutonomyContext(),
+                motivation=Motivation(),
+                drive_adjustments={"curiosity": 0.10},
+            )
+            selected = next(
+                item for item in result.autonomy.alternatives
+                if item["goal"]["goal_id"] == "sustain_drive:curiosity"
+            )
+            self.assertAlmostEqual(0.15, selected["score"]["feedback_adjustment"])
+            store.close()
+
     def test_open_goal_limit_is_validated(self):
         with tempfile.TemporaryDirectory() as directory:
             store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
@@ -96,6 +119,43 @@ class InternalDeliberatorTests(unittest.TestCase):
                 store.recent_deliberations(0)
             store.close()
 
+
+    def test_advisory_causal_guidance_is_persisted_without_mutating_policy(self):
+        guidance = {
+            "experiment_id": "strategy-exp",
+            "guidance": "favor_treatment_for_human_review",
+            "reason": "approximate_interval_is_above_zero",
+            "classification": "randomized_comparison",
+            "policy_mutated": False,
+            "requires_human_or_external_policy_approval": True,
+            "limitations": ["assignment protocol is externally declared"],
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            deliberator = InternalDeliberator(AutonomyController(), store)
+            result = deliberator.deliberate(
+                AutonomyContext(unresolved_questions=2),
+                strategy_guidance=guidance,
+            )
+            self.assertEqual(guidance, result.strategy_guidance)
+            self.assertEqual(guidance, result.to_dict()["strategy_guidance"])
+            history = store.recent_deliberations(1)[0]
+            self.assertEqual(guidance, history["context"]["strategy_guidance"])
+            store.close()
+
+    def test_deliberator_rejects_causal_guidance_that_claims_policy_mutation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            deliberator = InternalDeliberator(AutonomyController(), store)
+            with self.assertRaisesRegex(ValueError, "non-mutating"):
+                deliberator.deliberate(
+                    AutonomyContext(),
+                    strategy_guidance={
+                        "policy_mutated": True,
+                        "requires_human_or_external_policy_approval": True,
+                    },
+                )
+            store.close()
 
 
 if __name__ == "__main__":

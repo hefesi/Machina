@@ -3,6 +3,9 @@ import unittest
 from pathlib import Path
 
 from machina.causal_learning import CausalExperimentStore
+from machina.contracts import Artifact, ContractKind, EpistemicStatus
+from machina.event_store import EventStore
+from machina.mnn_strategy_event_bridge import MNNStrategyEventBridge
 
 
 class CausalExperimentStoreTests(unittest.TestCase):
@@ -83,10 +86,71 @@ class CausalExperimentStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown"):
             self.store.report("missing")
 
+    def test_confirmed_strategy_events_project_idempotently_into_causal_trials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            event_store = EventStore(Path(directory) / "events.sqlite3")
+            cycle_id = "cycle-causal-projection"
+            event_store.create_cycle(cycle_id)
+            bridge = MNNStrategyEventBridge(event_store)
+            bridge.record_proposal(
+                cycle_id,
+                {"status": "proposed", "action": "retrieve", "context": "same task", "evidence_ids": ["obs-1"]},
+                expected_reward=0.6,
+                proposal_id="proposal-1",
+            )
+            outcome = bridge.record_outcome(
+                cycle_id,
+                "proposal-1",
+                execution_confirmed=True,
+                executed_action="retrieve",
+                observed_reward=0.9,
+                operation_id="operation-1",
+            )
+            self._register("randomized")
+            projected = self.store.record_strategy_outcome(
+                "retrieval-v1", "treatment", outcome
+            )
+            replayed = self.store.record_strategy_outcome(
+                "retrieval-v1", "treatment", outcome
+            )
+            self.assertEqual(projected["trial_id"], replayed["trial_id"])
+            self.assertEqual(1, self.store.report("retrieval-v1")["treatment"]["n"])
+            self.assertEqual(outcome.artifact.id, projected["evidence_ref"])
+            with self.assertRaisesRegex(ValueError, "different trial data"):
+                self.store.record_strategy_outcome(
+                    "retrieval-v1", "control", outcome
+                )
+            event_store.close()
+
+    def test_unconfirmed_or_non_strategy_events_cannot_be_projected(self):
+        self._register()
+        wrong = object()
+        with self.assertRaisesRegex(ValueError, "strategy.outcome.recorded"):
+            self.store.record_strategy_outcome("retrieval-v1", "treatment", wrong)
+
     def test_report_threshold_must_be_at_least_two(self):
         self._register()
         with self.assertRaisesRegex(ValueError, "minimum_per_arm"):
             self.store.report("retrieval-v1", minimum_per_arm=1)
+
+    def test_strategy_guidance_only_recommends_when_interval_excludes_zero(self):
+        self._register("randomized")
+        for index in range(20):
+            self.store.record_trial("retrieval-v1", "treatment", .9, evidence_ref=f"et{index}", trial_id=f"gt{index}")
+            self.store.record_trial("retrieval-v1", "control", .2, evidence_ref=f"ec{index}", trial_id=f"gc{index}")
+        guidance = self.store.strategy_guidance("retrieval-v1")
+        self.assertEqual("favor_treatment_for_human_review", guidance["guidance"])
+        self.assertFalse(guidance["policy_mutated"])
+        self.assertTrue(guidance["requires_human_or_external_policy_approval"])
+
+    def test_strategy_guidance_holds_for_observational_or_insufficient_data(self):
+        self._register("observational")
+        for index in range(6):
+            self.store.record_trial("retrieval-v1", "treatment", .9, evidence_ref=f"ot{index}", trial_id=f"ot{index}")
+            self.store.record_trial("retrieval-v1", "control", .2, evidence_ref=f"oc{index}", trial_id=f"oc{index}")
+        guidance = self.store.strategy_guidance("retrieval-v1")
+        self.assertEqual("hold", guidance["guidance"])
+        self.assertEqual("observational_data_cannot_authorize_policy_changes", guidance["reason"])
 
 
 if __name__ == "__main__":

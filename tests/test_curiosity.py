@@ -26,6 +26,19 @@ class CuriosityInvestigationStoreTests(unittest.TestCase):
             cycle_id="cycle-1", goal_id="investigate_gap:memory-recall",
         )
 
+    def test_open_investigations_are_listed_in_creation_order(self):
+        self._start("inv-1", "How does recall work?")
+        self._start("inv-2", "How is novelty measured?")
+        opened = self.store.open_investigations()
+        self.assertEqual(["inv-1", "inv-2"], [item["investigation_id"] for item in opened])
+        self.store.close_investigation(
+            "inv-1", outcome="partially_answered", answer_summary="Partial result",
+            remaining_unknowns=["What remains?"], cycle_id="cycle-2",
+        )
+        self.assertEqual(["inv-2"], [
+            item["investigation_id"] for item in self.store.open_investigations()
+        ])
+
     def test_lifecycle_keeps_hypothesis_evidence_and_unknowns_separate(self):
         started = self._start()
         self.assertEqual("open", started["status"])

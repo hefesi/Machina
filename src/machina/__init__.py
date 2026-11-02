@@ -22,6 +22,7 @@ from .goal_outcome_learning import GoalOutcomeLearner
 from .experience_memory import ExperienceMemoryStore
 from .strategy_self_review import StrategySelfReviewStore
 from .curiosity import CuriosityInvestigationStore
+from .causal_learning import CausalExperimentStore
 from .deliberation import DeliberationDecision, InternalDeliberator
 from .mnn import Connection, MNN, Unit
 from .mnn_motivation import MotivationalDrive, MotivationSystem
@@ -29,6 +30,7 @@ from .mnn_organism import (DecisionAssessment, DecisionOption, MNNOrganism, Memo
 from .mnn_adapter import MNNCognitionAdapter
 from .mnn_organism_adapter import MNNOrganismCognitionAdapter
 from .mnn_organism_agency import MNNOrganismAgencyAdapter
+from .mnn_organism_runtime import MNNOrganismRuntime, build_mnn_organism_runtime
 from .self_model import SelfModel
 from .self_state_dynamics import SelfStateDynamicsAnalyzer, SelfStateTransition
 from .self_history_influence import SelfHistoryInfluence, SelfHistoryInfluenceAdapter, SelfHistoryRule
@@ -76,9 +78,13 @@ from .mnn_synaptic_consolidation import MNNSynapticConsolidator
 from .mnn_short_term_plasticity import MNNShortTermPlasticity
 from .mnn_plasticity_control import MNNPlasticityController, MNNPlasticityProposal
 from .mnn_experience_plasticity_advisor import MNNExperiencePlasticityAdvisor, MNNExperiencePlasticityProposal
+from .perception import NormalizedPerception
+from .internal_state import InternalStateSnapshot
 
 __all__ = [
     "Artifact",
+    "NormalizedPerception",
+    "InternalStateSnapshot",
     "ChemicalEvent",
     "ChemicalParameters",
     "ChemicalSignaling",
@@ -135,6 +141,8 @@ __all__ = [
     "MNNCognitionAdapter",
     "MNNOrganismCognitionAdapter",
     "MNNOrganismAgencyAdapter",
+    "MNNOrganismRuntime",
+    "build_mnn_organism_runtime",
     "SelfModel",
     "SelfStateDynamicsAnalyzer",
     "SelfStateTransition",
@@ -164,6 +172,7 @@ __all__ = [
     "RewardModulator",
     "Unit",
     "VirtualBrain",
+    "CausalExperimentStore",
     "ConsolidatedMemory",
     "MNNMemoryConsolidator",
     "ConceptHypothesis",

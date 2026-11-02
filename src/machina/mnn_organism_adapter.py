@@ -11,7 +11,7 @@ import re
 from collections.abc import Mapping
 
 from .components import CognitionEngine, DeterministicCognition, _text
-from .contracts import Artifact
+from .contracts import Artifact, ContractKind
 from .mnn_organism import MNNOrganism
 
 
@@ -113,7 +113,10 @@ class MNNOrganismCognitionAdapter:
             unit_id: features[feature]
             for unit_id, feature in self.input_features.items()
         }
-        step = self.organism.step(inputs=inputs)
+        # VirtualBrain applies evaluated motivational feedback once, after
+        # action evaluation. Keep cognition's MNN tick from advancing drives
+        # a second time within the same integrated cycle.
+        step = self.organism.step(inputs=inputs, advance_motivation=False)
 
         understanding = dict(result.get("understanding", {}))
         understanding["mnn_signal"] = {
@@ -142,7 +145,25 @@ class MNNOrganismCognitionAdapter:
         self, *, evaluation: Artifact, validation: Artifact
     ) -> Mapping[str, object]:
         """Prepare outcome-driven plasticity on a copy; do not mutate live state."""
-        succeeded = bool(evaluation.data["success"])
+        if evaluation.kind != ContractKind.EVALUATION:
+            raise ValueError("evaluation must be an EVALUATION artifact")
+        if validation.kind != ContractKind.VALIDATION_RESULT:
+            raise ValueError("validation must be a VALIDATION_RESULT artifact")
+        if evaluation.cycle_id != validation.cycle_id:
+            raise ValueError("evaluation and validation must belong to the same cycle")
+        if evaluation.id not in validation.input_refs:
+            raise ValueError("validation must preserve the evaluated outcome reference")
+        succeeded = evaluation.data.get("success")
+        if not isinstance(succeeded, bool):
+            raise ValueError("evaluation success must be an explicit boolean")
+        prediction_error = evaluation.data.get("prediction_error")
+        if (
+            isinstance(prediction_error, bool)
+            or not isinstance(prediction_error, (int, float))
+            or not math.isfinite(prediction_error)
+            or not 0.0 <= prediction_error <= 1.0
+        ):
+            raise ValueError("prediction_error must be finite and within [0, 1]")
         reward = 1.0 if succeeded else -1.0
         candidate = MNNOrganism.from_snapshot(self.organism.snapshot())
         deltas = candidate.network.apply_hebbian(
@@ -152,7 +173,13 @@ class MNNOrganismCognitionAdapter:
         return {
             "success": succeeded,
             "reward": reward,
+            "prediction_error": float(prediction_error),
+            "expected_outcome": evaluation.data["expected_outcome"],
+            "actual_outcome": evaluation.data["actual_outcome"],
+            "evaluation_ref": evaluation.id,
+            "validation_ref": validation.id,
             "validation_status": validation.data["status"],
+            "evidence_refs": [evaluation.id, validation.id, *evaluation.source_refs],
             "weight_deltas": deltas,
             "snapshot": candidate.snapshot(),
         }
@@ -176,4 +203,15 @@ class MNNOrganismCognitionAdapter:
         self.organism.continuity = restored.continuity
         self.organism.chemical_inputs = restored.chemical_inputs
         self.organism.learning_rate = restored.learning_rate
-        self.organism.motivation = restored.motivation
+        if self.organism.motivation is not None and restored.motivation is not None:
+            # Preserve the shared MotivationSystem object held by VirtualBrain
+            # and MNNOrganismRuntime while restoring its journaled values.
+            live = self.organism.motivation
+            live.drives = restored.motivation.drives
+            live.conflicts = restored.motivation.conflicts
+            live.cooperations = restored.motivation.cooperations
+            live.conflict_gain = restored.motivation.conflict_gain
+            live.cooperation_gain = restored.motivation.cooperation_gain
+            live.timestep = restored.motivation.timestep
+        else:
+            self.organism.motivation = restored.motivation

@@ -119,6 +119,7 @@ class MNNOrganism:
         *,
         memory_guidance: MemoryGuidance | None = None,
         fulfillment: Mapping[str, float] | None = None,
+        advance_motivation: bool = True,
     ) -> OrganismStep:
         """Advance all coupled states exactly one deterministic logical tick."""
         neural_inputs = dict(inputs or {})
@@ -161,7 +162,8 @@ class MNNOrganism:
 
         motivation_urgencies = (
             self.motivation.step(validated_fulfillment)
-            if self.motivation is not None else {}
+            if self.motivation is not None and advance_motivation else
+            (self.motivation.effective_urgencies() if self.motivation is not None else {})
         )
 
         self.continuity.record_event(

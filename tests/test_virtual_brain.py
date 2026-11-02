@@ -7,6 +7,7 @@ from pathlib import Path
 from machina import (
     AutonomyContext, AutonomyController, IntegrityError, InternalDeliberator,
     PersistentGoalStore, VirtualBrain, HomeostaticProposal, SelfHistoryInfluence, SelfStateTransition,
+    MotivationSystem, MotivationalDrive,
 )
 
 
@@ -41,6 +42,93 @@ class VirtualBrainLoopTests(unittest.TestCase):
 
     def tearDown(self) -> None:
         self.temporary_directory.cleanup()
+
+    def test_evaluated_explicit_fulfillment_updates_motivation_once_across_restart(self) -> None:
+        def make_motivation():
+            return MotivationSystem(drives=[
+                MotivationalDrive(
+                    "curiosity", level=0.8, setpoint=0.2,
+                    recovery_rate=0.0, relief_gain=0.25,
+                )
+            ])
+
+        original_motivation = make_motivation()
+        brain = VirtualBrain(self.database_path, motivation_system=original_motivation)
+        cycle_id = brain.start_cycle(
+            "An observed outcome.",
+            {
+                "description": "Evaluate a curiosity task.",
+                "motivational_fulfillment": {"curiosity": 0.8},
+            },
+        )
+        self.assertIsNone(brain.advance(cycle_id, stop_after="motivation.feedback_applied"))
+        self.assertEqual(1, brain.motivation_system.timestep)
+        self.assertAlmostEqual(0.6, brain.motivation_system.drives["curiosity"].level)
+        self.assertIs(original_motivation, brain.motivation_system)
+        feedback_events = [
+            event for event in brain.store.events_for_cycle(cycle_id)
+            if event.event_type == "motivation.feedback_applied"
+        ]
+        self.assertEqual(1, len(feedback_events))
+        brain.close()
+
+        restarted = VirtualBrain(self.database_path, motivation_system=make_motivation())
+        result = restarted.resume(cycle_id)
+        self.assertEqual("completed", result.status)
+        self.assertEqual(1, restarted.motivation_system.timestep)
+        self.assertAlmostEqual(0.6, restarted.motivation_system.drives["curiosity"].level)
+        feedback_events = [
+            event for event in result.events
+            if event.event_type == "motivation.feedback_applied"
+        ]
+        self.assertEqual(1, len(feedback_events))
+        self.assertEqual(
+            {"curiosity": 0.8},
+            feedback_events[0].artifact.data["fulfillment"],
+        )
+        self.assertTrue(restarted.audit_cycle(cycle_id).valid)
+        restarted.close()
+
+    def test_failed_action_does_not_apply_predeclared_fulfillment(self) -> None:
+        motivation = MotivationSystem(drives=[
+            MotivationalDrive("curiosity", level=0.7, setpoint=0.2, recovery_rate=0.0)
+        ])
+        brain = VirtualBrain(
+            self.database_path,
+            motivation_system=motivation,
+            action_executor=FailingExecutor(),
+        )
+        result = brain.run_cycle(
+            "Observation",
+            {
+                "description": "Attempt a task that fails.",
+                "motivational_fulfillment": {"curiosity": 1.0},
+            },
+        )
+        feedback = next(
+            event.artifact for event in result.events
+            if event.event_type == "motivation.feedback_applied"
+        )
+        self.assertFalse(feedback.data["success"])
+        self.assertEqual({"curiosity": 1.0}, feedback.data["requested_fulfillment"])
+        self.assertEqual({}, feedback.data["fulfillment"])
+        self.assertAlmostEqual(0.7, brain.motivation_system.drives["curiosity"].level)
+        brain.close()
+
+    def test_motivation_does_not_infer_fulfillment_from_success(self) -> None:
+        motivation = MotivationSystem(drives=[
+            MotivationalDrive("curiosity", level=0.7, setpoint=0.2, recovery_rate=0.0)
+        ])
+        brain = VirtualBrain(self.database_path, motivation_system=motivation)
+        result = brain.run_cycle("Observation", {"description": "Task completed."})
+        feedback = next(
+            event.artifact for event in result.events
+            if event.event_type == "motivation.feedback_applied"
+        )
+        self.assertTrue(feedback.data["success"])
+        self.assertEqual({}, feedback.data["fulfillment"])
+        self.assertAlmostEqual(0.7, brain.motivation_system.drives["curiosity"].level)
+        brain.close()
 
     def test_complete_loop_is_durable_and_causally_connected(self) -> None:
         brain = VirtualBrain(self.database_path)
