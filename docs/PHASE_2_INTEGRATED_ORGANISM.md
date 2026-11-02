@@ -138,9 +138,33 @@ Este fluxo demonstra integração funcional, memória, adaptação e autonomia o
 
 ### Validação de integração — 2 de novembro de 2026
 
-O primeiro CI da PR #91 encontrou um erro de propagação: o adaptador MNN colocava `mnn_signal` dentro de `understanding`, enquanto o workspace procurava apenas no nível superior. O workspace agora aceita ambos os formatos, preservando compatibilidade. O CI subsequente concluiu com sucesso (689 testes). A PR permanece aberta em draft para revisão; nenhum merge foi realizado.
+O primeiro CI da PR #91 encontrou um erro de propagação: o adaptador MNN colocava `mnn_signal` dentro de `understanding`, enquanto o workspace procurava apenas no nível superior. O workspace agora aceita ambos os formatos, preservando compatibilidade. O CI subsequente concluiu com sucesso (689 testes). A PR permanece aberta para revisão; nenhum merge foi realizado.
 
 
 ## Orientação causal na deliberação
 
 `VirtualBrain` pode receber um `CausalExperimentStore` externo e, por ciclo, um `strategy_experiment_id`. Quando solicitado, calcula uma orientação limitada (`hold`, favorecer tratamento para revisão humana ou favorecer controle para revisão humana) e a incorpora ao registro de deliberação e ao histórico persistente. A orientação não altera pesos, objetivos, recompensas ou políticas; o registro exige `policy_mutated=false` e aprovação humana/externa. A deliberação preserva a orientação como contexto auditável, não como verdade causal nem como ordem automática. O store é fornecido e gerenciado externamente pelo chamador.
+
+
+## Encerramento técnico da Fase 2 — 2 de novembro de 2026
+
+**Critério de saída demonstrado na branch desta fase.** O teste
+`test_full_organism_cycle_from_normalized_perception_through_curiosity_and_causal_guidance`
+executa um cenário integrado com percepção normalizada (transcrição de áudio e proveniência),
+snapshot interno, estado MNN compartilhado, investigação de curiosidade, deliberação,
+orientação causal observacional sem mutação de política, decisão, resultado de ação,
+avaliação, plasticidade persistida e auditoria válida do ciclo. O teste também verifica
+um único tick motivacional no ciclo.
+
+**Validação automatizada:** GitHub Actions — workflow `Python tests`, execução
+[41442379286](https://github.com/hefesi/Machina/actions/runs/41442379286),
+commit `1c3a0be49badb33235ef36e331b21dc8946e4927`, resultado `success`.
+O job `unittest` concluiu com sucesso, incluindo instalação do pacote e execução
+da suíte; o registro do projeto contabiliza 689 testes aprovados.
+
+**Decisão de escopo:** a Fase 2 atende ao critério funcional de integração e
+recuperabilidade coberto pelos testes. Isso não certifica consciência fenomenal,
+livre-arbítrio metafísico, causalidade a partir de dados observacionais, nem
+segurança para executar ações externas sem políticas e autorização explícitas.
+A PR #91 está pronta para revisão; sua integração à `main` permanece uma decisão
+de merge separada.
