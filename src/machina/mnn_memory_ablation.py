@@ -107,6 +107,7 @@ def run_memory_guidance_ablation(
                     result = organism.step(
                         {"sensor": 0.5},
                         ChemicalEvent(reward=0.4, novelty=0.2),
+                        memory_guidance=guidance,
                     )
                     signal = guidance.signal if guidance is not None else 0.0
                     evidence_ids = list(guidance.evidence_ids) if guidance is not None else []
