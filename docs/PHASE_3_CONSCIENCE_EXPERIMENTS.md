@@ -76,3 +76,17 @@ Todo ganho deve ser confrontado com: maior orçamento, heurísticas locais, recu
 ## Critério de conclusão
 
 A Fase 3 requer harness versionado, hipóteses pré-registradas, ablações, controles negativos, avaliação separada, replicação e relatório de limitações. A conclusão permitida será sobre capacidades funcionais medidas. A presença ou ausência de experiência subjetiva permanece em aberto.
+
+
+## Execução pareada no VirtualBrain
+
+`src/machina/virtual_brain_experiment.py` liga o registro a um ciclo real do VirtualBrain e inclui a auditoria do journal. `src/machina/experiment_protocol.py` acrescenta execução baseline/tratamento em múltiplas seeds, com entradas e orçamento idênticos, fechamento do banco após cada trial e comparações pareadas por seed.
+
+Exemplo conceitual de uso:
+
+- fornecer uma `brain_factory(condition, seed, configuration)` que constrói um VirtualBrain novo e aplica a intervenção real;
+- executar `run_paired_conditions` com condições, seeds, entrada, orçamento, revisão e métricas pré-registradas;
+- exportar os registros JSONL do harness para armazenamento durável;
+- analisar deltas por seed e replicar em outro conjunto de entradas.
+
+**Limite atual:** o protocolo garante pareamento, ciclo real e rastreabilidade dos componentes. Ele não consegue provar sozinho que uma configuração removeu um mecanismo: essa validade depende da implementação da `brain_factory` e deve ser demonstrada por testes específicos de cada intervenção. Não interpretar configurações diferentes como ablações válidas apenas porque receberam nomes diferentes.
