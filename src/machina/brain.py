@@ -1038,7 +1038,15 @@ class VirtualBrain:
                 if isinstance(item, Mapping) and isinstance(item.get("fragment_id"), str)
             ],
         ]))
-        mnn_signal = result.data.get("mnn_signal", {})
+        # MNN organism adapters publish telemetry inside the cognition
+        # result's "understanding" object. Keep compatibility with older
+        # plugins that exposed it at the top level.
+        understanding = result.data.get("understanding", {})
+        if not isinstance(understanding, Mapping):
+            understanding = {}
+        mnn_signal = result.data.get("mnn_signal")
+        if not isinstance(mnn_signal, Mapping):
+            mnn_signal = understanding.get("mnn_signal", {})
         if not isinstance(mnn_signal, Mapping):
             mnn_signal = {}
         state = InternalStateSnapshot.from_dict(data["internal_state"])
