@@ -69,7 +69,7 @@ def run_memory_guidance_ablation(
                 "network_topology": "sensor+memory_context->integrator",
             },
             code_revision=code_revision,
-            budget={"organism_steps": 1, "memory_queries": int(enabled)},
+            budget={"organism_steps": 1, "memory_queries": 1},
         )
 
         def execute(_: ExperimentSpec) -> dict[str, Any]:
@@ -139,7 +139,7 @@ def run_memory_guidance_ablation(
         "hypothesis_id": hypothesis_id,
         "seed": seed,
         "trials": {
-            condition: record.to_dict()
+            condition: record.snapshot()
             for condition, record in records.items()
         },
         "comparison": comparison,
