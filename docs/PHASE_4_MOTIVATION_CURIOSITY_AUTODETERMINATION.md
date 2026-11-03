@@ -12,6 +12,46 @@ signal reduces the exploration weight, while repeated questions receive a
 penalty. Risky candidates and candidates requiring external action are rejected
 by default.
 
+### Implemented selector contract
+
+`CuriosityCandidate` represents one caller-proposed knowledge gap with
+explicit uncertainty, expected information gain, relevance, novelty, cost,
+risk, and evidence references. `CuriositySelector.rank()` returns a
+`CuriosityDecision` containing the selected candidate, a deterministic
+ranked alternative list with score components, and rejection reasons.
+
+`stability_pressure` is bounded to [0, 1] and scales exploration-related
+terms by `1 - 0.75 * stability_pressure`. Prior questions are normalized by
+case and whitespace before the repetition penalty is applied. Risk above the
+configured maximum and any candidate requiring external action are rejected.
+The selector is deliberately a pure ranking component; it does not create
+investigations in `CuriosityInvestigationStore` or execute a selected goal.
+
+Example:
+
+```python
+from machina import CuriosityCandidate, CuriositySelector
+
+selector = CuriositySelector(max_risk=0.4)
+decision = selector.rank(
+    [CuriosityCandidate(
+        candidate_id="gap-1",
+        gap_property="memory.coherence",
+        question="Which observation explains this contradiction?",
+        hypothesis="The records may refer to different contexts.",
+        uncertainty=0.8,
+        expected_information_gain=0.9,
+        relevance=0.9,
+        novelty=0.7,
+        estimated_cost=0.2,
+        risk=0.05,
+        evidence_refs=("memory:12", "observation:31"),
+    )],
+    stability_pressure=0.2,
+    prior_questions=(),
+)
+```
+
 ## Evidence boundary
 
 The caller supplies each question, hypothesis and numerical estimate. The
