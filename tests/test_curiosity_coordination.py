@@ -80,7 +80,9 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
             0.34 * result["curiosity_decision"].exploration_weight
         ))
         autonomy_score = result["autonomy_decision"].alternatives[0]["score"]
-        self.assertAlmostEqual(0.25, autonomy_score["feedback_adjustment"])
+        # AutonomyController intentionally clamps final drive feedback to ±0.15,
+        # even though the coordinator preserves the wider ±0.3 proposal bound.
+        self.assertAlmostEqual(0.15, autonomy_score["feedback_adjustment"])
 
     def test_persisted_question_is_suppressed_on_later_cycles(self):
         first = self.coordinator.deliberate(
