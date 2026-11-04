@@ -156,9 +156,18 @@ class CuriosityGoalCoordinator:
         motivational_adjustments: Mapping[str, float] = {}
         motivational_goals: list[GoalCandidate] = []
         if motivation is not None:
-            if not callable(getattr(motivation, "temporal_autonomy_adjustments", None)):
-                raise ValueError("motivation must expose temporal_autonomy_adjustments()")
-            motivational_adjustments = motivation.temporal_autonomy_adjustments()
+            if not callable(getattr(motivation, "temporal_urgencies", None)):
+                raise ValueError("motivation must expose temporal_urgencies()")
+            pressures = motivation.temporal_urgencies()
+            if not isinstance(pressures, Mapping):
+                raise ValueError("temporal_urgencies() must return a mapping")
+            motivational_adjustments = {
+                drive: (_bounded(f"temporal_urgencies[{drive}]", pressure, 0.0, 1.0) - 0.5) * 0.3
+                for drive, pressure in pressures.items()
+                if isinstance(drive, str) and drive.strip()
+            }
+            if len(motivational_adjustments) != len(pressures):
+                raise ValueError("temporal urgency drive names must be non-empty strings")
             motivational_goals = self.controller.generate_motivational_goals(motivation)
 
         drive_adjustments = self._merge_drive_adjustments(
