@@ -11,8 +11,9 @@ Phase 4 already contains distinct, tested mechanisms:
   uncertainty, expected information gain, relevance, novelty, cost and risk.
 - `AutonomyController` generates internal goals and applies bounded utility,
   risk, repetition and drive-feedback rules.
-- `MotivationSystem` maintains persistent drive pressure and exposes bounded
-  adjustments for goal selection.
+- `MotivationSystem` maintains persistent drive pressure through
+  `temporal_urgencies()`; the coordinator maps each pressure to a bounded
+  adjustment using `(pressure - 0.5) * 0.3`.
 - `HomeostaticRegulator` proposes drive corrections only after observed
   deviations persist across distinct cycles.
 - `CuriosityInvestigationStore` keeps an append-only investigation and
@@ -32,7 +33,8 @@ For each deliberation it:
 4. derives a transparent stability-pressure heuristic from the current
    `HomeostaticProposal`, unless an explicit pressure value is supplied;
 5. combines homeostatic drive adjustments with temporal motivational
-   adjustments, bounded to [-0.3, 0.3];
+   adjustments derived from `(temporal_urgency - 0.5) * 0.3`, bounded to
+   [-0.3, 0.3];
 6. places the selected curiosity proposal alongside optional context- and
    motivation-generated goals for final selection by `AutonomyController`;
 7. starts an investigation in `CuriosityInvestigationStore` only if the
