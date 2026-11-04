@@ -46,6 +46,12 @@ biological measurement. The caller may supply an explicit
 `stability_pressure` when a different calibrated signal is appropriate.
 Homeostatic proposals must belong to the same cycle as the deliberation.
 
+The coordinator combines its inputs within [-0.3, 0.3]. The existing
+`AutonomyController` then applies its narrower final feedback clamp of
+[-0.15, 0.15] during goal scoring. This is intentional: upstream proposals
+retain their bounded magnitude for inspection, while the autonomy policy
+limits their influence on the final choice.
+
 The coordinator records the selected goal, provenance, scoring decisions,
 pressure source, drive adjustments and investigation. It never executes a
 goal or grants permission for external actions. Previously investigated
@@ -93,7 +99,7 @@ assert result["execution_performed"] is False
 Unit and integration tests must verify that:
 
 - homeostatic pressure reduces exploration weighting and its drive adjustments
-  reach the final autonomy policy;
+  reach the final autonomy policy within the controller's stricter clamp;
 - temporal motivational pressure combines with homeostatic feedback without
   exceeding configured bounds;
 - prior questions are suppressed by persistent investigation history;
@@ -105,3 +111,4 @@ These mechanisms demonstrate operational goal generation, selection and
 persistence. They do not establish subjective curiosity, desire, consciousness
 or metaphysical free will. Any consciousness claim remains an experimental
 hypothesis requiring independent operationalization and falsifiable tests.
+```
