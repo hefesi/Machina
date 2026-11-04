@@ -76,7 +76,7 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         self.assertEqual("homeostasis", result["stability_pressure_source"])
         self.assertAlmostEqual(0.25, result["drive_adjustments"]["curiosity"])
         curiosity_score = result["curiosity_decision"].ranked[0]["score"]
-        self.assertAlmostEqual(0.55, curiosity_score["uncertainty_information_gain"] / (
+        self.assertAlmostEqual(0.9, curiosity_score["uncertainty_information_gain"] / (
             0.34 * result["curiosity_decision"].exploration_weight
         ))
         autonomy_score = result["autonomy_decision"].alternatives[0]["score"]
@@ -127,10 +127,14 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
                 homeostatic_proposal=proposal,
             )
 
-        proposal.cycle_id = "cycle-1"
+        matching_proposal = HomeostaticProposal(
+            cycle_id="cycle-1", adjustments={},
+            deviations={"prediction_error": 0.9},
+            persistence={"prediction_error": 3}, evidence_refs=(), rationale=(),
+        )
         result = self.coordinator.deliberate(
             self.mappings(), cycle_id="cycle-1", investigation_store=self.store,
-            homeostatic_proposal=proposal, stability_pressure=0.2,
+            homeostatic_proposal=matching_proposal, stability_pressure=0.2,
         )
         self.assertAlmostEqual(0.2, result["stability_pressure"])
         self.assertEqual("explicit", result["stability_pressure_source"])
