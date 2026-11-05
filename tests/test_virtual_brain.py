@@ -431,5 +431,143 @@ class VirtualBrainLoopTests(unittest.TestCase):
 
 
 
+    def test_curiosity_candidate_competes_with_commitments_before_investigation_persistence(self) -> None:
+        from machina.curiosity_coordination import CuriosityGoalCoordinator
+        from machina.goal_outcome_learning import GoalOutcomeLearner
+        from machina.self_model import SelfModel
+        from machina.self_model_learning import SelfModelLearningBridge
+
+        goals = PersistentGoalStore(
+            Path(self.temporary_directory.name) / "curiosity-goals.sqlite"
+        )
+        learner = GoalOutcomeLearner(
+            Path(self.temporary_directory.name) / "curiosity-outcomes.sqlite"
+        )
+        controller = AutonomyController()
+        coordinator = CuriosityGoalCoordinator(
+            SelfModelLearningBridge(SelfModel(), learner), controller
+        )
+        curiosity_path = Path(self.temporary_directory.name) / "integrated-curiosity.sqlite"
+        brain = VirtualBrain(
+            self.database_path,
+            internal_deliberator=InternalDeliberator(controller, goals),
+            curiosity_investigation_path=curiosity_path,
+            curiosity_goal_coordinator=coordinator,
+        )
+        proposal = HomeostaticProposal(
+            cycle_id="shared-homeostasis-cycle",
+            adjustments={"curiosity": -0.12},
+            deviations={"prediction_error": 0.6},
+            persistence={"prediction_error": 3},
+            evidence_refs=("telemetry:shared-cycle",),
+            rationale=("prediction error remained outside its range",),
+        )
+        mappings = {
+            "memory_gap": {
+                "question": "Which evidence explains the memory gap?",
+                "hypothesis": "A missing retrieval relation may explain the gap.",
+                "information_gain": 0.9,
+                "impact": 0.9,
+                "urgency": 0.9,
+                "estimated_cost": 0.1,
+                "risk": 0.02,
+            }
+        }
+        try:
+            result = brain.run_deliberated_cycle(
+                "An unresolved memory question.",
+                AutonomyContext(memory_count=1),
+                homeostatic_proposal=proposal,
+                curiosity_gap_mappings=mappings,
+            )
+            trace = next(
+                event.artifact for event in result.events
+                if event.event_type == "goal.deliberated"
+            )
+            curiosity = trace.data["curiosity_context"]
+            self.assertEqual("investigate_gap:memory-gap", trace.data["internal_goal_id"])
+            self.assertEqual("curiosity", trace.data["selected_source"])
+            self.assertTrue(curiosity["selected_by_unified_deliberation"])
+            self.assertAlmostEqual(0.6, curiosity["stability_pressure"])
+            self.assertEqual("shared-homeostasis-cycle", result.cycle_id)
+            option = next(
+                item for item in trace.data["deliberation"]["autonomy"]["alternatives"]
+                if item["goal"]["goal_id"] == "investigate_gap:memory-gap"
+            )
+            self.assertAlmostEqual(-0.12, option["score"]["feedback_adjustment"])
+            investigations = brain.curiosity_store.open_investigations()
+            self.assertEqual(1, len(investigations))
+            self.assertEqual(result.cycle_id, investigations[0]["cycle_id"])
+            self.assertIn(
+                "curiosity.investigation_started",
+                [event.event_type for event in result.events],
+            )
+            self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+        finally:
+            brain.close()
+            learner.close()
+            goals.close()
+
+    def test_curiosity_investigation_is_not_persisted_when_an_existing_goal_wins(self) -> None:
+        from machina.curiosity_coordination import CuriosityGoalCoordinator
+        from machina.goal_outcome_learning import GoalOutcomeLearner
+        from machina.self_model import SelfModel
+        from machina.self_model_learning import SelfModelLearningBridge
+
+        goals = PersistentGoalStore(
+            Path(self.temporary_directory.name) / "nonselected-curiosity-goals.sqlite"
+        )
+        learner = GoalOutcomeLearner(
+            Path(self.temporary_directory.name) / "nonselected-curiosity-outcomes.sqlite"
+        )
+        controller = AutonomyController()
+        coordinator = CuriosityGoalCoordinator(
+            SelfModelLearningBridge(SelfModel(), learner), controller
+        )
+        brain = VirtualBrain(
+            self.database_path,
+            internal_deliberator=InternalDeliberator(controller, goals),
+            curiosity_investigation_path=(
+                Path(self.temporary_directory.name) / "nonselected-curiosity.sqlite"
+            ),
+            curiosity_goal_coordinator=coordinator,
+        )
+        mappings = {
+            "memory_gap": {
+                "question": "What caused the memory gap?",
+                "hypothesis": "A missing retrieval relation may be involved.",
+                "information_gain": 0.2,
+                "impact": 0.2,
+                "urgency": 0.1,
+                "estimated_cost": 0.7,
+                "risk": 0.05,
+            }
+        }
+        try:
+            result = brain.run_deliberated_cycle(
+                "A recent cognitive cycle failed.",
+                AutonomyContext(memory_count=1, failed_cycles=2),
+                curiosity_gap_mappings=mappings,
+            )
+            trace = next(
+                event.artifact for event in result.events
+                if event.event_type == "goal.deliberated"
+            )
+            self.assertEqual("analyze_recent_failure", trace.data["internal_goal_id"])
+            self.assertFalse(
+                trace.data["curiosity_context"]["selected_by_unified_deliberation"]
+            )
+            self.assertEqual([], brain.curiosity_store.open_investigations())
+            self.assertNotIn(
+                "curiosity.investigation_started",
+                [event.event_type for event in result.events],
+            )
+            self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+        finally:
+            brain.close()
+            learner.close()
+            goals.close()
+
+
 if __name__ == "__main__":
     unittest.main()
