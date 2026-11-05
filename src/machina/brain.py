@@ -456,7 +456,7 @@ class VirtualBrain:
                 evidence_ref = curiosity_trace["selected_provenance"].get("belief_evidence_ref")
                 self._journal_curiosity_record(
                     cycle_id,
-                    "started",
+                    "investigation_started",
                     curiosity_investigation["investigation_id"],
                     curiosity_investigation,
                     source_refs=[evidence_ref] if isinstance(evidence_ref, str) and evidence_ref else (),
