@@ -569,5 +569,95 @@ class VirtualBrainLoopTests(unittest.TestCase):
             goals.close()
 
 
+
+    def test_integrated_curiosity_history_suppresses_repeat_after_brain_restart(self) -> None:
+        from machina.curiosity_coordination import CuriosityGoalCoordinator
+        from machina.goal_outcome_learning import GoalOutcomeLearner
+        from machina.self_model import SelfModel
+        from machina.self_model_learning import SelfModelLearningBridge
+
+        goals_path = Path(self.temporary_directory.name) / "restart-curiosity-goals.sqlite"
+        outcomes_path = Path(self.temporary_directory.name) / "restart-curiosity-outcomes.sqlite"
+        curiosity_path = Path(self.temporary_directory.name) / "restart-curiosity-history.sqlite"
+        mappings = {
+            "memory_gap": {
+                "question": "Which evidence explains the memory gap?",
+                "hypothesis": "A missing retrieval relation may explain the gap.",
+                "information_gain": 0.9,
+                "impact": 0.9,
+                "urgency": 0.9,
+                "estimated_cost": 0.1,
+                "risk": 0.02,
+            }
+        }
+
+        def build_brain():
+            controller = AutonomyController()
+            goals = PersistentGoalStore(goals_path)
+            learner = GoalOutcomeLearner(outcomes_path)
+            coordinator = CuriosityGoalCoordinator(
+                SelfModelLearningBridge(SelfModel(), learner), controller
+            )
+            brain = VirtualBrain(
+                self.database_path,
+                internal_deliberator=InternalDeliberator(controller, goals),
+                curiosity_investigation_path=curiosity_path,
+                curiosity_goal_coordinator=coordinator,
+            )
+            return brain, goals, learner
+
+        first_brain, first_goals, first_learner = build_brain()
+        try:
+            first = first_brain.run_deliberated_cycle(
+                "Inspect an unresolved memory gap.",
+                AutonomyContext(memory_count=1),
+                curiosity_gap_mappings=mappings,
+            )
+            first_trace = next(
+                event.artifact for event in first.events
+                if event.event_type == "goal.deliberated"
+            )
+            self.assertEqual("curiosity", first_trace.data["selected_source"])
+            self.assertTrue(
+                first_trace.data["curiosity_context"]["selected_by_unified_deliberation"]
+            )
+            first_history = first_brain.curiosity_store.history()
+            self.assertEqual(1, len(first_history))
+            investigation_id = first_history[0]["investigation_id"]
+            self.assertTrue(first_brain.audit_cycle(first.cycle_id).valid)
+        finally:
+            first_brain.close()
+            first_learner.close()
+            first_goals.close()
+
+        second_brain, second_goals, second_learner = build_brain()
+        try:
+            second = second_brain.run_deliberated_cycle(
+                "Re-evaluate the same memory gap after restart.",
+                AutonomyContext(memory_count=1),
+                curiosity_gap_mappings=mappings,
+            )
+            second_trace = next(
+                event.artifact for event in second.events
+                if event.event_type == "goal.deliberated"
+            )
+            curiosity_context = second_trace.data["curiosity_context"]
+            self.assertIsNone(curiosity_context["candidate_goal_id"])
+            self.assertFalse(curiosity_context["selected_by_unified_deliberation"])
+            history = second_brain.curiosity_store.history()
+            self.assertEqual([investigation_id], [
+                item["investigation_id"] for item in history
+            ])
+            self.assertNotIn(
+                "curiosity.investigation_started",
+                [event.event_type for event in second.events],
+            )
+            self.assertTrue(second_brain.audit_cycle(second.cycle_id).valid)
+        finally:
+            second_brain.close()
+            second_learner.close()
+            second_goals.close()
+
+
 if __name__ == "__main__":
     unittest.main()
