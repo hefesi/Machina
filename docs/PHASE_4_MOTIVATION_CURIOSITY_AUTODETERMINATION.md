@@ -52,10 +52,30 @@ The coordinator combines its inputs within [-0.3, 0.3]. The existing
 retain their bounded magnitude for inspection, while the autonomy policy
 limits their influence on the final choice.
 
-The coordinator records the selected goal, provenance, scoring decisions,
-pressure source, drive adjustments and investigation. It never executes a
-goal or grants permission for external actions. Previously investigated
-questions are suppressed by the existing store before ranking.
+The standalone coordinator records the selected goal, provenance, scoring
+decisions, pressure source, drive adjustments and investigation. It never
+executes a goal or grants permission for external actions. Previously
+investigated questions are suppressed by the existing store before ranking.
+
+## VirtualBrain integration
+
+When configured with a `CuriosityGoalCoordinator` and an investigation store,
+`VirtualBrain.run_deliberated_cycle` accepts `curiosity_gap_mappings`. The
+coordinator prepares the highest-ranked eligible curiosity candidate without
+persisting it. `InternalDeliberator` then compares that candidate in the same
+`AutonomyController` decision as context-generated goals, motivation-generated
+goals and durable open commitments from `PersistentGoalStore`.
+
+Only after this unified decision selects the curiosity candidate does
+`VirtualBrain` start the investigation and append the corresponding event to
+its cycle journal. If another goal wins, no curiosity investigation is opened.
+The selected cycle ID is shared by the homeostatic proposal, investigation and
+brain journal; when a homeostatic proposal is supplied and no explicit cycle
+ID is given, its cycle ID anchors the integrated deliberation.
+
+The bridge, outcome learner and coordinator are injected explicitly. This
+keeps self-model evidence policy and persistence configuration under the
+caller's control.
 
 ## Example
 
@@ -92,6 +112,45 @@ result = coordinator.deliberate(
 )
 
 assert result["execution_performed"] is False
+```
+
+For a full brain cycle, inject the same controller into the deliberator and
+coordinator, then pass the gap mappings to `run_deliberated_cycle`:
+
+```python
+from machina import (
+    AutonomyContext, AutonomyController, CuriosityGoalCoordinator,
+    GoalOutcomeLearner, InternalDeliberator, PersistentGoalStore,
+    SelfModel, SelfModelLearningBridge, VirtualBrain,
+)
+
+controller = AutonomyController()
+goals = PersistentGoalStore("goals.sqlite3")
+learner = GoalOutcomeLearner("outcomes.sqlite3")
+coordinator = CuriosityGoalCoordinator(
+    SelfModelLearningBridge(SelfModel(), learner), controller
+)
+brain = VirtualBrain(
+    "brain.sqlite3",
+    internal_deliberator=InternalDeliberator(controller, goals),
+    curiosity_investigation_path="curiosity.sqlite3",
+    curiosity_goal_coordinator=coordinator,
+)
+result = brain.run_deliberated_cycle(
+    "Review an unresolved memory gap.",
+    AutonomyContext(memory_count=1),
+    curiosity_gap_mappings={
+        "memory.coherence": {
+            "question": "Which evidence explains this gap?",
+            "hypothesis": "A missing retrieval relation may be involved.",
+            "information_gain": 0.9,
+            "impact": 0.8,
+            "urgency": 0.7,
+            "estimated_cost": 0.2,
+            "risk": 0.05,
+        }
+    },
+)
 ```
 
 ## Validation and research boundary
