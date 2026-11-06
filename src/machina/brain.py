@@ -302,6 +302,10 @@ class VirtualBrain:
         if homeostatic_proposal is not None:
             if not isinstance(homeostatic_proposal, HomeostaticProposal):
                 raise TypeError("homeostatic_proposal must be a HomeostaticProposal")
+            if not isinstance(homeostatic_proposal.cycle_id, str) or not homeostatic_proposal.cycle_id.strip():
+                raise ValueError("homeostatic proposal cycle_id must be a non-empty string")
+            if cycle_id is not None and homeostatic_proposal.cycle_id != cycle_id:
+                raise ValueError("homeostatic proposal cycle_id must match the deliberation cycle")
             for drive, adjustment in homeostatic_proposal.adjustments.items():
                 if not isinstance(drive, str) or not drive.strip():
                     raise ValueError("homeostatic drive names must be non-empty strings")
@@ -318,7 +322,7 @@ class VirtualBrain:
             }
         selected_cycle_id = cycle_id or (
             homeostatic_proposal.cycle_id
-            if curiosity_gap_mappings is not None and homeostatic_proposal is not None
+            if homeostatic_proposal is not None
             else new_id("cycle")
         )
         self_history_trace = None
