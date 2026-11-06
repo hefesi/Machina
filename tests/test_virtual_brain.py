@@ -329,6 +329,71 @@ class VirtualBrainLoopTests(unittest.TestCase):
         goal_store.close()
 
 
+    def test_homeostatic_proposal_cycle_anchors_deliberated_cycle(self) -> None:
+        goals = PersistentGoalStore(
+            Path(self.temporary_directory.name) / "homeostatic-anchor-goals.sqlite"
+        )
+        brain = VirtualBrain(
+            self.database_path,
+            internal_deliberator=InternalDeliberator(AutonomyController(), goals),
+        )
+        proposal = HomeostaticProposal(
+            cycle_id="homeostatic-cycle-anchor",
+            adjustments={"error_recovery": 0.08},
+            deviations={"prediction_error": 0.4},
+            persistence={"prediction_error": 3},
+            evidence_refs=("telemetry:anchor",),
+            rationale=("prediction error remained elevated",),
+        )
+        try:
+            result = brain.run_deliberated_cycle(
+                "Review sustained prediction error.",
+                AutonomyContext(failed_cycles=1),
+                homeostatic_proposal=proposal,
+            )
+            trace = next(
+                event.artifact for event in result.events
+                if event.event_type == "goal.deliberated"
+            )
+            self.assertEqual("homeostatic-cycle-anchor", result.cycle_id)
+            self.assertEqual(result.cycle_id, trace.data["homeostatic_regulation"]["cycle_id"])
+            self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+        finally:
+            brain.close()
+            goals.close()
+
+    def test_explicit_cycle_id_must_match_homeostatic_proposal(self) -> None:
+        goals = PersistentGoalStore(
+            Path(self.temporary_directory.name) / "homeostatic-mismatch-goals.sqlite"
+        )
+        brain = VirtualBrain(
+            self.database_path,
+            internal_deliberator=InternalDeliberator(AutonomyController(), goals),
+        )
+        proposal = HomeostaticProposal(
+            cycle_id="homeostatic-cycle-expected",
+            adjustments={"error_recovery": 0.08},
+            deviations={"prediction_error": 0.4},
+            persistence={"prediction_error": 3},
+            evidence_refs=("telemetry:mismatch",),
+            rationale=("prediction error remained elevated",),
+        )
+        try:
+            with self.assertRaisesRegex(
+                ValueError,
+                "homeostatic proposal cycle_id must match the deliberation cycle",
+            ):
+                brain.run_deliberated_cycle(
+                    "Review sustained prediction error.",
+                    AutonomyContext(failed_cycles=1),
+                    homeostatic_proposal=proposal,
+                    cycle_id="different-brain-cycle",
+                )
+            self.assertEqual(0, goals.summary()["active"])
+        finally:
+            brain.close()
+            goals.close()
+
     def test_self_history_influence_is_applied_and_journaled(self) -> None:
         goal_store = PersistentGoalStore(
             Path(self.temporary_directory.name) / "self-history-goals.sqlite"
