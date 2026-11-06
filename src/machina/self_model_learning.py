@@ -37,8 +37,10 @@ class SelfModelLearningBridge:
 
         Each assessment must explicitly classify a stored evidence reference as
         support, contradict, or neutral. Text findings are never classified by
-        this method. The immutable report is persisted before any optional
-        self-model update; this is not a cross-database transaction.
+        this method. A requested self-model update is keyed by review ID and
+        input fingerprint before the immutable review report is written. If the
+        ledger write fails, retrying can recover the completed update without
+        repeating a belief revision. The two stores are not one transaction.
         """
         import math
         from .curiosity import CuriosityInvestigationStore
