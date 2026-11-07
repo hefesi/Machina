@@ -20,8 +20,8 @@ class CausalExperimentStoreTests(unittest.TestCase):
     def _register(self, design="randomized"):
         return self.store.register_experiment(
             "retrieval-v1", design=design,
-            treatment_name="new_retrieval_strategy",
-            control_name="baseline_strategy",
+            treatment_name="retrieve",
+            control_name="archive",
             protocol_ref="protocol:retrieval-v1",
         )
 
@@ -116,10 +116,31 @@ class CausalExperimentStoreTests(unittest.TestCase):
             self.assertEqual(projected["trial_id"], replayed["trial_id"])
             self.assertEqual(1, self.store.report("retrieval-v1")["treatment"]["n"])
             self.assertEqual(outcome.artifact.id, projected["evidence_ref"])
-            with self.assertRaisesRegex(ValueError, "different trial data"):
+            with self.assertRaisesRegex(ValueError, "does not match the experiment arm"):
                 self.store.record_strategy_outcome(
                     "retrieval-v1", "control", outcome
                 )
+            self.assertEqual(0, self.store.report("retrieval-v1")["control"]["n"])
+
+            bridge.record_proposal(
+                cycle_id,
+                {"status": "proposed", "action": "archive", "context": "same task", "evidence_ids": ["obs-2"]},
+                expected_reward=0.5,
+                proposal_id="proposal-2",
+            )
+            control_outcome = bridge.record_outcome(
+                cycle_id,
+                "proposal-2",
+                execution_confirmed=True,
+                executed_action="archive",
+                observed_reward=0.4,
+                operation_id="operation-2",
+            )
+            control_trial = self.store.record_strategy_outcome(
+                "retrieval-v1", "control", control_outcome
+            )
+            self.assertEqual("control", control_trial["arm"])
+            self.assertEqual(1, self.store.report("retrieval-v1")["control"]["n"])
             event_store.close()
 
     def test_unconfirmed_or_non_strategy_events_cannot_be_projected(self):

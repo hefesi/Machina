@@ -170,9 +170,12 @@ inputs; conflicting reuse of either identity is rejected.
 Registration creates only an experiment definition. It does not assign trials,
 execute either strategy, infer a causal effect or change policy. A separately
 defined protocol must be carried out and evaluator-backed outcomes recorded
-before `CausalExperimentStore.report()` can estimate a comparison. Observational
-associations and insufficient samples remain ineligible for causal belief
-updates. Eligible randomized or matched reports can be passed explicitly to
+before `CausalExperimentStore.report()` can estimate a comparison. When a
+confirmed strategy outcome is projected into a trial, its recorded action must
+match the experiment's configured treatment or control label for the requested
+arm; mismatches are rejected before persistence. Observational associations
+and insufficient samples remain ineligible for causal belief updates. Eligible
+randomized or matched reports can be passed explicitly to
 `SelfModelLearningBridge.update_belief_from_causal_experiment()`, which records a
 bounded inferred belief with its evidence references; it does not prove an
 individual counterfactual.

@@ -184,6 +184,15 @@ class CausalExperimentStore:
         key = self._label(experiment_id, "experiment_id")
         group = self._label(arm, "arm")
         experiment = self.experiment(key)
+        if group not in self.ARMS:
+            raise ValueError("arm must be treatment or control")
+        expected_action = (
+            experiment["treatment_name"]
+            if group == "treatment"
+            else experiment["control_name"]
+        )
+        if data.get("action") != expected_action:
+            raise ValueError("strategy outcome action does not match the experiment arm")
         if experiment["design"] == "matched" and context_key is None:
             raise ValueError("matched strategy outcomes require context_key")
         if experiment["design"] != "matched" and context_key is not None:
