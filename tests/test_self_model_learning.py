@@ -81,11 +81,125 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             self.assertEqual("inferred", self.model.beliefs["memory_recall"]["status"])
             self.assertEqual("mixed", self.model.beliefs["memory_recall"]["value"]["assessment"])
             repeated = self.bridge.review_curiosity_investigation(
-                store, "inv-review", review_id="review-2", cycle_id="c5",
+                store, "inv-review", review_id="review-2", cycle_id="c4",
                 evidence_assessments=assessments, apply_to_self_model=True,
             )
             self.assertTrue(repeated["already_reviewed"])
+            self.assertTrue(repeated["self_model_updated"])
+            self.assertFalse(repeated["self_model_update_performed_now"])
             self.assertEqual(0, len(self.model.belief_revision_history))
+            changed = {
+                **assessments,
+                "e1": {
+                    "classification": "contradict",
+                    "confidence": 0.9,
+                    "rationale": "Changed assessment under the same review ID",
+                },
+            }
+            with self.assertRaisesRegex(ValueError, "different review input"):
+                self.bridge.review_curiosity_investigation(
+                    store, "inv-review", review_id="review-2", cycle_id="c4",
+                    evidence_assessments=changed, apply_to_self_model=True,
+                )
+        finally:
+            store.close()
+
+    def test_curiosity_review_recovers_after_model_update_before_ledger_write(self):
+        from machina.curiosity import CuriosityInvestigationStore
+
+        store = CuriosityInvestigationStore(Path(self.tmp.name) / "review-recovery.sqlite3")
+        try:
+            self.model.update(
+                {"memory_recall": "tentative"},
+                cycle_id="initial",
+                evidence_refs={"memory_recall": "initial-evidence"},
+                statuses={"memory_recall": "inferred"},
+                confidences={"memory_recall": 0.4},
+            )
+            store.start_investigation(
+                "inv-recovery", gap_property="memory_recall",
+                question="Does indexing improve recall?",
+                hypothesis="Indexing improves recall", selection_reason="test",
+                cycle_id="c1", goal_id="g1",
+            )
+            store.record_evidence(
+                "inv-recovery", evidence_ref="e1",
+                finding="Recall improved in a controlled benchmark", cycle_id="c2",
+            )
+            store.record_evidence(
+                "inv-recovery", evidence_ref="e2",
+                finding="An independent replication also improved recall", cycle_id="c2",
+            )
+            assessments = {
+                "e1": {
+                    "classification": "support",
+                    "confidence": 0.9,
+                    "rationale": "Controlled benchmark comparison",
+                },
+                "e2": {
+                    "classification": "support",
+                    "confidence": 0.85,
+                    "rationale": "Independent replication",
+                },
+            }
+            original_record_review = store.record_review
+
+            def fail_review_write(*args, **kwargs):
+                raise RuntimeError("simulated review-ledger write failure")
+
+            store.record_review = fail_review_write
+            with self.assertRaisesRegex(RuntimeError, "simulated review-ledger"):
+                self.bridge.review_curiosity_investigation(
+                    store, "inv-recovery", review_id="recoverable-review",
+                    cycle_id="c3", evidence_assessments=assessments,
+                    apply_to_self_model=True,
+                )
+            self.assertEqual(1, len(self.model.belief_revision_history))
+            store.record_review = original_record_review
+
+            recovered = self.bridge.review_curiosity_investigation(
+                store, "inv-recovery", review_id="recoverable-review",
+                cycle_id="c3", evidence_assessments=assessments,
+                apply_to_self_model=True,
+            )
+            self.assertTrue(recovered["self_model_updated"])
+            self.assertTrue(recovered["self_model_update_recovered"])
+            self.assertFalse(recovered["self_model_update_performed_now"])
+            self.assertEqual(1, len(self.model.belief_revision_history))
+            self.assertIsNotNone(store.find_review("recoverable-review"))
+        finally:
+            store.close()
+
+    def test_curiosity_review_requires_non_empty_cycle_id_and_safe_classification(self):
+        from machina.curiosity import CuriosityInvestigationStore
+
+        store = CuriosityInvestigationStore(Path(self.tmp.name) / "review-validation.sqlite3")
+        try:
+            store.start_investigation(
+                "inv-validation", gap_property="capability",
+                question="Can it do X?", hypothesis="It can do X",
+                selection_reason="test", cycle_id="c1", goal_id="g1",
+            )
+            store.record_evidence(
+                "inv-validation", evidence_ref="e1",
+                finding="A measured result", cycle_id="c2",
+            )
+            with self.assertRaisesRegex(ValueError, "cycle_id must be a non-empty string"):
+                self.bridge.review_curiosity_investigation(
+                    store, "inv-validation", review_id="invalid-cycle",
+                    cycle_id=" ", evidence_assessments={},
+                )
+            with self.assertRaisesRegex(ValueError, "classification must be"):
+                self.bridge.review_curiosity_investigation(
+                    store, "inv-validation", review_id="invalid-classification",
+                    cycle_id="c3",
+                    evidence_assessments={
+                        "e1": {
+                            "classification": ["support"],
+                            "rationale": "Malformed classification",
+                        }
+                    },
+                )
         finally:
             store.close()
 

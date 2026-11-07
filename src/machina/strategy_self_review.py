@@ -1,8 +1,8 @@
 """Hypothesis-driven, evidence-linked strategy self-review proposals.
 
 The planner consumes evaluator-authored autobiographical summaries and caller-
-authored hypotheses. It records proposals and explicit decisions, but never
-runs experiments, changes policies, or infers causes from free text.
+authored hypotheses. An explicitly approved proposal can be registered as a
+causal experiment, but registration never runs trials or changes policy.
 """
 from __future__ import annotations
 
@@ -49,6 +49,15 @@ class StrategySelfReviewStore:
             "CREATE INDEX IF NOT EXISTS idx_strategy_review_decisions "
             "ON strategy_review_decisions(proposal_id, created_at)"
         )
+        self._db.execute("""
+            CREATE TABLE IF NOT EXISTS strategy_review_experiments (
+                proposal_id TEXT PRIMARY KEY REFERENCES strategy_review_proposals(proposal_id),
+                experiment_id TEXT NOT NULL UNIQUE,
+                design TEXT NOT NULL,
+                protocol_ref TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         self._db.commit()
 
     def close(self) -> None:
@@ -205,6 +214,106 @@ class StrategySelfReviewStore:
         )
         self._db.commit()
         return self.get(key) | {"already_recorded": False}
+
+    def register_approved_experiment(
+        self,
+        proposal_id: str,
+        causal_store: Any,
+        *,
+        experiment_id: str,
+        design: str,
+        protocol_ref: str,
+    ) -> dict[str, Any]:
+        """Register an approved alternative for a separately run comparison.
+
+        The existing strategy is the control and the proposed alternative is
+        the treatment. Approval is required before registration. This method
+        creates only the experiment definition: it does not assign trials,
+        execute strategies, infer a causal effect, or mutate policy.
+
+        The review-to-experiment link is durable and idempotent. If the causal
+        store write succeeds but this store's link write fails, a retry can
+        recover the matching experiment definition without duplicating it.
+        """
+        from .causal_learning import CausalExperimentStore
+
+        if not isinstance(causal_store, CausalExperimentStore):
+            raise TypeError("causal_store must be a CausalExperimentStore")
+        key = self._text(proposal_id, "proposal_id")
+        experiment_key = self._text(experiment_id, "experiment_id")
+        kind = self._text(design, "design")
+        protocol = self._text(protocol_ref, "protocol_ref")
+        review = self.get(key)
+        decision = review["decision"]
+        if decision is None or decision["decision"] != "approved":
+            raise ValueError("strategy proposal requires an explicit approved decision")
+
+        proposal = review["proposal"]
+        treatment = proposal["alternative_strategy"]
+        control = proposal["strategy"]
+        expected = (kind, treatment, control, protocol)
+
+        linked = self._db.execute(
+            "SELECT experiment_id, design, protocol_ref "
+            "FROM strategy_review_experiments WHERE proposal_id = ?",
+            (key,),
+        ).fetchone()
+        if linked is not None:
+            if tuple(linked) != (experiment_key, kind, protocol):
+                raise ValueError("proposal is already linked to a different experiment")
+            already_registered = True
+        else:
+            other_link = self._db.execute(
+                "SELECT proposal_id FROM strategy_review_experiments WHERE experiment_id = ?",
+                (experiment_key,),
+            ).fetchone()
+            if other_link is not None and other_link["proposal_id"] != key:
+                raise ValueError("experiment_id is already linked to another proposal")
+            already_registered = False
+
+        try:
+            experiment = causal_store.experiment(experiment_key)
+        except ValueError:
+            experiment = causal_store.register_experiment(
+                experiment_key,
+                design=kind,
+                treatment_name=treatment,
+                control_name=control,
+                protocol_ref=protocol,
+            )
+        else:
+            actual = (
+                experiment["design"], experiment["treatment_name"],
+                experiment["control_name"], experiment["protocol_ref"],
+            )
+            if actual != expected:
+                raise ValueError("experiment_id already exists with different configuration")
+            already_registered = True
+
+        if linked is None:
+            try:
+                self._db.execute(
+                    "INSERT INTO strategy_review_experiments "
+                    "(proposal_id, experiment_id, design, protocol_ref) "
+                    "VALUES (?, ?, ?, ?)",
+                    (key, experiment_key, kind, protocol),
+                )
+                self._db.commit()
+            except sqlite3.IntegrityError as exc:
+                self._db.rollback()
+                raise ValueError("proposal or experiment is already linked") from exc
+
+        return {
+            "proposal_id": key,
+            "decision_id": decision["decision_id"],
+            "authorization_ref": decision["authorization_ref"],
+            "experiment": experiment,
+            "already_registered": already_registered,
+            "experiment_definition_created": not already_registered,
+            "execution_performed": False,
+            "policy_changed": False,
+            "requires_separate_protocol_execution": True,
+        }
 
     def get(self, proposal_id: str) -> dict[str, Any]:
         key = self._text(proposal_id, "proposal_id")

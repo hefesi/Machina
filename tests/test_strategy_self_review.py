@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from machina.experience_memory import ExperienceMemoryStore
+from machina.causal_learning import CausalExperimentStore
 from machina.strategy_self_review import StrategySelfReviewStore
 
 
@@ -12,8 +13,10 @@ class StrategySelfReviewTests(unittest.TestCase):
         root = Path(self.tmp.name)
         self.experiences = ExperienceMemoryStore(root / "experiences.db")
         self.reviews = StrategySelfReviewStore(root / "reviews.db")
+        self.causal = CausalExperimentStore(root / "causal.db")
 
     def tearDown(self):
+        self.causal.close()
         self.reviews.close()
         self.experiences.close()
         self.tmp.cleanup()
@@ -125,6 +128,61 @@ class StrategySelfReviewTests(unittest.TestCase):
             self.reviews.decide(
                 "review-1", **{**args, "rationale": "Changed rationale"}
             )
+
+    def test_unapproved_strategy_review_cannot_register_causal_experiment(self):
+        self._propose(self._report())
+        with self.assertRaisesRegex(ValueError, "explicit approved decision"):
+            self.reviews.register_approved_experiment(
+                "review-1", self.causal, experiment_id="experiment-1",
+                design="randomized", protocol_ref="protocol:experiment-1",
+            )
+        with self.assertRaisesRegex(ValueError, "unknown experiment_id"):
+            self.causal.experiment("experiment-1")
+
+    def test_approved_strategy_review_registers_causal_experiment_idempotently(self):
+        self._propose(self._report())
+        self.reviews.decide(
+            "review-1", decision_id="decision-1", decision="approved",
+            rationale="Approved for a separately controlled evaluation.",
+            authorization_ref="human-approval:42",
+        )
+        first = self.reviews.register_approved_experiment(
+            "review-1", self.causal, experiment_id="experiment-1",
+            design="randomized", protocol_ref="protocol:experiment-1",
+        )
+        self.assertFalse(first["already_registered"])
+        self.assertTrue(first["experiment_definition_created"])
+        self.assertEqual("conservative-v2", first["experiment"]["treatment_name"])
+        self.assertEqual("baseline", first["experiment"]["control_name"])
+        self.assertEqual("human-approval:42", first["authorization_ref"])
+        self.assertFalse(first["execution_performed"])
+        self.assertFalse(first["policy_changed"])
+        self.assertEqual(
+            "insufficient_evidence",
+            self.causal.report("experiment-1")["classification"],
+        )
+
+        repeated = self.reviews.register_approved_experiment(
+            "review-1", self.causal, experiment_id="experiment-1",
+            design="randomized", protocol_ref="protocol:experiment-1",
+        )
+        self.assertTrue(repeated["already_registered"])
+        self.assertFalse(repeated["experiment_definition_created"])
+        with self.assertRaisesRegex(ValueError, "different experiment"):
+            self.reviews.register_approved_experiment(
+                "review-1", self.causal, experiment_id="experiment-2",
+                design="randomized", protocol_ref="protocol:experiment-2",
+            )
+
+        self.reviews.close()
+        self.reviews = StrategySelfReviewStore(
+            Path(self.tmp.name) / "reviews.db"
+        )
+        after_restart = self.reviews.register_approved_experiment(
+            "review-1", self.causal, experiment_id="experiment-1",
+            design="randomized", protocol_ref="protocol:experiment-1",
+        )
+        self.assertTrue(after_restart["already_registered"])
 
     def test_history_survives_restart(self):
         self._propose(self._report())

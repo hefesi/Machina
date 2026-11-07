@@ -22,6 +22,8 @@ from .goal_outcome_learning import GoalOutcomeLearner
 from .experience_memory import ExperienceMemoryStore
 from .strategy_self_review import StrategySelfReviewStore
 from .curiosity import CuriosityInvestigationStore
+from .curiosity_policy import CuriosityQuestion, CuriosityDecision, CuriositySelector
+from .curiosity_coordination import CuriosityGoalCoordinator
 from .causal_learning import CausalExperimentStore
 from .deliberation import DeliberationDecision, InternalDeliberator
 from .mnn import Connection, MNN, Unit
@@ -107,6 +109,10 @@ __all__ = [
     "ExperienceMemoryStore",
     "StrategySelfReviewStore",
     "CuriosityInvestigationStore",
+    "CuriosityQuestion",
+    "CuriosityDecision",
+    "CuriositySelector",
+    "CuriosityGoalCoordinator",
     "DeliberationDecision",
     "InternalDeliberator",
     "HierarchicalPlanner",
