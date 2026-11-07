@@ -153,6 +153,40 @@ result = brain.run_deliberated_cycle(
 )
 ```
 
+## Experience-backed strategic review and causal experiment registration
+
+`ExperienceMemoryStore` produces evaluator-grounded autobiographical reports. Their repeated
+patterns are descriptive and explicitly non-causal. `StrategySelfReviewStore`
+accepts a caller-authored, testable alternative only when the report includes
+enough evaluated repetitions, matching evidence references and explicit
+confounders.
+
+A strategy proposal must receive an explicit `approved` decision before it can be
+registered with `CausalExperimentStore`. Registration maps the current strategy to the
+control arm and the proposed alternative to the treatment arm. The registration
+also stores a durable proposal-to-experiment link and is idempotent for matching
+inputs; conflicting reuse of either identity is rejected.
+
+Registration creates only an experiment definition. It does not assign trials,
+execute either strategy, infer a causal effect or change policy. A separately
+defined protocol must be carried out and evaluator-backed outcomes recorded
+before `CausalExperimentStore.report()` can estimate a comparison. Observational
+associations and insufficient samples remain ineligible for causal belief
+updates. Eligible randomized or matched reports can be passed explicitly to
+`SelfModelLearningBridge.update_belief_from_causal_experiment()`, which records a
+bounded inferred belief with its evidence references; it does not prove an
+individual counterfactual.
+
+The intended review path is therefore:
+
+1. record and evaluate repeated experiences;
+2. propose a testable strategy alternative with confounders;
+3. record an explicit approval or rejection;
+4. register an approved experiment and its protocol reference;
+5. collect trials separately and review the resulting evidence;
+6. update inferred beliefs only when the causal-design and uncertainty gates
+   are satisfied.
+
 ## Validation and research boundary
 
 Unit and integration tests must verify that:
