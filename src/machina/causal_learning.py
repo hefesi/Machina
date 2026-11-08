@@ -229,15 +229,25 @@ class CausalExperimentStore:
         )
         if data.get("action") != expected_action:
             raise ValueError("strategy outcome action does not match the experiment arm")
-        if experiment["design"] == "matched" and context_key is None:
-            raise ValueError("matched strategy outcomes require context_key")
-        if experiment["design"] != "matched" and context_key is not None:
+        expected_context = None
+        if experiment["design"] == "matched":
+            if context_key is None:
+                raise ValueError("matched strategy outcomes require context_key")
+            event_context = data.get("context")
+            if not isinstance(event_context, str) or not event_context.strip():
+                raise ValueError("matched strategy outcomes require a recorded context")
+            expected_context = self._label(event_context, "outcome context")
+            supplied_context = self._label(context_key, "context_key")
+            if supplied_context != expected_context:
+                raise ValueError(
+                    "context_key must match the recorded strategy outcome context"
+                )
+        elif context_key is not None:
             raise ValueError("context_key is only valid for matched experiments")
         trial_id = f"{key}:{operation_id}"
         existing = self._db.execute(
             "SELECT * FROM causal_trials WHERE trial_id = ?", (trial_id,)
         ).fetchone()
-        expected_context = None if context_key is None else self._label(context_key, "context_key")
         if existing is not None:
             row = dict(existing)
             expected = (key, group, float(observed), evidence, expected_context)
