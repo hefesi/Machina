@@ -143,6 +143,63 @@ class CausalExperimentStoreTests(unittest.TestCase):
             self.assertEqual(1, self.store.report("retrieval-v1")["control"]["n"])
             event_store.close()
 
+    def test_matched_strategy_outcomes_require_the_recorded_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            event_store = EventStore(Path(directory) / "events.sqlite3")
+            cycle_id = "cycle-matched-context"
+            event_store.create_cycle(cycle_id)
+            bridge = MNNStrategyEventBridge(event_store)
+            self._register("matched")
+
+            bridge.record_proposal(
+                cycle_id,
+                {"status": "proposed", "action": "retrieve", "context": " Task   A ", "evidence_ids": ["obs-t"]},
+                expected_reward=0.6,
+                proposal_id="matched-treatment",
+            )
+            treatment_outcome = bridge.record_outcome(
+                cycle_id,
+                "matched-treatment",
+                execution_confirmed=True,
+                executed_action="retrieve",
+                observed_reward=0.9,
+                operation_id="matched-operation-treatment",
+            )
+            with self.assertRaisesRegex(ValueError, "must match the recorded strategy outcome context"):
+                self.store.record_strategy_outcome(
+                    "retrieval-v1", "treatment", treatment_outcome, context_key="task b"
+                )
+            self.assertEqual([], self.store.report("retrieval-v1")["trials"])
+
+            projected_treatment = self.store.record_strategy_outcome(
+                "retrieval-v1", "treatment", treatment_outcome, context_key="task a"
+            )
+            self.assertEqual("task a", projected_treatment["context_key"])
+
+            bridge.record_proposal(
+                cycle_id,
+                {"status": "proposed", "action": "archive", "context": "TASK A", "evidence_ids": ["obs-c"]},
+                expected_reward=0.5,
+                proposal_id="matched-control",
+            )
+            control_outcome = bridge.record_outcome(
+                cycle_id,
+                "matched-control",
+                execution_confirmed=True,
+                executed_action="archive",
+                observed_reward=0.4,
+                operation_id="matched-operation-control",
+            )
+            projected_control = self.store.record_strategy_outcome(
+                "retrieval-v1", "control", control_outcome, context_key="task a"
+            )
+            self.assertEqual("task a", projected_control["context_key"])
+            self.assertEqual(
+                ["task a", "task a"],
+                [trial["context_key"] for trial in self.store.report("retrieval-v1")["trials"]],
+            )
+            event_store.close()
+
     def test_unconfirmed_or_non_strategy_events_cannot_be_projected(self):
         self._register()
         wrong = object()
