@@ -173,7 +173,10 @@ defined protocol must be carried out and evaluator-backed outcomes recorded
 before `CausalExperimentStore.report()` can estimate a comparison. When a
 confirmed strategy outcome is projected into a trial, its recorded action must
 match the experiment's configured treatment or control label for the requested
-arm; mismatches are rejected before persistence. Observational associations
+arm; mismatches are rejected before persistence. For matched designs, the
+caller-supplied context key must also equal the normalized context recorded in
+the outcome event, so a trial cannot be assigned to an unrelated comparison
+pair. Observational associations
 and insufficient samples remain ineligible for causal belief updates. Eligible
 randomized or matched reports can be passed explicitly to
 `SelfModelLearningBridge.update_belief_from_causal_experiment()`, which records a
