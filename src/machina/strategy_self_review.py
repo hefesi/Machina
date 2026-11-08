@@ -49,6 +49,26 @@ class StrategySelfReviewStore:
             "CREATE INDEX IF NOT EXISTS idx_strategy_review_decisions "
             "ON strategy_review_decisions(proposal_id, created_at)"
         )
+        duplicate_decision = self._db.execute(
+            """
+            SELECT proposal_id, COUNT(*) AS decisions
+            FROM strategy_review_decisions
+            GROUP BY proposal_id
+            HAVING COUNT(*) > 1
+            LIMIT 1
+            """
+        ).fetchone()
+        if duplicate_decision is not None:
+            self._db.rollback()
+            self._db.close()
+            raise RuntimeError(
+                "strategy review ledger contains multiple final decisions for one proposal; "
+                "resolve the conflicting historical decisions before opening it"
+            )
+        self._db.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_strategy_review_decisions_proposal_unique "
+            "ON strategy_review_decisions(proposal_id)"
+        )
         self._db.execute("""
             CREATE TABLE IF NOT EXISTS strategy_review_experiments (
                 proposal_id TEXT PRIMARY KEY REFERENCES strategy_review_proposals(proposal_id),
@@ -191,29 +211,38 @@ class StrategySelfReviewStore:
             raise ValueError("decision must be approved or rejected")
         why = self._text(rationale, "rationale")
         authorization = self._text(authorization_ref, "authorization_ref")
-        self.get(key)
-        existing = self._db.execute(
-            "SELECT proposal_id, decision, rationale, authorization_ref "
-            "FROM strategy_review_decisions WHERE decision_id = ?", (token,)
-        ).fetchone()
         values = (key, choice, why, authorization)
-        if existing is not None:
-            if tuple(existing) != values:
-                raise ValueError("decision_id already exists with different content")
-            return self.get(key) | {"already_recorded": True}
-        prior = self._db.execute(
-            "SELECT decision FROM strategy_review_decisions "
-            "WHERE proposal_id = ? ORDER BY rowid DESC LIMIT 1", (key,)
-        ).fetchone()
-        if prior is not None:
-            raise ValueError("proposal already has a final decision")
-        self._db.execute(
-            "INSERT INTO strategy_review_decisions "
-            "(decision_id, proposal_id, decision, rationale, authorization_ref) "
-            "VALUES (?, ?, ?, ?, ?)", (token, *values)
-        )
-        self._db.commit()
-        return self.get(key) | {"already_recorded": False}
+        # Serialize the read/check/write sequence across independent SQLite
+        # connections. The unique index below is the durable invariant; the
+        # immediate transaction makes competing callers observe the winner.
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            self.get(key)
+            existing = self._db.execute(
+                "SELECT proposal_id, decision, rationale, authorization_ref "
+                "FROM strategy_review_decisions WHERE decision_id = ?", (token,)
+            ).fetchone()
+            if existing is not None:
+                if tuple(existing) != values:
+                    raise ValueError("decision_id already exists with different content")
+                self._db.commit()
+                return self.get(key) | {"already_recorded": True}
+            prior = self._db.execute(
+                "SELECT decision FROM strategy_review_decisions "
+                "WHERE proposal_id = ? LIMIT 1", (key,)
+            ).fetchone()
+            if prior is not None:
+                raise ValueError("proposal already has a final decision")
+            self._db.execute(
+                "INSERT INTO strategy_review_decisions "
+                "(decision_id, proposal_id, decision, rationale, authorization_ref) "
+                "VALUES (?, ?, ?, ?, ?)", (token, *values)
+            )
+            self._db.commit()
+            return self.get(key) | {"already_recorded": False}
+        except Exception:
+            self._db.rollback()
+            raise
 
     def register_approved_experiment(
         self,

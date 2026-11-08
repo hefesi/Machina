@@ -1,5 +1,8 @@
+import sqlite3
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from machina.experience_memory import ExperienceMemoryStore
@@ -128,6 +131,65 @@ class StrategySelfReviewTests(unittest.TestCase):
             self.reviews.decide(
                 "review-1", **{**args, "rationale": "Changed rationale"}
             )
+
+    def test_concurrent_final_decisions_are_serialized(self):
+        self._propose(self._report())
+        database = Path(self.tmp.name) / "reviews.db"
+        barrier = threading.Barrier(2)
+
+        def decide(decision_id, choice):
+            store = StrategySelfReviewStore(database)
+            try:
+                barrier.wait(timeout=5)
+                result = store.decide(
+                    "review-1", decision_id=decision_id, decision=choice,
+                    rationale=f"Concurrent {choice} decision",
+                    authorization_ref=f"human:{decision_id}",
+                )
+                return ("recorded", result["status"])
+            except ValueError as exc:
+                return ("rejected", str(exc))
+            finally:
+                store.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(
+                lambda args: decide(*args),
+                (("decision-approved", "approved"), ("decision-rejected", "rejected")),
+            ))
+
+        self.assertEqual(1, sum(status == "recorded" for status, _ in results))
+        self.assertEqual(1, sum(status == "rejected" for status, _ in results))
+        rejection = next(detail for status, detail in results if status == "rejected")
+        self.assertIn("final decision", rejection)
+
+    def test_legacy_duplicate_final_decisions_fail_closed(self):
+        database = Path(self.tmp.name) / "legacy-reviews.db"
+        connection = sqlite3.connect(database)
+        connection.execute("""
+            CREATE TABLE strategy_review_decisions (
+                decision_id TEXT PRIMARY KEY,
+                proposal_id TEXT NOT NULL,
+                decision TEXT NOT NULL CHECK (decision IN ('approved', 'rejected')),
+                rationale TEXT NOT NULL,
+                authorization_ref TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        connection.executemany(
+            "INSERT INTO strategy_review_decisions "
+            "(decision_id, proposal_id, decision, rationale, authorization_ref) "
+            "VALUES (?, ?, ?, ?, ?)",
+            [
+                ("legacy-approved", "legacy-proposal", "approved", "first", "human:1"),
+                ("legacy-rejected", "legacy-proposal", "rejected", "second", "human:2"),
+            ],
+        )
+        connection.commit()
+        connection.close()
+
+        with self.assertRaisesRegex(RuntimeError, "multiple final decisions"):
+            StrategySelfReviewStore(database)
 
     def test_unapproved_strategy_review_cannot_register_causal_experiment(self):
         self._propose(self._report())
