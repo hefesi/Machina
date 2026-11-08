@@ -54,6 +54,30 @@ class CausalExperimentStore:
             "CREATE INDEX IF NOT EXISTS idx_causal_trials_experiment "
             "ON causal_trials(experiment_id, arm, id)"
         )
+        duplicate_context = self._db.execute(
+            """
+            SELECT experiment_id, arm, context_key, COUNT(*) AS observations
+            FROM causal_trials
+            WHERE context_key IS NOT NULL
+            GROUP BY experiment_id, arm, context_key
+            HAVING COUNT(*) > 1
+            LIMIT 1
+            """
+        ).fetchone()
+        if duplicate_context is not None:
+            self._db.rollback()
+            self._db.close()
+            raise RuntimeError(
+                "causal trial ledger contains duplicate matched context/arm rows; "
+                "resolve the conflicting historical observations before opening it"
+            )
+        self._db.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_causal_trials_context_arm_unique
+            ON causal_trials(experiment_id, arm, context_key)
+            WHERE context_key IS NOT NULL
+            """
+        )
         self._db.commit()
 
     def close(self) -> None:
@@ -148,7 +172,19 @@ class CausalExperimentStore:
             self._db.commit()
         except sqlite3.IntegrityError as exc:
             self._db.rollback()
-            raise ValueError("trial_id has already been recorded") from exc
+            if self._db.execute(
+                "SELECT 1 FROM causal_trials WHERE trial_id = ?", (token,)
+            ).fetchone():
+                raise ValueError("trial_id has already been recorded") from exc
+            if context is not None and self._db.execute(
+                "SELECT 1 FROM causal_trials "
+                "WHERE experiment_id = ? AND arm = ? AND context_key = ?",
+                (key, group, context),
+            ).fetchone():
+                raise ValueError(
+                    "matched context already has an observation for this arm"
+                ) from exc
+            raise
         return {
             "record_id": int(cursor.lastrowid), "experiment_id": key,
             "arm": group, "outcome": float(outcome), "evidence_ref": evidence,
