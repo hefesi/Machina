@@ -260,9 +260,10 @@ class StrategySelfReviewStore:
         creates only the experiment definition: it does not assign trials,
         execute strategies, infer a causal effect, or mutate policy.
 
-        The review-to-experiment link is durable and idempotent. If the causal
-        store write succeeds but this store's link write fails, a retry can
-        recover the matching experiment definition without duplicating it.
+        The review-to-experiment link is durable and idempotent. A write to
+        the causal store that succeeds before a failed link write can be
+        recovered on retry. An immediate transaction serializes concurrent
+        registrations for the same review ledger.
         """
         from .causal_learning import CausalExperimentStore
 
@@ -272,65 +273,74 @@ class StrategySelfReviewStore:
         experiment_key = self._text(experiment_id, "experiment_id")
         kind = self._text(design, "design")
         protocol = self._text(protocol_ref, "protocol_ref")
-        review = self.get(key)
-        decision = review["decision"]
-        if decision is None or decision["decision"] != "approved":
-            raise ValueError("strategy proposal requires an explicit approved decision")
 
-        proposal = review["proposal"]
-        treatment = proposal["alternative_strategy"]
-        control = proposal["strategy"]
-        expected = (kind, treatment, control, protocol)
-
-        linked = self._db.execute(
-            "SELECT experiment_id, design, protocol_ref "
-            "FROM strategy_review_experiments WHERE proposal_id = ?",
-            (key,),
-        ).fetchone()
-        if linked is not None:
-            if tuple(linked) != (experiment_key, kind, protocol):
-                raise ValueError("proposal is already linked to a different experiment")
-            already_registered = True
-        else:
-            other_link = self._db.execute(
-                "SELECT proposal_id FROM strategy_review_experiments WHERE experiment_id = ?",
-                (experiment_key,),
-            ).fetchone()
-            if other_link is not None and other_link["proposal_id"] != key:
-                raise ValueError("experiment_id is already linked to another proposal")
-            already_registered = False
-
+        # Lock the review ledger before checking the link. Without this,
+        # independent callers can both observe an absent link, race to create
+        # the causal definition, and turn an otherwise idempotent retry into
+        # a duplicate-key error.
+        self._db.execute("BEGIN IMMEDIATE")
         try:
-            experiment = causal_store.experiment(experiment_key)
-        except ValueError:
-            experiment = causal_store.register_experiment(
-                experiment_key,
-                design=kind,
-                treatment_name=treatment,
-                control_name=control,
-                protocol_ref=protocol,
-            )
-        else:
-            actual = (
-                experiment["design"], experiment["treatment_name"],
-                experiment["control_name"], experiment["protocol_ref"],
-            )
-            if actual != expected:
-                raise ValueError("experiment_id already exists with different configuration")
-            already_registered = True
+            review = self.get(key)
+            decision = review["decision"]
+            if decision is None or decision["decision"] != "approved":
+                raise ValueError("strategy proposal requires an explicit approved decision")
 
-        if linked is None:
+            proposal = review["proposal"]
+            treatment = proposal["alternative_strategy"]
+            control = proposal["strategy"]
+            expected = (kind, treatment, control, protocol)
+
+            linked = self._db.execute(
+                "SELECT experiment_id, design, protocol_ref "
+                "FROM strategy_review_experiments WHERE proposal_id = ?",
+                (key,),
+            ).fetchone()
+            if linked is not None:
+                if tuple(linked) != (experiment_key, kind, protocol):
+                    raise ValueError("proposal is already linked to a different experiment")
+                already_registered = True
+            else:
+                other_link = self._db.execute(
+                    "SELECT proposal_id FROM strategy_review_experiments WHERE experiment_id = ?",
+                    (experiment_key,),
+                ).fetchone()
+                if other_link is not None and other_link["proposal_id"] != key:
+                    raise ValueError("experiment_id is already linked to another proposal")
+                already_registered = False
+
             try:
+                experiment = causal_store.experiment(experiment_key)
+            except ValueError:
+                experiment = causal_store.register_experiment(
+                    experiment_key,
+                    design=kind,
+                    treatment_name=treatment,
+                    control_name=control,
+                    protocol_ref=protocol,
+                )
+            else:
+                actual = (
+                    experiment["design"], experiment["treatment_name"],
+                    experiment["control_name"], experiment["protocol_ref"],
+                )
+                if actual != expected:
+                    raise ValueError("experiment_id already exists with different configuration")
+                already_registered = True
+
+            if linked is None:
                 self._db.execute(
                     "INSERT INTO strategy_review_experiments "
                     "(proposal_id, experiment_id, design, protocol_ref) "
                     "VALUES (?, ?, ?, ?)",
                     (key, experiment_key, kind, protocol),
                 )
-                self._db.commit()
-            except sqlite3.IntegrityError as exc:
-                self._db.rollback()
-                raise ValueError("proposal or experiment is already linked") from exc
+            self._db.commit()
+        except sqlite3.IntegrityError as exc:
+            self._db.rollback()
+            raise ValueError("proposal or experiment is already linked") from exc
+        except Exception:
+            self._db.rollback()
+            raise
 
         return {
             "proposal_id": key,
