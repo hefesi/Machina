@@ -246,6 +246,53 @@ class StrategySelfReviewTests(unittest.TestCase):
         )
         self.assertTrue(after_restart["already_registered"])
 
+    def test_concurrent_experiment_registration_is_idempotent(self):
+        self._propose(self._report())
+        self.reviews.decide(
+            "review-1", decision_id="decision-1", decision="approved",
+            rationale="Approved for a separately controlled evaluation.",
+            authorization_ref="human-approval:42",
+        )
+        root = Path(self.tmp.name)
+        stores = [
+            (
+                StrategySelfReviewStore(root / "reviews.db"),
+                CausalExperimentStore(root / "causal.db"),
+            )
+            for _ in range(2)
+        ]
+        barrier = threading.Barrier(2)
+
+        def register(pair):
+            reviews, causal = pair
+            try:
+                barrier.wait(timeout=5)
+                return reviews.register_approved_experiment(
+                    "review-1", causal, experiment_id="experiment-1",
+                    design="randomized", protocol_ref="protocol:experiment-1",
+                )
+            finally:
+                reviews.close()
+                causal.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(register, stores))
+
+        self.assertEqual(1, sum(not item["already_registered"] for item in results))
+        self.assertEqual(1, sum(item["already_registered"] for item in results))
+        self.assertEqual(1, sum(item["experiment_definition_created"] for item in results))
+        self.assertEqual(1, sum(not item["experiment_definition_created"] for item in results))
+
+        # Both independent callers converge on one durable review link and
+        # one causal definition; a later retry remains idempotent as well.
+        self.assertEqual("conservative-v2", self.causal.experiment("experiment-1")["treatment_name"])
+        replay = self.reviews.register_approved_experiment(
+            "review-1", self.causal, experiment_id="experiment-1",
+            design="randomized", protocol_ref="protocol:experiment-1",
+        )
+        self.assertTrue(replay["already_registered"])
+        self.assertFalse(replay["experiment_definition_created"])
+
     def test_history_survives_restart(self):
         self._propose(self._report())
         self.reviews.close()
