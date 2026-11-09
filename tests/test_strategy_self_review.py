@@ -254,17 +254,13 @@ class StrategySelfReviewTests(unittest.TestCase):
             authorization_ref="human-approval:42",
         )
         root = Path(self.tmp.name)
-        stores = [
-            (
-                StrategySelfReviewStore(root / "reviews.db"),
-                CausalExperimentStore(root / "causal.db"),
-            )
-            for _ in range(2)
-        ]
         barrier = threading.Barrier(2)
 
-        def register(pair):
-            reviews, causal = pair
+        def register(_):
+            # SQLite connections must be created, used and closed in the
+            # worker thread that owns them.
+            reviews = StrategySelfReviewStore(root / "reviews.db")
+            causal = CausalExperimentStore(root / "causal.db")
             try:
                 barrier.wait(timeout=5)
                 return reviews.register_approved_experiment(
@@ -276,7 +272,7 @@ class StrategySelfReviewTests(unittest.TestCase):
                 causal.close()
 
         with ThreadPoolExecutor(max_workers=2) as executor:
-            results = list(executor.map(register, stores))
+            results = list(executor.map(register, range(2)))
 
         self.assertEqual(1, sum(not item["already_registered"] for item in results))
         self.assertEqual(1, sum(item["already_registered"] for item in results))
