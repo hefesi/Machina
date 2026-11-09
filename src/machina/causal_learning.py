@@ -245,25 +245,44 @@ class CausalExperimentStore:
         elif context_key is not None:
             raise ValueError("context_key is only valid for matched experiments")
         trial_id = f"{key}:{operation_id}"
-        existing = self._db.execute(
-            "SELECT * FROM causal_trials WHERE trial_id = ?", (trial_id,)
-        ).fetchone()
-        if existing is not None:
-            row = dict(existing)
-            expected = (key, group, float(observed), evidence, expected_context)
-            actual = (
-                row["experiment_id"], row["arm"], row["outcome"],
-                row["evidence_ref"], row["context_key"],
+        # Serialize the idempotency check and insertion. Without an immediate
+        # transaction, concurrent projections can both observe a missing
+        # operation and one caller then fails on the unique trial_id constraint.
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            existing = self._db.execute(
+                "SELECT * FROM causal_trials WHERE trial_id = ?", (trial_id,)
+            ).fetchone()
+            if existing is not None:
+                row = dict(existing)
+                expected = (key, group, float(observed), evidence, expected_context)
+                actual = (
+                    row["experiment_id"], row["arm"], row["outcome"],
+                    row["evidence_ref"], row["context_key"],
+                )
+                if actual != expected:
+                    raise ValueError("operation_id was already projected with different trial data")
+                self._db.commit()
+                return {
+                    "record_id": int(row["id"]),
+                    "experiment_id": row["experiment_id"],
+                    "arm": row["arm"],
+                    "outcome": float(row["outcome"]),
+                    "evidence_ref": row["evidence_ref"],
+                    "context_key": row["context_key"],
+                    "trial_id": row["trial_id"],
+                }
+            # record_trial commits this transaction after the same validation
+            # and insert path used by direct trial registration.
+            return self.record_trial(
+                key, group, observed,
+                evidence_ref=evidence,
+                trial_id=trial_id,
+                context_key=expected_context,
             )
-            if actual != expected:
-                raise ValueError("operation_id was already projected with different trial data")
-            return row
-        return self.record_trial(
-            key, group, observed,
-            evidence_ref=evidence,
-            trial_id=trial_id,
-            context_key=expected_context,
-        )
+        except Exception:
+            self._db.rollback()
+            raise
 
     @staticmethod
     def _mean_variance(values: list[float]) -> tuple[float | None, float | None]:

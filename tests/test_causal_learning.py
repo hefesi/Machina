@@ -1,5 +1,7 @@
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from machina.causal_learning import CausalExperimentStore
@@ -113,7 +115,7 @@ class CausalExperimentStoreTests(unittest.TestCase):
             replayed = self.store.record_strategy_outcome(
                 "retrieval-v1", "treatment", outcome
             )
-            self.assertEqual(projected["trial_id"], replayed["trial_id"])
+            self.assertEqual(projected, replayed)
             self.assertEqual(1, self.store.report("retrieval-v1")["treatment"]["n"])
             self.assertEqual(outcome.artifact.id, projected["evidence_ref"])
             with self.assertRaisesRegex(ValueError, "does not match the experiment arm"):
@@ -142,6 +144,51 @@ class CausalExperimentStoreTests(unittest.TestCase):
             self.assertEqual("control", control_trial["arm"])
             self.assertEqual(1, self.store.report("retrieval-v1")["control"]["n"])
             event_store.close()
+
+    def test_concurrent_confirmed_strategy_outcome_projection_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            event_store = EventStore(Path(directory) / "events.sqlite3")
+            try:
+                cycle_id = "cycle-causal-concurrent-projection"
+                event_store.create_cycle(cycle_id)
+                bridge = MNNStrategyEventBridge(event_store)
+                bridge.record_proposal(
+                    cycle_id,
+                    {"status": "proposed", "action": "retrieve", "context": "same task", "evidence_ids": ["obs-concurrent"]},
+                    expected_reward=0.6,
+                    proposal_id="proposal-concurrent",
+                )
+                outcome = bridge.record_outcome(
+                    cycle_id,
+                    "proposal-concurrent",
+                    execution_confirmed=True,
+                    executed_action="retrieve",
+                    observed_reward=0.9,
+                    operation_id="operation-concurrent",
+                )
+                self._register("randomized")
+                database = Path(self.tmp.name) / "causal.sqlite3"
+                barrier = threading.Barrier(4)
+
+                def project(_):
+                    # Each worker owns its SQLite connection. The barrier makes
+                    # independent callers contend for the same operation ID.
+                    store = CausalExperimentStore(database)
+                    try:
+                        barrier.wait(timeout=5)
+                        return store.record_strategy_outcome(
+                            "retrieval-v1", "treatment", outcome
+                        )
+                    finally:
+                        store.close()
+
+                with ThreadPoolExecutor(max_workers=4) as executor:
+                    results = list(executor.map(project, range(4)))
+
+                self.assertTrue(all(item == results[0] for item in results[1:]))
+                self.assertEqual(1, self.store.report("retrieval-v1")["treatment"]["n"])
+            finally:
+                event_store.close()
 
     def test_matched_strategy_outcomes_require_the_recorded_context(self):
         with tempfile.TemporaryDirectory() as directory:
