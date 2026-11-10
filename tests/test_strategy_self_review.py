@@ -132,6 +132,36 @@ class StrategySelfReviewTests(unittest.TestCase):
                 "review-1", **{**args, "rationale": "Changed rationale"}
             )
 
+    def test_concurrent_identical_proposals_are_idempotent(self):
+        report = self._report()
+        database = Path(self.tmp.name) / "reviews.db"
+        barrier = threading.Barrier(2)
+
+        def propose(_):
+            store = StrategySelfReviewStore(database)
+            try:
+                barrier.wait(timeout=5)
+                return store.propose(
+                    "review-concurrent", autobiographical_report=report,
+                    goal_id="goal", strategy="baseline",
+                    alternative_strategy="conservative-v2",
+                    hypothesis="Reducing the task scope may improve measured completion.",
+                    rationale="The repeated underestimation pattern warrants a testable alternative.",
+                    outcome_metric="evaluator completion score",
+                    confounders=["task difficulty may differ", "evaluator scoring may drift"],
+                    minimum_repetitions=3,
+                )
+            finally:
+                store.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(propose, range(2)))
+
+        self.assertEqual(1, sum(not item["already_recorded"] for item in results))
+        self.assertEqual(1, sum(item["already_recorded"] for item in results))
+        self.assertEqual(results[0]["proposal"], results[1]["proposal"])
+        self.assertEqual(1, len(self.reviews.history()))
+
     def test_concurrent_final_decisions_are_serialized(self):
         self._propose(self._report())
         database = Path(self.tmp.name) / "reviews.db"
