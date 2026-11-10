@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 
 class CuriosityInvestigationStore:
@@ -79,6 +80,26 @@ class CuriosityInvestigationStore:
 
     def close(self) -> None:
         self._db.close()
+
+    @contextmanager
+    def review_transaction(self) -> Iterator[None]:
+        """Serialize review lookup, model update and immutable report write.
+
+        The immediate transaction is held across the caller's self-model
+        mutation so independent connections cannot apply the same review ID
+        concurrently. The self-model and investigation ledger are still
+        separate stores; retry recovery remains necessary after a process
+        failure between their writes.
+        """
+        if self._db.in_transaction:
+            raise RuntimeError("curiosity review transaction cannot be nested")
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            yield
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
 
     @staticmethod
     def _label(value: str, name: str) -> str:
@@ -217,19 +238,28 @@ class CuriosityInvestigationStore:
         """Persist one immutable assessment report per caller-supplied review ID."""
         review = self._label(review_id, "review_id")
         key = self._label(investigation_id, "investigation_id")
-        self.get_investigation(key)
         if not isinstance(report, dict):
             raise ValueError("report must be a mapping")
         payload = json.dumps(report, ensure_ascii=False, sort_keys=True, allow_nan=False)
+        owns_transaction = not self._db.in_transaction
+        if owns_transaction:
+            self._db.execute("BEGIN IMMEDIATE")
         try:
+            self.get_investigation(key)
             self._db.execute(
                 "INSERT INTO curiosity_reviews (review_id, investigation_id, report) VALUES (?, ?, ?)",
                 (review, key, payload),
             )
-            self._db.commit()
+            if owns_transaction:
+                self._db.commit()
         except sqlite3.IntegrityError as exc:
-            self._db.rollback()
+            if owns_transaction:
+                self._db.rollback()
             raise ValueError("review_id already exists") from exc
+        except Exception:
+            if owns_transaction:
+                self._db.rollback()
+            raise
         return self.get_review(review)
 
     def get_review(self, review_id: str) -> dict[str, Any]:
