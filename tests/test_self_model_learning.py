@@ -1,5 +1,8 @@
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from machina.autonomy import GoalCandidate
@@ -169,6 +172,82 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             self.assertIsNotNone(store.find_review("recoverable-review"))
         finally:
             store.close()
+
+    def test_concurrent_curiosity_review_id_applies_self_model_once(self):
+        from machina.curiosity import CuriosityInvestigationStore
+
+        database = Path(self.tmp.name) / "review-concurrent.sqlite3"
+        setup = CuriosityInvestigationStore(database)
+        setup.start_investigation(
+            "inv-concurrent", gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing improves recall", selection_reason="test",
+            cycle_id="c1", goal_id="g1",
+        )
+        setup.record_evidence(
+            "inv-concurrent", evidence_ref="e1",
+            finding="A controlled benchmark showed improvement", cycle_id="c2",
+        )
+        setup.record_evidence(
+            "inv-concurrent", evidence_ref="e2",
+            finding="An independent replication showed improvement", cycle_id="c2",
+        )
+        setup.close()
+        self.model.update(
+            {"memory_recall": "tentative"},
+            cycle_id="initial",
+            evidence_refs={"memory_recall": "initial-evidence"},
+            statuses={"memory_recall": "inferred"},
+            confidences={"memory_recall": 0.4},
+        )
+        original_revise = self.model.revise_belief
+
+        def slow_revise(*args, **kwargs):
+            # Keep the first reviewer inside the mutation window long enough
+            # for the second independent SQLite connection to contend.
+            time.sleep(0.05)
+            return original_revise(*args, **kwargs)
+
+        self.model.revise_belief = slow_revise
+        assessments = {
+            "e1": {
+                "classification": "support", "confidence": 0.9,
+                "rationale": "Controlled benchmark comparison",
+            },
+            "e2": {
+                "classification": "support", "confidence": 0.85,
+                "rationale": "Independent replication",
+            },
+        }
+        barrier = threading.Barrier(2)
+
+        def review(_):
+            store = CuriosityInvestigationStore(database)
+            bridge = SelfModelLearningBridge(self.model, self.learner)
+            try:
+                barrier.wait(timeout=5)
+                return bridge.review_curiosity_investigation(
+                    store, "inv-concurrent", review_id="shared-review",
+                    cycle_id="c3", evidence_assessments=assessments,
+                    apply_to_self_model=True,
+                )
+            finally:
+                store.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(review, range(2)))
+
+        self.assertEqual(1, sum(not item["already_reviewed"] for item in results))
+        self.assertEqual(1, sum(item["already_reviewed"] for item in results))
+        self.assertEqual(1, sum(item["self_model_update_performed_now"] for item in results))
+        self.assertEqual(1, len(self.model.belief_revision_history))
+        verification = CuriosityInvestigationStore(database)
+        try:
+            persisted = verification.find_review("shared-review")
+            self.assertIsNotNone(persisted)
+            self.assertEqual("memory_recall", persisted["report"]["belief_property"])
+        finally:
+            verification.close()
 
     def test_curiosity_review_requires_non_empty_cycle_id_and_safe_classification(self):
         from machina.curiosity import CuriosityInvestigationStore
