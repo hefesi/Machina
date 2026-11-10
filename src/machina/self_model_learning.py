@@ -57,151 +57,152 @@ class SelfModelLearningBridge:
             raise ValueError("minimum_assessments must be a positive integer")
         if not isinstance(evidence_assessments, Mapping):
             raise ValueError("evidence_assessments must be a mapping")
-        investigation = investigation_store.get_investigation(investigation_id)
-        evidence_by_ref = {item["evidence_ref"]: item for item in investigation["evidence"]}
-        normalized = []
-        for raw_ref, raw_assessment in evidence_assessments.items():
-            if not isinstance(raw_ref, str) or raw_ref not in evidence_by_ref:
-                raise ValueError("every assessment must reference evidence stored in this investigation")
-            if not isinstance(raw_assessment, Mapping):
-                raise ValueError("each evidence assessment must be a mapping")
-            classification = raw_assessment.get("classification")
-            if not isinstance(classification, str) or classification not in {"support", "contradict", "neutral"}:
-                raise ValueError("classification must be support, contradict, or neutral")
-            rationale = raw_assessment.get("rationale")
-            if not isinstance(rationale, str) or not rationale.strip():
-                raise ValueError("each assessment requires a non-empty rationale")
-            confidence = raw_assessment.get("confidence", 0.5)
-            if isinstance(confidence, bool):
-                raise ValueError("assessment confidence must be finite and in [0, 1]")
-            try:
-                confidence = float(confidence)
-            except (TypeError, ValueError) as exc:
-                raise ValueError("assessment confidence must be finite and in [0, 1]") from exc
-            if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
-                raise ValueError("assessment confidence must be finite and in [0, 1]")
-            normalized.append({
-                "evidence_ref": raw_ref, "finding": evidence_by_ref[raw_ref]["finding"],
-                "classification": classification, "confidence": confidence,
-                "rationale": rationale.strip(),
-            })
-        if len({item["evidence_ref"] for item in normalized}) != len(normalized):
-            raise ValueError("evidence references must be unique")
-        normalized.sort(key=lambda item: item["evidence_ref"])
-        request_payload = {
-            "investigation_id": investigation_id,
-            "cycle_id": cycle_id,
-            "apply_to_self_model": apply_to_self_model,
-            "minimum_assessments": minimum_assessments,
-            "evidence_assessments": normalized,
-        }
-        request_fingerprint = hashlib.sha256(
-            json.dumps(
-                request_payload, ensure_ascii=False, sort_keys=True,
-                separators=(",", ":"), allow_nan=False,
-            ).encode("utf-8")
-        ).hexdigest()
-        prior = investigation_store.find_review(review_id)
-        if prior is not None:
-            prior_report = prior["report"]
-            stored_fingerprint = prior_report.get("request_fingerprint")
-            if stored_fingerprint is not None:
-                matches = stored_fingerprint == request_fingerprint
-            else:
-                # Read reports written before request fingerprints were added.
-                matches = (
-                    prior_report.get("investigation_id") == investigation_id
-                    and prior_report.get("cycle_id") == cycle_id
-                    and prior_report.get("apply_to_self_model_requested") == apply_to_self_model
-                    and prior_report.get("minimum_assessments") == minimum_assessments
-                    and sorted(
-                        prior_report.get("evidence_assessments", []),
-                        key=lambda item: item.get("evidence_ref", ""),
-                    ) == normalized
-                )
-            if not matches:
-                raise ValueError("review_id already exists with different review input")
-            return {
-                **prior_report,
-                "already_reviewed": True,
-                "self_model_update_performed_now": False,
+        with investigation_store.review_transaction():
+            investigation = investigation_store.get_investigation(investigation_id)
+            evidence_by_ref = {item["evidence_ref"]: item for item in investigation["evidence"]}
+            normalized = []
+            for raw_ref, raw_assessment in evidence_assessments.items():
+                if not isinstance(raw_ref, str) or raw_ref not in evidence_by_ref:
+                    raise ValueError("every assessment must reference evidence stored in this investigation")
+                if not isinstance(raw_assessment, Mapping):
+                    raise ValueError("each evidence assessment must be a mapping")
+                classification = raw_assessment.get("classification")
+                if not isinstance(classification, str) or classification not in {"support", "contradict", "neutral"}:
+                    raise ValueError("classification must be support, contradict, or neutral")
+                rationale = raw_assessment.get("rationale")
+                if not isinstance(rationale, str) or not rationale.strip():
+                    raise ValueError("each assessment requires a non-empty rationale")
+                confidence = raw_assessment.get("confidence", 0.5)
+                if isinstance(confidence, bool):
+                    raise ValueError("assessment confidence must be finite and in [0, 1]")
+                try:
+                    confidence = float(confidence)
+                except (TypeError, ValueError) as exc:
+                    raise ValueError("assessment confidence must be finite and in [0, 1]") from exc
+                if not math.isfinite(confidence) or not 0.0 <= confidence <= 1.0:
+                    raise ValueError("assessment confidence must be finite and in [0, 1]")
+                normalized.append({
+                    "evidence_ref": raw_ref, "finding": evidence_by_ref[raw_ref]["finding"],
+                    "classification": classification, "confidence": confidence,
+                    "rationale": rationale.strip(),
+                })
+            if len({item["evidence_ref"] for item in normalized}) != len(normalized):
+                raise ValueError("evidence references must be unique")
+            normalized.sort(key=lambda item: item["evidence_ref"])
+            request_payload = {
+                "investigation_id": investigation_id,
+                "cycle_id": cycle_id,
+                "apply_to_self_model": apply_to_self_model,
+                "minimum_assessments": minimum_assessments,
+                "evidence_assessments": normalized,
             }
-        counts = {label: sum(item["classification"] == label for item in normalized)
-                  for label in ("support", "contradict", "neutral")}
-        decisive = counts["support"] + counts["contradict"]
-        if decisive == 0:
-            assessment = "insufficient"
-        elif counts["support"] and counts["contradict"]:
-            assessment = "mixed"
-        elif counts["support"]:
-            assessment = "supported"
-        else:
-            assessment = "contradicted"
-        confidence_mean = (
-            sum(item["confidence"] for item in normalized) / len(normalized)
-            if normalized else 0.0
-        )
-        report = {
-            "review_id": review_id, "investigation_id": investigation_id,
-            "belief_property": investigation["gap_property"],
-            "hypothesis": investigation["hypothesis"], "assessment": assessment,
-            "counts": counts, "assessed_evidence_count": len(normalized),
-            "evidence_assessments": normalized, "mean_assessor_confidence": confidence_mean,
-            "minimum_assessments": minimum_assessments,
-            "sufficient_evidence": len(normalized) >= minimum_assessments and decisive > 0,
-            "cycle_id": cycle_id, "apply_to_self_model_requested": apply_to_self_model,
-            "request_fingerprint": request_fingerprint,
-            "self_model_updated": False,
-            "interpretation_limit": "Caller-authored classifications; not independently verified truth or proof of consciousness.",
-        }
-        update_performed_now = False
-        if apply_to_self_model and report["sufficient_evidence"]:
-            prop = investigation["gap_property"]
-            previous = self.self_model.beliefs.get(prop)
-            evidence_ref = "curiosity-review:" + review_id
-            value = {
-                "kind": "curiosity_hypothesis_review", "hypothesis": investigation["hypothesis"],
-                "assessment": assessment, "counts": counts,
-                "evidence_refs": [item["evidence_ref"] for item in normalized],
-                "review_id": review_id,
-                "request_fingerprint": request_fingerprint,
-            }
-            score = min(0.8, confidence_mean * (len(normalized) / (len(normalized) + 2.0)))
-            contradicts = assessment == "contradicted" or (
-                assessment == "mixed" and previous is not None
-                and isinstance(previous.get("value"), dict)
-                and previous["value"].get("assessment") == "supported"
-            )
-            already_applied = self._curiosity_review_was_applied(
-                prop, review_id=review_id, request_fingerprint=request_fingerprint,
-            )
-            if not already_applied:
-                if previous is not None:
-                    self.self_model.revise_belief(
-                        prop, value, cycle_id=cycle_id,
-                        reason="An explicit review assessed the stored investigation evidence.",
-                        source="curiosity_investigation_review", evidence_ref=evidence_ref,
-                        status="inferred", confidence=score, contradicts_previous=contradicts,
-                    )
+            request_fingerprint = hashlib.sha256(
+                json.dumps(
+                    request_payload, ensure_ascii=False, sort_keys=True,
+                    separators=(",", ":"), allow_nan=False,
+                ).encode("utf-8")
+            ).hexdigest()
+            prior = investigation_store.find_review(review_id)
+            if prior is not None:
+                prior_report = prior["report"]
+                stored_fingerprint = prior_report.get("request_fingerprint")
+                if stored_fingerprint is not None:
+                    matches = stored_fingerprint == request_fingerprint
                 else:
-                    self.self_model.update(
-                        {prop: value}, cycle_id=cycle_id,
-                        evidence_refs={prop: evidence_ref}, statuses={prop: "inferred"},
-                        confidences={prop: score},
+                    # Read reports written before request fingerprints were added.
+                    matches = (
+                        prior_report.get("investigation_id") == investigation_id
+                        and prior_report.get("cycle_id") == cycle_id
+                        and prior_report.get("apply_to_self_model_requested") == apply_to_self_model
+                        and prior_report.get("minimum_assessments") == minimum_assessments
+                        and sorted(
+                            prior_report.get("evidence_assessments", []),
+                            key=lambda item: item.get("evidence_ref", ""),
+                        ) == normalized
                     )
-                update_performed_now = True
+                if not matches:
+                    raise ValueError("review_id already exists with different review input")
+                return {
+                    **prior_report,
+                    "already_reviewed": True,
+                    "self_model_update_performed_now": False,
+                }
+            counts = {label: sum(item["classification"] == label for item in normalized)
+                      for label in ("support", "contradict", "neutral")}
+            decisive = counts["support"] + counts["contradict"]
+            if decisive == 0:
+                assessment = "insufficient"
+            elif counts["support"] and counts["contradict"]:
+                assessment = "mixed"
+            elif counts["support"]:
+                assessment = "supported"
             else:
-                report["self_model_update_recovered"] = True
-            report["self_model_updated"] = True
-            report["belief_revision_count"] = len(self.self_model.belief_revision_history)
-        # The self-model update intentionally precedes this write. Its review ID
-        # and request fingerprint make a retry recoverable if this write fails.
-        investigation_store.record_review(review_id, investigation_id, report)
-        return {
-            **report,
-            "already_reviewed": False,
-            "self_model_update_performed_now": update_performed_now,
-        }
+                assessment = "contradicted"
+            confidence_mean = (
+                sum(item["confidence"] for item in normalized) / len(normalized)
+                if normalized else 0.0
+            )
+            report = {
+                "review_id": review_id, "investigation_id": investigation_id,
+                "belief_property": investigation["gap_property"],
+                "hypothesis": investigation["hypothesis"], "assessment": assessment,
+                "counts": counts, "assessed_evidence_count": len(normalized),
+                "evidence_assessments": normalized, "mean_assessor_confidence": confidence_mean,
+                "minimum_assessments": minimum_assessments,
+                "sufficient_evidence": len(normalized) >= minimum_assessments and decisive > 0,
+                "cycle_id": cycle_id, "apply_to_self_model_requested": apply_to_self_model,
+                "request_fingerprint": request_fingerprint,
+                "self_model_updated": False,
+                "interpretation_limit": "Caller-authored classifications; not independently verified truth or proof of consciousness.",
+            }
+            update_performed_now = False
+            if apply_to_self_model and report["sufficient_evidence"]:
+                prop = investigation["gap_property"]
+                previous = self.self_model.beliefs.get(prop)
+                evidence_ref = "curiosity-review:" + review_id
+                value = {
+                    "kind": "curiosity_hypothesis_review", "hypothesis": investigation["hypothesis"],
+                    "assessment": assessment, "counts": counts,
+                    "evidence_refs": [item["evidence_ref"] for item in normalized],
+                    "review_id": review_id,
+                    "request_fingerprint": request_fingerprint,
+                }
+                score = min(0.8, confidence_mean * (len(normalized) / (len(normalized) + 2.0)))
+                contradicts = assessment == "contradicted" or (
+                    assessment == "mixed" and previous is not None
+                    and isinstance(previous.get("value"), dict)
+                    and previous["value"].get("assessment") == "supported"
+                )
+                already_applied = self._curiosity_review_was_applied(
+                    prop, review_id=review_id, request_fingerprint=request_fingerprint,
+                )
+                if not already_applied:
+                    if previous is not None:
+                        self.self_model.revise_belief(
+                            prop, value, cycle_id=cycle_id,
+                            reason="An explicit review assessed the stored investigation evidence.",
+                            source="curiosity_investigation_review", evidence_ref=evidence_ref,
+                            status="inferred", confidence=score, contradicts_previous=contradicts,
+                        )
+                    else:
+                        self.self_model.update(
+                            {prop: value}, cycle_id=cycle_id,
+                            evidence_refs={prop: evidence_ref}, statuses={prop: "inferred"},
+                            confidences={prop: score},
+                        )
+                    update_performed_now = True
+                else:
+                    report["self_model_update_recovered"] = True
+                report["self_model_updated"] = True
+                report["belief_revision_count"] = len(self.self_model.belief_revision_history)
+            # The self-model update intentionally precedes this write. Its review ID
+            # and request fingerprint make a retry recoverable if this write fails.
+            investigation_store.record_review(review_id, investigation_id, report)
+            return {
+                **report,
+                "already_reviewed": False,
+                "self_model_update_performed_now": update_performed_now,
+            }
 
     def _curiosity_review_was_applied(
         self, property_name: str, *, review_id: str, request_fingerprint: str,
