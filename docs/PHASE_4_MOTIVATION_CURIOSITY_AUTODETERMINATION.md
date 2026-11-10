@@ -211,3 +211,8 @@ persistence. They do not establish subjective curiosity, desire, consciousness
 or metaphysical free will. Any consciousness claim remains an experimental
 hypothesis requiring independent operationalization and falsifiable tests.
 ```
+
+
+## Concurrent curiosity review integrity
+
+Curiosity evidence review holds an SQLite `BEGIN IMMEDIATE` transaction from the review-ID lookup through the optional self-model update and immutable report write. Independent connections therefore serialize the same review ID: one call applies the update and records the report, while a matching retry observes the stored fingerprint and does not apply a second revision. The transaction is released on failure, and the existing fingerprint-based retry path remains necessary because the self-model and investigation ledger are separate stores rather than one atomic database transaction.
