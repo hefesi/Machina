@@ -175,24 +175,33 @@ class StrategySelfReviewStore:
             goal, method, alternative, claim, why, metric,
             self._json(refs), self._json(normalized_confounders), self._json(pattern),
         )
-        existing = self._db.execute(
-            "SELECT goal_id, strategy, alternative_strategy, hypothesis, rationale, "
-            "outcome_metric, evidence_refs_json, confounders_json, source_pattern_json "
-            "FROM strategy_review_proposals WHERE proposal_id = ?", (key,)
-        ).fetchone()
-        if existing is not None:
-            if tuple(existing) != values:
-                raise ValueError("proposal_id already exists with different content")
-            return self.get(key) | {"already_recorded": True}
-        self._db.execute(
-            "INSERT INTO strategy_review_proposals "
-            "(proposal_id, goal_id, strategy, alternative_strategy, hypothesis, rationale, "
-            "outcome_metric, evidence_refs_json, confounders_json, source_pattern_json) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (key, *values),
-        )
-        self._db.commit()
-        return self.get(key) | {"already_recorded": False}
+        # Serialize the idempotency check and insert across independent
+        # SQLite connections. Without an immediate transaction, concurrent
+        # retries can both observe a missing proposal and race on its primary key.
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            existing = self._db.execute(
+                "SELECT goal_id, strategy, alternative_strategy, hypothesis, rationale, "
+                "outcome_metric, evidence_refs_json, confounders_json, source_pattern_json "
+                "FROM strategy_review_proposals WHERE proposal_id = ?", (key,)
+            ).fetchone()
+            if existing is not None:
+                if tuple(existing) != values:
+                    raise ValueError("proposal_id already exists with different content")
+                self._db.commit()
+                return self.get(key) | {"already_recorded": True}
+            self._db.execute(
+                "INSERT INTO strategy_review_proposals "
+                "(proposal_id, goal_id, strategy, alternative_strategy, hypothesis, rationale, "
+                "outcome_metric, evidence_refs_json, confounders_json, source_pattern_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (key, *values),
+            )
+            self._db.commit()
+            return self.get(key) | {"already_recorded": False}
+        except Exception:
+            self._db.rollback()
+            raise
 
     def decide(
         self,
