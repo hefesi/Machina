@@ -165,14 +165,23 @@ class CuriosityInvestigationStore:
         finding: str,
         cycle_id: str,
     ) -> dict[str, Any]:
+        """Append evidence only while the investigation is still open.
+
+        Reserve the SQLite write lock before reading lifecycle status. This
+        prevents a concurrent close from committing between the status check
+        and the evidence insert.
+        """
         key = self._label(investigation_id, "investigation_id")
         ref = self._label(evidence_ref, "evidence_ref")
         note = self._label(finding, "finding")
         cycle = self._label(cycle_id, "cycle_id")
-        investigation = self.get_investigation(key)
-        if investigation["status"] != "open":
-            raise ValueError("cannot add evidence to a closed investigation")
+        if self._db.in_transaction:
+            raise RuntimeError("record_evidence cannot run inside an existing transaction")
+        self._db.execute("BEGIN IMMEDIATE")
         try:
+            investigation = self.get_investigation(key)
+            if investigation["status"] != "open":
+                raise ValueError("cannot add evidence to a closed investigation")
             cursor = self._db.execute(
                 """INSERT INTO curiosity_evidence
                 (investigation_id, evidence_ref, finding, cycle_id)
@@ -183,6 +192,9 @@ class CuriosityInvestigationStore:
         except sqlite3.IntegrityError as exc:
             self._db.rollback()
             raise ValueError("evidence_ref has already been recorded for this investigation") from exc
+        except Exception:
+            self._db.rollback()
+            raise
         return {
             "record_id": int(cursor.lastrowid), "investigation_id": key,
             "evidence_ref": ref, "finding": note, "cycle_id": cycle,
