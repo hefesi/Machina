@@ -107,6 +107,69 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
         finally:
             store.close()
 
+    def test_curiosity_review_replay_reconciles_restored_self_model(self):
+        from machina.curiosity import CuriosityInvestigationStore
+
+        store = CuriosityInvestigationStore(Path(self.tmp.name) / "review-restored-model.sqlite3")
+        try:
+            store.start_investigation(
+                "inv-restored", gap_property="memory_recall",
+                question="Does indexing improve recall?",
+                hypothesis="Indexing improves recall", selection_reason="test",
+                cycle_id="c1", goal_id="g1",
+            )
+            store.record_evidence(
+                "inv-restored", evidence_ref="e1",
+                finding="A controlled benchmark showed improvement", cycle_id="c2",
+            )
+            store.record_evidence(
+                "inv-restored", evidence_ref="e2",
+                finding="An independent replication showed improvement", cycle_id="c2",
+            )
+            assessments = {
+                "e1": {
+                    "classification": "support", "confidence": 0.9,
+                    "rationale": "Controlled benchmark comparison",
+                },
+                "e2": {
+                    "classification": "support", "confidence": 0.85,
+                    "rationale": "Independent replication",
+                },
+            }
+            pre_review_snapshot = self.model.snapshot()
+            first = self.bridge.review_curiosity_investigation(
+                store, "inv-restored", review_id="durable-review",
+                cycle_id="c3", evidence_assessments=assessments,
+                apply_to_self_model=True,
+            )
+            self.assertTrue(first["self_model_updated"])
+
+            restored_model = SelfModel.from_snapshot(pre_review_snapshot)
+            restored_bridge = SelfModelLearningBridge(restored_model, self.learner)
+            replayed = restored_bridge.review_curiosity_investigation(
+                store, "inv-restored", review_id="durable-review",
+                cycle_id="c3", evidence_assessments=assessments,
+                apply_to_self_model=True,
+            )
+            self.assertTrue(replayed["already_reviewed"])
+            self.assertTrue(replayed["self_model_update_replayed_now"])
+            self.assertTrue(replayed["self_model_update_performed_now"])
+            belief = restored_model.beliefs["memory_recall"]
+            self.assertEqual("durable-review", belief["value"]["review_id"])
+            self.assertEqual("inferred", belief["status"])
+
+            repeated = restored_bridge.review_curiosity_investigation(
+                store, "inv-restored", review_id="durable-review",
+                cycle_id="c3", evidence_assessments=assessments,
+                apply_to_self_model=True,
+            )
+            self.assertTrue(repeated["already_reviewed"])
+            self.assertFalse(repeated["self_model_update_replayed_now"])
+            self.assertFalse(repeated["self_model_update_performed_now"])
+            self.assertEqual(belief, restored_model.beliefs["memory_recall"])
+        finally:
+            store.close()
+
     def test_curiosity_review_recovers_after_model_update_before_ledger_write(self):
         from machina.curiosity import CuriosityInvestigationStore
 
