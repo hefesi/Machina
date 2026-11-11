@@ -122,10 +122,30 @@ class SelfModelLearningBridge:
                     )
                 if not matches:
                     raise ValueError("review_id already exists with different review input")
+                replayed_now = False
+                if stored_fingerprint is not None and prior_report.get("self_model_updated") is True:
+                    prop = prior_report.get("belief_property")
+                    if not isinstance(prop, str) or not prop.strip():
+                        raise ValueError("stored curiosity review report is missing belief_property")
+                    if not self._curiosity_review_was_applied(
+                        prop, review_id=review_id, request_fingerprint=request_fingerprint,
+                    ):
+                        self._apply_curiosity_review_update(
+                            investigation,
+                            review_id=review_id,
+                            request_fingerprint=request_fingerprint,
+                            cycle_id=prior_report["cycle_id"],
+                            assessment=prior_report["assessment"],
+                            counts=prior_report["counts"],
+                            evidence_assessments=prior_report["evidence_assessments"],
+                            confidence_mean=prior_report["mean_assessor_confidence"],
+                        )
+                        replayed_now = True
                 return {
                     **prior_report,
                     "already_reviewed": True,
-                    "self_model_update_performed_now": False,
+                    "self_model_update_performed_now": replayed_now,
+                    "self_model_update_replayed_now": replayed_now,
                 }
             counts = {label: sum(item["classification"] == label for item in normalized)
                       for label in ("support", "contradict", "neutral")}
@@ -157,39 +177,22 @@ class SelfModelLearningBridge:
             }
             update_performed_now = False
             if apply_to_self_model and report["sufficient_evidence"]:
-                prop = investigation["gap_property"]
-                previous = self.self_model.beliefs.get(prop)
-                evidence_ref = "curiosity-review:" + review_id
-                value = {
-                    "kind": "curiosity_hypothesis_review", "hypothesis": investigation["hypothesis"],
-                    "assessment": assessment, "counts": counts,
-                    "evidence_refs": [item["evidence_ref"] for item in normalized],
-                    "review_id": review_id,
-                    "request_fingerprint": request_fingerprint,
-                }
-                score = min(0.8, confidence_mean * (len(normalized) / (len(normalized) + 2.0)))
-                contradicts = assessment == "contradicted" or (
-                    assessment == "mixed" and previous is not None
-                    and isinstance(previous.get("value"), dict)
-                    and previous["value"].get("assessment") == "supported"
-                )
                 already_applied = self._curiosity_review_was_applied(
-                    prop, review_id=review_id, request_fingerprint=request_fingerprint,
+                    investigation["gap_property"],
+                    review_id=review_id,
+                    request_fingerprint=request_fingerprint,
                 )
                 if not already_applied:
-                    if previous is not None:
-                        self.self_model.revise_belief(
-                            prop, value, cycle_id=cycle_id,
-                            reason="An explicit review assessed the stored investigation evidence.",
-                            source="curiosity_investigation_review", evidence_ref=evidence_ref,
-                            status="inferred", confidence=score, contradicts_previous=contradicts,
-                        )
-                    else:
-                        self.self_model.update(
-                            {prop: value}, cycle_id=cycle_id,
-                            evidence_refs={prop: evidence_ref}, statuses={prop: "inferred"},
-                            confidences={prop: score},
-                        )
+                    self._apply_curiosity_review_update(
+                        investigation,
+                        review_id=review_id,
+                        request_fingerprint=request_fingerprint,
+                        cycle_id=cycle_id,
+                        assessment=assessment,
+                        counts=counts,
+                        evidence_assessments=normalized,
+                        confidence_mean=confidence_mean,
+                    )
                     update_performed_now = True
                 else:
                     report["self_model_update_recovered"] = True
@@ -207,19 +210,68 @@ class SelfModelLearningBridge:
     def _curiosity_review_was_applied(
         self, property_name: str, *, review_id: str, request_fingerprint: str,
     ) -> bool:
-        """Detect a completed model update whose review-ledger write needs retry."""
+        """Detect a completed model update, including one superseded by a later revision."""
         current = self.self_model.beliefs.get(property_name)
         values = [current.get("value")] if current is not None else []
         for revision in self.self_model.belief_revision_history:
-            new = revision.get("new")
-            if isinstance(new, Mapping) and new.get("property") == property_name:
-                values.append(new.get("value"))
+            for side in ("previous", "new"):
+                record = revision.get(side)
+                if isinstance(record, Mapping) and record.get("property") == property_name:
+                    values.append(record.get("value"))
         for value in values:
             if isinstance(value, Mapping) and value.get("review_id") == review_id:
                 if value.get("request_fingerprint") != request_fingerprint:
                     raise ValueError("review_id was already applied with different review input")
                 return True
         return False
+
+    def _apply_curiosity_review_update(
+        self,
+        investigation: Mapping[str, Any],
+        *,
+        review_id: str,
+        request_fingerprint: str,
+        cycle_id: str,
+        assessment: str,
+        counts: Mapping[str, int],
+        evidence_assessments: list[Mapping[str, Any]],
+        confidence_mean: float,
+    ) -> None:
+        """Apply one reviewed belief, shared by first-write and recovery paths."""
+        prop = investigation["gap_property"]
+        previous = self.self_model.beliefs.get(prop)
+        evidence_ref = "curiosity-review:" + review_id
+        value = {
+            "kind": "curiosity_hypothesis_review",
+            "hypothesis": investigation["hypothesis"],
+            "assessment": assessment,
+            "counts": dict(counts),
+            "evidence_refs": [item["evidence_ref"] for item in evidence_assessments],
+            "review_id": review_id,
+            "request_fingerprint": request_fingerprint,
+        }
+        score = min(
+            0.8,
+            confidence_mean * (len(evidence_assessments) / (len(evidence_assessments) + 2.0)),
+        )
+        contradicts = assessment == "contradicted" or (
+            assessment == "mixed" and previous is not None
+            and isinstance(previous.get("value"), dict)
+            and previous["value"].get("assessment") == "supported"
+        )
+        if previous is not None:
+            self.self_model.revise_belief(
+                prop, value, cycle_id=cycle_id,
+                reason="An explicit review assessed the stored investigation evidence.",
+                source="curiosity_investigation_review", evidence_ref=evidence_ref,
+                status="inferred", confidence=score, contradicts_previous=contradicts,
+            )
+        else:
+            self.self_model.update(
+                {prop: value}, cycle_id=cycle_id,
+                evidence_refs={prop: evidence_ref}, statuses={prop: "inferred"},
+                confidences={prop: score},
+            )
 
     def propose_curiosity_goals(
         self, gap_mappings: Mapping[str, Mapping[str, Any]], *,
