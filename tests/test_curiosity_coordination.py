@@ -1,5 +1,7 @@
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from machina.autonomy import AutonomyContext, AutonomyController
@@ -113,6 +115,88 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         self.assertEqual("analyze_recent_failure", result["selected_goal_id"])
         self.assertFalse(result["curiosity_goal_selected"])
         self.assertEqual([], self.store.open_investigations())
+
+    def test_evidence_append_serializes_with_concurrent_investigation_close(self):
+        database = Path(self.tmp.name) / "evidence-close-race.sqlite3"
+        seed = CuriosityInvestigationStore(database)
+        seed.start_investigation(
+            "investigation-race",
+            gap_property="memory_gap",
+            question="Which evidence explains the memory gap?",
+            hypothesis="A missing retrieval relation may explain the gap.",
+            selection_reason="High expected information value.",
+            cycle_id="cycle-start",
+            goal_id="investigate_gap:memory-gap",
+        )
+        seed.close()
+
+        status_checked = threading.Event()
+        release_evidence = threading.Event()
+        close_started = threading.Event()
+        close_finished = threading.Event()
+
+        def append_evidence():
+            store = CuriosityInvestigationStore(database)
+            original_get = store.get_investigation
+
+            def pause_after_status_read(investigation_id):
+                result = original_get(investigation_id)
+                status_checked.set()
+                if not release_evidence.wait(timeout=5):
+                    raise TimeoutError("test did not release the evidence append")
+                return result
+
+            store.get_investigation = pause_after_status_read
+            try:
+                return store.record_evidence(
+                    "investigation-race",
+                    evidence_ref="source:race",
+                    finding="The source contains a relevant observation.",
+                    cycle_id="cycle-evidence",
+                )
+            finally:
+                store.close()
+
+        def close_investigation():
+            store = CuriosityInvestigationStore(database)
+            try:
+                if not status_checked.wait(timeout=5):
+                    raise TimeoutError("evidence append did not reach its status check")
+                close_started.set()
+                return store.close_investigation(
+                    "investigation-race",
+                    outcome="partially_answered",
+                    answer_summary="One evidence item was recorded.",
+                    remaining_unknowns=["Which retrieval path was omitted?"],
+                    cycle_id="cycle-close",
+                )
+            finally:
+                close_finished.set()
+                store.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            evidence_future = executor.submit(append_evidence)
+            self.assertTrue(status_checked.wait(timeout=5))
+            close_future = executor.submit(close_investigation)
+            self.assertTrue(close_started.wait(timeout=5))
+            try:
+                self.assertFalse(
+                    close_finished.wait(timeout=0.2),
+                    "close committed while the evidence append held the write transaction",
+                )
+            finally:
+                release_evidence.set()
+
+            evidence = evidence_future.result(timeout=5)
+            closed = close_future.result(timeout=5)
+
+        self.assertEqual("source:race", evidence["evidence_ref"])
+        self.assertEqual("closed", closed["status"])
+        self.assertEqual("cycle-close", closed["closed_cycle_id"])
+        self.assertEqual(
+            ["source:race"],
+            [item["evidence_ref"] for item in closed["evidence"]],
+        )
 
     def test_homeostatic_cycle_must_match_and_explicit_pressure_overrides_derived(self):
         proposal = HomeostaticProposal(
