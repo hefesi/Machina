@@ -223,6 +223,30 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             self.assertEqual(1, len(self.model.belief_revision_history))
             store.record_review = original_record_review
 
+            # A later review may supersede the belief before the failed first
+            # review is retried. Recovery must recognize the first review in
+            # the previous side of the later revision and must not roll back
+            # the newer belief.
+            later_assessments = {
+                "e1": {
+                    "classification": "contradict",
+                    "confidence": 0.9,
+                    "rationale": "A later contradictory replication",
+                },
+                "e2": {
+                    "classification": "contradict",
+                    "confidence": 0.85,
+                    "rationale": "A second contradictory replication",
+                },
+            }
+            later = self.bridge.review_curiosity_investigation(
+                store, "inv-recovery", review_id="later-review",
+                cycle_id="c4", evidence_assessments=later_assessments,
+                apply_to_self_model=True,
+            )
+            self.assertTrue(later["self_model_updated"])
+            self.assertEqual(2, len(self.model.belief_revision_history))
+
             recovered = self.bridge.review_curiosity_investigation(
                 store, "inv-recovery", review_id="recoverable-review",
                 cycle_id="c3", evidence_assessments=assessments,
@@ -231,7 +255,11 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             self.assertTrue(recovered["self_model_updated"])
             self.assertTrue(recovered["self_model_update_recovered"])
             self.assertFalse(recovered["self_model_update_performed_now"])
-            self.assertEqual(1, len(self.model.belief_revision_history))
+            self.assertEqual(2, len(self.model.belief_revision_history))
+            self.assertEqual(
+                "later-review",
+                self.model.beliefs["memory_recall"]["value"]["review_id"],
+            )
             self.assertIsNotNone(store.find_review("recoverable-review"))
         finally:
             store.close()
