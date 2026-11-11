@@ -216,3 +216,24 @@ hypothesis requiring independent operationalization and falsifiable tests.
 ## Concurrent curiosity review integrity
 
 Curiosity evidence review holds an SQLite `BEGIN IMMEDIATE` transaction from the review-ID lookup through the optional self-model update and immutable report write. Independent connections therefore serialize the same review ID: one call applies the update and records the report, while a matching retry observes the stored fingerprint and does not apply a second revision. The transaction is released on failure, and the existing fingerprint-based retry path remains necessary because the self-model and investigation ledger are separate stores rather than one atomic database transaction.
+
+## Curiosity review replay and belief restoration
+
+A curiosity review report and a `SelfModel` snapshot are separate persistence
+artifacts. When a caller restores a snapshot from before a successfully recorded
+review and replays the same review ID and request fingerprint, the bridge
+reconciles the reviewed belief into that restored model if the review marker is
+absent from its current belief and revision history. A matching replay against
+a model that already contains the review marker remains idempotent and does not
+create another revision.
+
+Recovery also checks both the previous and new belief records in revision
+history. This matters when a review updated the model but its report write
+failed, a later review superseded that belief, and the first review is retried:
+the earlier review is recognized in the later revision's previous value, so
+recovery does not overwrite the newer belief.
+
+The model snapshot and investigation ledger are still not one atomic storage
+transaction. Callers remain responsible for persisting and restoring
+`SelfModel.snapshot()`; replay reconciles a restored snapshot with the durable
+review report rather than claiming cross-store atomicity.
