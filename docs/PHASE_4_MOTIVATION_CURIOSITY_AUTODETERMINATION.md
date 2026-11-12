@@ -77,6 +77,26 @@ The bridge, outcome learner and coordinator are injected explicitly. This
 keeps self-model evidence policy and persistence configuration under the
 caller's control.
 
+## Follow-up curiosity across investigation cycles
+
+A closed investigation can record unresolved questions in remaining_unknowns.
+SelfModelLearningBridge.propose_follow_up_curiosity_goals() turns only those
+recorded unknowns into bounded candidates and suppresses questions already
+present in the investigation history.
+
+CuriosityGoalCoordinator.deliberate_follow_up() adds the same integrated
+selection path used for initial gaps: it converts follow-up candidates to the
+existing CuriosityQuestion contract, ranks them with CuriositySelector under
+the current homeostatic stability pressure, combines bounded homeostatic and
+motivational drive adjustments, and submits the selected candidate alongside
+context-generated goals to the same AutonomyController.
+
+A child investigation is persisted only when the final autonomy decision
+selects that curiosity candidate. Its goal ID and selection rationale retain
+the source investigation ID and the exact unresolved question. A caller may
+supply an explicit hypothesis; otherwise the record states that no explanation
+is presumed. Follow-up selection does not execute research or external actions.
+
 ## Example
 
 ```python
