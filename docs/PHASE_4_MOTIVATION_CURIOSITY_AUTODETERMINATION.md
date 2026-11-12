@@ -97,6 +97,17 @@ the source investigation ID and the exact unresolved question. A caller may
 supply an explicit hypothesis; otherwise the record states that no explanation
 is presumed. Follow-up selection does not execute research or external actions.
 
+For end-to-end operation, VirtualBrain.run_deliberated_cycle() accepts
+curiosity_follow_up_investigation_id together with
+curiosity_follow_up_mappings. It prepares the follow-up candidate without
+persisting it, submits that candidate to the same unified deliberation as
+context-generated goals and durable commitments, then persists the child
+investigation only if the unified winner is that candidate. The brain journal
+links the new investigation event to evidence already recorded by the parent.
+Initial gap mappings and follow-up mappings are mutually exclusive in one
+cycle, preventing two independent curiosity previews from competing under
+ambiguous provenance.
+
 ## Example
 
 ```python
