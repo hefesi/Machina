@@ -735,6 +735,10 @@ class VirtualBrainLoopTests(unittest.TestCase):
             self.assertIsNotNone(child)
             self.assertEqual("open", child["status"])
             self.assertEqual(
+                "parent-recall-investigation",
+                child["parent_investigation_id"],
+            )
+            self.assertEqual(
                 "The index may persist across process restarts.",
                 child["hypothesis"],
             )

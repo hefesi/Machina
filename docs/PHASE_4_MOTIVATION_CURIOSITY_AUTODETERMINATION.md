@@ -92,10 +92,16 @@ motivational drive adjustments, and submits the selected candidate alongside
 context-generated goals to the same AutonomyController.
 
 A child investigation is persisted only when the final autonomy decision
-selects that curiosity candidate. Its goal ID and selection rationale retain
-the source investigation ID and the exact unresolved question. A caller may
-supply an explicit hypothesis; otherwise the record states that no explanation
-is presumed. Follow-up selection does not execute research or external actions.
+selects that curiosity candidate. The child record stores
+`parent_investigation_id` as a self-referential foreign key, so lineage remains
+queryable after restart rather than existing only in a goal ID or free-text
+selection rationale. A child may reference only an existing closed parent.
+Existing SQLite databases receive an additive nullable-column migration;
+historical investigations remain root records and their data is preserved.
+Its goal ID and selection rationale also retain the source investigation ID
+and exact unresolved question. A caller may supply an explicit hypothesis;
+otherwise the record states that no explanation is presumed. Follow-up
+selection does not execute research or external actions.
 
 For end-to-end operation, VirtualBrain.run_deliberated_cycle() accepts
 curiosity_follow_up_investigation_id together with

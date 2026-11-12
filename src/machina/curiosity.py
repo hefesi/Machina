@@ -39,6 +39,7 @@ class CuriosityInvestigationStore:
                 selection_reason TEXT NOT NULL,
                 cycle_id TEXT NOT NULL,
                 goal_id TEXT NOT NULL,
+                parent_investigation_id TEXT REFERENCES curiosity_investigations(investigation_id),
                 status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
                 outcome TEXT CHECK (outcome IS NULL OR outcome IN
                     ('answered','partially_answered','unanswered','abandoned')),
@@ -75,6 +76,22 @@ class CuriosityInvestigationStore:
                 closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
             """
+        )
+        # Additive migration for databases created before explicit investigation
+        # lineage was stored. Existing investigations remain root records.
+        columns = {
+            row["name"]
+            for row in self._db.execute("PRAGMA table_info(curiosity_investigations)")
+        }
+        if "parent_investigation_id" not in columns:
+            self._db.execute(
+                "ALTER TABLE curiosity_investigations "
+                "ADD COLUMN parent_investigation_id TEXT "
+                "REFERENCES curiosity_investigations(investigation_id)"
+            )
+        self._db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_curiosity_parent_investigation "
+            "ON curiosity_investigations(parent_investigation_id)"
         )
         self._db.commit()
 
@@ -133,6 +150,7 @@ class CuriosityInvestigationStore:
         selection_reason: str,
         cycle_id: str,
         goal_id: str,
+        parent_investigation_id: str | None = None,
     ) -> dict[str, Any]:
         key = self._label(investigation_id, "investigation_id")
         prop = self._label(gap_property, "gap_property")
@@ -141,13 +159,35 @@ class CuriosityInvestigationStore:
         reason = self._label(selection_reason, "selection_reason")
         cycle = self._label(cycle_id, "cycle_id")
         goal = self._label(goal_id, "goal_id")
+        parent_key = (
+            self._label(parent_investigation_id, "parent_investigation_id")
+            if parent_investigation_id is not None else None
+        )
+        if self._db.in_transaction:
+            raise RuntimeError("start_investigation cannot run inside an existing transaction")
+        self._db.execute("BEGIN IMMEDIATE")
         try:
+            if parent_key is not None:
+                if parent_key == key:
+                    raise ValueError("an investigation cannot be its own parent")
+                parent = self._db.execute(
+                    "SELECT status FROM curiosity_investigations WHERE investigation_id=?",
+                    (parent_key,),
+                ).fetchone()
+                if parent is None:
+                    raise ValueError("unknown parent_investigation_id")
+                if parent["status"] != "closed":
+                    raise ValueError("parent_investigation_id must refer to a closed investigation")
             self._db.execute(
                 """INSERT INTO curiosity_investigations
                 (investigation_id, gap_property, question, question_key,
-                 hypothesis, selection_reason, cycle_id, goal_id, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
-                (key, prop, prompt, self._question_key(prompt), theory, reason, cycle, goal),
+                 hypothesis, selection_reason, cycle_id, goal_id,
+                 parent_investigation_id, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
+                (
+                    key, prop, prompt, self._question_key(prompt), theory, reason,
+                    cycle, goal, parent_key,
+                ),
             )
             self._db.commit()
         except sqlite3.IntegrityError as exc:
@@ -155,6 +195,9 @@ class CuriosityInvestigationStore:
             raise ValueError(
                 "investigation_id already exists or an equivalent question is already open"
             ) from exc
+        except Exception:
+            self._db.rollback()
+            raise
         return self.get_investigation(key)
 
     def record_evidence(

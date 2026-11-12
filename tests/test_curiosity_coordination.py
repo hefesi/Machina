@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import threading
 import unittest
@@ -254,8 +255,22 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         self.assertEqual("parent-investigation", result["selected_provenance"]["source_investigation_id"])
         self.assertEqual("open", result["investigation"]["status"])
         self.assertEqual(
+            "parent-investigation",
+            result["investigation"]["parent_investigation_id"],
+        )
+        self.assertEqual(
             "The index may persist across process restarts.",
             result["investigation"]["hypothesis"],
+        )
+        database = self.store.path
+        self.store.close()
+        self.store = CuriosityInvestigationStore(database)
+        restored_child = self.store.get_investigation(
+            result["investigation"]["investigation_id"]
+        )
+        self.assertEqual(
+            "parent-investigation",
+            restored_child["parent_investigation_id"],
         )
         self.assertIn("source_investigation_id=parent-investigation", result["investigation"]["selection_reason"])
         self.assertFalse(result["execution_performed"])
@@ -413,6 +428,111 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
                 self.mappings(), cycle_id="cycle-1", investigation_store=self.store,
                 homeostatic_proposal=proposal,
             )
+
+
+    def test_child_investigation_requires_an_existing_closed_parent(self):
+        self.store.start_investigation(
+            "parent-open-for-lineage",
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Initial investigation.",
+            cycle_id="cycle-parent",
+            goal_id="investigate_gap:memory-recall",
+        )
+        child_args = {
+            "gap_property": "memory_recall",
+            "question": "Does recall survive a restart?",
+            "hypothesis": "The index may persist.",
+            "selection_reason": "Follow-up investigation.",
+            "cycle_id": "cycle-child",
+            "goal_id": "follow_up:parent-open-for-lineage:restart",
+        }
+        with self.assertRaisesRegex(ValueError, "must refer to a closed"):
+            self.store.start_investigation(
+                "child-before-parent-close",
+                **child_args,
+                parent_investigation_id="parent-open-for-lineage",
+            )
+        with self.assertRaisesRegex(ValueError, "unknown parent_investigation_id"):
+            self.store.start_investigation(
+                "child-with-missing-parent",
+                **child_args,
+                parent_investigation_id="missing-parent",
+            )
+
+        self.store.close_investigation(
+            "parent-open-for-lineage",
+            outcome="partially_answered",
+            answer_summary="The initial benchmark was inconclusive.",
+            remaining_unknowns=["Does recall survive a restart?"],
+            cycle_id="cycle-parent-close",
+        )
+        child = self.store.start_investigation(
+            "child-after-parent-close",
+            **child_args,
+            parent_investigation_id="parent-open-for-lineage",
+        )
+        self.assertEqual(
+            "parent-open-for-lineage",
+            child["parent_investigation_id"],
+        )
+
+    def test_legacy_investigation_database_migrates_lineage_without_data_loss(self):
+        legacy_path = Path(self.tmp.name) / "legacy-curiosity.sqlite3"
+        connection = sqlite3.connect(legacy_path)
+        connection.execute(
+            """CREATE TABLE curiosity_investigations (
+                investigation_id TEXT PRIMARY KEY,
+                gap_property TEXT NOT NULL,
+                question TEXT NOT NULL,
+                question_key TEXT NOT NULL,
+                hypothesis TEXT NOT NULL,
+                selection_reason TEXT NOT NULL,
+                cycle_id TEXT NOT NULL,
+                goal_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+                outcome TEXT CHECK (outcome IS NULL OR outcome IN
+                    ('answered','partially_answered','unanswered','abandoned')),
+                answer_summary TEXT,
+                remaining_unknowns TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                closed_at TEXT
+            )"""
+        )
+        connection.execute(
+            """INSERT INTO curiosity_investigations
+            (investigation_id, gap_property, question, question_key, hypothesis,
+             selection_reason, cycle_id, goal_id, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "legacy-root", "memory_recall", "Does recall survive restart?",
+                "does recall survive restart?", "The index may persist.",
+                "Legacy investigation.", "legacy-cycle", "legacy-goal", "closed",
+            ),
+        )
+        connection.commit()
+        connection.close()
+
+        migrated = CuriosityInvestigationStore(legacy_path)
+        try:
+            record = migrated.get_investigation("legacy-root")
+            self.assertIsNone(record["parent_investigation_id"])
+            columns = {
+                row["name"]
+                for row in migrated._db.execute(
+                    "PRAGMA table_info(curiosity_investigations)"
+                )
+            }
+            self.assertIn("parent_investigation_id", columns)
+            self.assertEqual(["legacy-root"], [
+                item["investigation_id"] for item in migrated.history()
+            ])
+            self.assertEqual([], migrated._db.execute(
+                "PRAGMA foreign_key_check"
+            ).fetchall())
+        finally:
+            migrated.close()
 
 
 if __name__ == "__main__":

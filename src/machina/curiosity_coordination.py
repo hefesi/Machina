@@ -626,4 +626,5 @@ class CuriosityGoalCoordinator:
             ),
             cycle_id=cycle_id,
             goal_id=selected_goal_id,
+            parent_investigation_id=source_id,
         )
