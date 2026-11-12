@@ -514,31 +514,25 @@ class CuriosityGoalCoordinator:
             and curiosity_goal is not None
             and selected_goal.goal_id == curiosity_goal.goal_id
         )
-        investigation = None
-        if persist_selected and curiosity_goal_won:
-            selected_id = selected_goal.goal_id
-            provenance = provenance_by_goal[selected_id]
-            spec = follow_up_mappings[provenance["remaining_unknown"]]
-            hypothesis = spec.get("hypothesis", _NO_HYPOTHESIS)
-            score = next(
-                item["score"]["total"]
-                for item in curiosity_decision.ranked
-                if item["question"]["question_id"] == selected_id
-            )
-            investigation = investigation_store.start_investigation(
-                child_investigation_id or f"{cycle_id}:{selected_id}",
-                gap_property=parent["gap_property"],
-                question=provenance["question"],
-                hypothesis=hypothesis.strip(),
-                selection_reason=(
-                    f"CuriositySelector follow-up score={score:.6f}; "
-                    f"source_investigation_id={investigation_id}; "
-                    f"stability_pressure={selected_pressure:.6f}; "
-                    f"remaining_unknown={provenance['remaining_unknown']}"
-                ),
+        prepared = {
+            "cycle_id": cycle_id,
+            "source_investigation_id": investigation_id,
+            "curiosity_candidate_goal_id": curiosity_goal.goal_id if curiosity_goal else None,
+            "provenance_by_goal": provenance_by_goal,
+            "curiosity_decision": curiosity_decision,
+            "stability_pressure": selected_pressure,
+        }
+        investigation = (
+            self.persist_selected_follow_up_candidate(
+                prepared,
+                selected_goal_id=selected_goal.goal_id if selected_goal else None,
+                follow_up_mappings=follow_up_mappings,
                 cycle_id=cycle_id,
-                goal_id=selected_id,
+                investigation_store=investigation_store,
+                child_investigation_id=child_investigation_id,
             )
+            if persist_selected else None
+        )
 
         return {
             "cycle_id": cycle_id,
@@ -548,6 +542,7 @@ class CuriosityGoalCoordinator:
             "autonomy_decision": autonomy_decision,
             "selected_goal_id": selected_goal.goal_id if selected_goal else None,
             "selected_provenance": selected_provenance,
+            "provenance_by_goal": provenance_by_goal,
             "curiosity_candidate_goal_id": curiosity_goal.goal_id if curiosity_goal else None,
             "curiosity_goal_won": curiosity_goal_won,
             "curiosity_goal_selected": investigation is not None,
@@ -557,3 +552,78 @@ class CuriosityGoalCoordinator:
             "drive_adjustments": drive_adjustments,
             "execution_performed": False,
         }
+
+
+    def persist_selected_follow_up_candidate(
+        self,
+        prepared: Mapping[str, Any],
+        *,
+        selected_goal_id: str | None,
+        follow_up_mappings: Mapping[str, Mapping[str, Any]],
+        cycle_id: str,
+        investigation_store: CuriosityInvestigationStore,
+        child_investigation_id: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Persist a follow-up only after the caller's unified final decision."""
+        if not isinstance(prepared, Mapping):
+            raise TypeError("prepared must be a mapping")
+        if not isinstance(follow_up_mappings, Mapping):
+            raise ValueError("follow_up_mappings must be a mapping")
+        if not isinstance(investigation_store, CuriosityInvestigationStore):
+            raise TypeError("investigation_store must be a CuriosityInvestigationStore")
+        if prepared.get("cycle_id") != cycle_id:
+            raise ValueError("prepared curiosity cycle_id must match the final selection cycle")
+        candidate_id = prepared.get("curiosity_candidate_goal_id")
+        if selected_goal_id is None or selected_goal_id != candidate_id:
+            return None
+        source_id = prepared.get("source_investigation_id")
+        if not isinstance(source_id, str) or not source_id.strip():
+            raise ValueError("prepared follow-up is missing its source investigation ID")
+        if child_investigation_id is not None and (
+            not isinstance(child_investigation_id, str) or not child_investigation_id.strip()
+        ):
+            raise ValueError("child_investigation_id must be a non-empty string when supplied")
+        provenance_by_goal = prepared.get("provenance_by_goal")
+        if not isinstance(provenance_by_goal, Mapping):
+            raise ValueError("prepared result is missing follow-up provenance")
+        provenance = provenance_by_goal.get(selected_goal_id)
+        if not isinstance(provenance, Mapping):
+            raise ValueError("selected follow-up is missing provenance")
+        decision = prepared.get("curiosity_decision")
+        if not isinstance(decision, CuriosityDecision):
+            raise ValueError("prepared result is missing a CuriosityDecision")
+        score = next(
+            (
+                item["score"]["total"]
+                for item in decision.ranked
+                if item["question"]["question_id"] == selected_goal_id
+            ),
+            None,
+        )
+        if score is None:
+            raise ValueError("selected follow-up has no selector score")
+        parent = investigation_store.get_investigation(source_id)
+        if parent["status"] != "closed":
+            raise ValueError("follow-up source investigation must remain closed")
+        unknown = provenance.get("remaining_unknown")
+        spec = follow_up_mappings.get(unknown)
+        if not isinstance(spec, Mapping):
+            raise ValueError("selected follow-up mapping is missing")
+        hypothesis = spec.get("hypothesis", _NO_HYPOTHESIS)
+        if not isinstance(hypothesis, str) or not hypothesis.strip():
+            raise ValueError("hypothesis must be a non-empty string when supplied")
+        pressure = _bounded("stability_pressure", prepared["stability_pressure"], 0.0, 1.0)
+        return investigation_store.start_investigation(
+            child_investigation_id or f"{cycle_id}:{selected_goal_id}",
+            gap_property=parent["gap_property"],
+            question=provenance["question"],
+            hypothesis=hypothesis.strip(),
+            selection_reason=(
+                f"CuriositySelector follow-up score={score:.6f}; "
+                f"source_investigation_id={source_id}; "
+                f"stability_pressure={pressure:.6f}; "
+                f"remaining_unknown={unknown}"
+            ),
+            cycle_id=cycle_id,
+            goal_id=selected_goal_id,
+        )
