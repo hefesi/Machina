@@ -635,6 +635,121 @@ class VirtualBrainLoopTests(unittest.TestCase):
 
 
 
+
+    def test_follow_up_curiosity_flows_through_selector_brain_and_journal(self) -> None:
+        from machina.curiosity_coordination import CuriosityGoalCoordinator
+        from machina.goal_outcome_learning import GoalOutcomeLearner
+        from machina.self_model import SelfModel
+        from machina.self_model_learning import SelfModelLearningBridge
+
+        goals = PersistentGoalStore(
+            Path(self.temporary_directory.name) / "follow-up-brain-goals.sqlite"
+        )
+        learner = GoalOutcomeLearner(
+            Path(self.temporary_directory.name) / "follow-up-brain-outcomes.sqlite"
+        )
+        controller = AutonomyController()
+        coordinator = CuriosityGoalCoordinator(
+            SelfModelLearningBridge(SelfModel(), learner), controller
+        )
+        curiosity_path = Path(self.temporary_directory.name) / "follow-up-brain-curiosity.sqlite"
+        brain = VirtualBrain(
+            self.database_path,
+            internal_deliberator=InternalDeliberator(controller, goals),
+            curiosity_investigation_path=curiosity_path,
+            curiosity_goal_coordinator=coordinator,
+        )
+        try:
+            parent_cycle = brain.run_cycle(
+                "A first recall benchmark was completed.",
+                "Record the initial result.",
+            )
+            brain.start_curiosity_investigation(
+                parent_cycle.cycle_id,
+                "parent-recall-investigation",
+                gap_property="memory_recall",
+                question="Does indexing improve recall?",
+                hypothesis="Indexing may improve recall.",
+                selection_reason="Initial evidence-backed inquiry.",
+                goal_id="investigate_gap:memory-recall",
+            )
+            brain.record_curiosity_evidence(
+                parent_cycle.cycle_id,
+                "parent-recall-investigation",
+                evidence_ref="benchmark:recall-v1",
+                finding="Indexed fragments ranked higher in the initial benchmark.",
+            )
+            brain.close_curiosity_investigation(
+                parent_cycle.cycle_id,
+                "parent-recall-investigation",
+                outcome="partially_answered",
+                answer_summary="The initial benchmark improved, but persistence is unknown.",
+                remaining_unknowns=["Does recall remain stable after restart?"],
+            )
+
+            proposal = HomeostaticProposal(
+                cycle_id="follow-up-brain-cycle",
+                adjustments={"curiosity": -0.12},
+                deviations={"prediction_error": 0.5},
+                persistence={"prediction_error": 3},
+                evidence_refs=("telemetry:follow-up-cycle",),
+                rationale=("prediction error persisted across the cycle window",),
+            )
+            result = brain.run_deliberated_cycle(
+                "Revisit the unresolved recall question.",
+                AutonomyContext(memory_count=1),
+                homeostatic_proposal=proposal,
+                curiosity_follow_up_investigation_id="parent-recall-investigation",
+                curiosity_follow_up_mappings={
+                    "Does recall remain stable after restart?": {
+                        "hypothesis": "The index may persist across process restarts.",
+                        "uncertainty": 0.8,
+                        "information_gain": 0.9,
+                        "impact": 0.85,
+                        "novelty": 0.95,
+                        "urgency": 0.8,
+                        "estimated_cost": 0.1,
+                        "risk": 0.02,
+                    }
+                },
+            )
+            trace = next(
+                event.artifact for event in result.events
+                if event.event_type == "goal.deliberated"
+            )
+            curiosity = trace.data["curiosity_context"]
+            self.assertEqual("curiosity", trace.data["selected_source"])
+            self.assertTrue(curiosity["selected_by_unified_deliberation"])
+            self.assertEqual(
+                "parent-recall-investigation",
+                curiosity["follow_up_source_investigation_id"],
+            )
+            self.assertEqual(
+                "parent-recall-investigation",
+                curiosity["selected_provenance"]["source_investigation_id"],
+            )
+            self.assertAlmostEqual(0.5, curiosity["stability_pressure"])
+            self.assertEqual("follow-up-brain-cycle", result.cycle_id)
+
+            child = curiosity["investigation"]
+            self.assertIsNotNone(child)
+            self.assertEqual("open", child["status"])
+            self.assertEqual(
+                "The index may persist across process restarts.",
+                child["hypothesis"],
+            )
+            journal_event = next(
+                event for event in result.events
+                if event.event_type == "curiosity.investigation_started"
+            )
+            self.assertIn("benchmark:recall-v1", journal_event.artifact.source_refs)
+            self.assertEqual(2, len(brain.curiosity_store.history()))
+            self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+        finally:
+            brain.close()
+            learner.close()
+            goals.close()
+
     def test_integrated_curiosity_history_suppresses_repeat_after_brain_restart(self) -> None:
         from machina.curiosity_coordination import CuriosityGoalCoordinator
         from machina.goal_outcome_learning import GoalOutcomeLearner
