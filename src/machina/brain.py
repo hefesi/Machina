@@ -253,6 +253,8 @@ class VirtualBrain:
         motivational_fulfillment: Mapping[str, float] | None = None,
         strategy_experiment_id: str | None = None,
         curiosity_gap_mappings: Mapping[str, Mapping[str, Any]] | None = None,
+        curiosity_follow_up_investigation_id: str | None = None,
+        curiosity_follow_up_mappings: Mapping[str, Mapping[str, Any]] | None = None,
         cycle_id: str | None = None,
         **cycle_kwargs: Any,
     ) -> CycleResult:
@@ -282,16 +284,28 @@ class VirtualBrain:
         )
         if self.motivation_system is None and validated_fulfillment:
             raise ValueError("motivational_fulfillment requires a configured MotivationSystem")
+        has_follow_up_input = (
+            curiosity_follow_up_investigation_id is not None
+            or curiosity_follow_up_mappings is not None
+        )
+        if curiosity_gap_mappings is not None and has_follow_up_input:
+            raise ValueError("initial curiosity gaps and follow-up mappings are mutually exclusive")
         if curiosity_gap_mappings is not None:
             if not isinstance(curiosity_gap_mappings, Mapping):
                 raise ValueError("curiosity_gap_mappings must be a mapping")
+        if has_follow_up_input:
+            if not isinstance(curiosity_follow_up_investigation_id, str) or not curiosity_follow_up_investigation_id.strip():
+                raise ValueError("curiosity_follow_up_investigation_id must be supplied with follow-up mappings")
+            if not isinstance(curiosity_follow_up_mappings, Mapping):
+                raise ValueError("curiosity_follow_up_mappings must be a mapping")
+        if curiosity_gap_mappings is not None or has_follow_up_input:
             if self.curiosity_goal_coordinator is None:
                 raise RuntimeError(
-                    "curiosity gap mappings require a configured CuriosityGoalCoordinator"
+                    "curiosity mappings require a configured CuriosityGoalCoordinator"
                 )
             if self.curiosity_store is None:
                 raise RuntimeError(
-                    "curiosity gap mappings require curiosity_investigation_path"
+                    "curiosity mappings require curiosity_investigation_path"
                 )
         if cycle_id is not None and (
             not isinstance(cycle_id, str) or not cycle_id.strip()
@@ -371,6 +385,7 @@ class VirtualBrain:
                 item["investigation_id"] for item in open_investigations
             ],
             "unresolved_question_count": len(open_investigations),
+            "follow_up_source_investigation_id": curiosity_follow_up_investigation_id,
             "policy": "open_investigations_raise_curiosity_goal_pressure",
         }
         curiosity_preview = None
@@ -387,6 +402,19 @@ class VirtualBrain:
                 recent_goal_ids=recent_goal_ids,
                 persist_selected=False,
             )
+        elif curiosity_follow_up_mappings is not None:
+            curiosity_preview = self.curiosity_goal_coordinator.deliberate_follow_up(
+                curiosity_follow_up_investigation_id,
+                curiosity_follow_up_mappings,
+                cycle_id=selected_cycle_id,
+                investigation_store=self.curiosity_store,
+                context=None,
+                motivation=None,
+                homeostatic_proposal=homeostatic_proposal,
+                recent_goal_ids=recent_goal_ids,
+                persist_selected=False,
+            )
+        if curiosity_preview is not None:
             candidate_id = curiosity_preview["curiosity_candidate_goal_id"]
             if candidate_id is not None:
                 curiosity_candidates = tuple(
@@ -433,13 +461,22 @@ class VirtualBrain:
         active_goal = self._required(cycle_id, "goal.activated")
         curiosity_investigation = None
         if curiosity_preview is not None:
-            curiosity_investigation = self.curiosity_goal_coordinator.persist_selected_candidate(
-                curiosity_preview,
-                selected_goal_id=selected.goal_id,
-                gap_mappings=curiosity_gap_mappings,
-                cycle_id=selected_cycle_id,
-                investigation_store=self.curiosity_store,
-            )
+            if curiosity_follow_up_mappings is not None:
+                curiosity_investigation = self.curiosity_goal_coordinator.persist_selected_follow_up_candidate(
+                    curiosity_preview,
+                    selected_goal_id=selected.goal_id,
+                    follow_up_mappings=curiosity_follow_up_mappings,
+                    cycle_id=selected_cycle_id,
+                    investigation_store=self.curiosity_store,
+                )
+            else:
+                curiosity_investigation = self.curiosity_goal_coordinator.persist_selected_candidate(
+                    curiosity_preview,
+                    selected_goal_id=selected.goal_id,
+                    gap_mappings=curiosity_gap_mappings,
+                    cycle_id=selected_cycle_id,
+                    investigation_store=self.curiosity_store,
+                )
             selected_curiosity = (
                 curiosity_preview["curiosity_candidate_goal_id"] == selected.goal_id
             )
@@ -457,13 +494,23 @@ class VirtualBrain:
                 "persistence_policy": "after_unified_deliberation_selection",
             })
             if curiosity_investigation is not None:
-                evidence_ref = curiosity_trace["selected_provenance"].get("belief_evidence_ref")
+                provenance = curiosity_trace["selected_provenance"]
+                source_refs = []
+                evidence_ref = provenance.get("belief_evidence_ref")
+                if isinstance(evidence_ref, str) and evidence_ref:
+                    source_refs.append(evidence_ref)
+                source_investigation_id = provenance.get("source_investigation_id")
+                if isinstance(source_investigation_id, str) and source_investigation_id:
+                    parent = self.curiosity_store.get_investigation(source_investigation_id)
+                    source_refs.extend(
+                        item["evidence_ref"] for item in parent["evidence"]
+                    )
                 self._journal_curiosity_record(
                     cycle_id,
                     "investigation_started",
                     curiosity_investigation["investigation_id"],
                     curiosity_investigation,
-                    source_refs=[evidence_ref] if isinstance(evidence_ref, str) and evidence_ref else (),
+                    source_refs=list(dict.fromkeys(source_refs)),
                 )
         trace = Artifact.create(
             ContractKind.GOAL,
