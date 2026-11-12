@@ -198,6 +198,166 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
             [item["evidence_ref"] for item in closed["evidence"]],
         )
 
+
+    def test_follow_up_curiosity_uses_selector_homeostasis_and_persists_selected_child(self):
+        self.store.start_investigation(
+            "parent-investigation",
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Initial curiosity selection.",
+            cycle_id="cycle-parent",
+            goal_id="investigate_gap:memory-recall",
+        )
+        self.store.close_investigation(
+            "parent-investigation",
+            outcome="partially_answered",
+            answer_summary="Recall improved in the initial benchmark.",
+            remaining_unknowns=["Does recall remain stable after restart?"],
+            cycle_id="cycle-parent-close",
+        )
+        mappings = {
+            "Does recall remain stable after restart?": {
+                "hypothesis": "The index may persist across process restarts.",
+                "uncertainty": 0.8,
+                "information_gain": 0.9,
+                "impact": 0.85,
+                "novelty": 0.95,
+                "urgency": 0.8,
+                "estimated_cost": 0.1,
+                "risk": 0.02,
+            }
+        }
+        proposal = HomeostaticProposal(
+            cycle_id="cycle-follow-up",
+            adjustments={"curiosity": 0.1},
+            deviations={"prediction_error": 0.6},
+            persistence={"prediction_error": 3},
+            evidence_refs=("telemetry:follow-up",),
+            rationale=("prediction error persisted",),
+        )
+        result = self.coordinator.deliberate_follow_up(
+            "parent-investigation",
+            mappings,
+            cycle_id="cycle-follow-up",
+            investigation_store=self.store,
+            homeostatic_proposal=proposal,
+        )
+        self.assertEqual(
+            "follow_up:parent-investigation:does-recall-remain-stable-after-restart",
+            result["selected_goal_id"],
+        )
+        self.assertTrue(result["curiosity_goal_won"])
+        self.assertTrue(result["curiosity_goal_selected"])
+        self.assertAlmostEqual(0.6, result["stability_pressure"])
+        self.assertAlmostEqual(0.55, result["curiosity_decision"].exploration_weight)
+        self.assertEqual("parent-investigation", result["selected_provenance"]["source_investigation_id"])
+        self.assertEqual("open", result["investigation"]["status"])
+        self.assertEqual(
+            "The index may persist across process restarts.",
+            result["investigation"]["hypothesis"],
+        )
+        self.assertIn("source_investigation_id=parent-investigation", result["investigation"]["selection_reason"])
+        self.assertFalse(result["execution_performed"])
+
+        repeated = self.coordinator.deliberate_follow_up(
+            "parent-investigation",
+            mappings,
+            cycle_id="cycle-follow-up-2",
+            investigation_store=self.store,
+        )
+        self.assertIsNone(repeated["curiosity_candidate_goal_id"])
+        self.assertFalse(repeated["curiosity_goal_won"])
+        self.assertIsNone(repeated["investigation"])
+        self.assertEqual(
+            "prior_investigation_exists",
+            repeated["proposals"]["suppressed"][0]["reason"],
+        )
+
+    def test_follow_up_curiosity_is_not_persisted_when_failure_recovery_wins(self):
+        self.store.start_investigation(
+            "parent-low-value",
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Initial curiosity selection.",
+            cycle_id="cycle-parent",
+            goal_id="investigate_gap:memory-recall",
+        )
+        self.store.close_investigation(
+            "parent-low-value",
+            outcome="unanswered",
+            answer_summary="The first investigation was inconclusive.",
+            remaining_unknowns=["Could the index be measured under load?"],
+            cycle_id="cycle-parent-close",
+        )
+        mappings = {
+            "Could the index be measured under load?": {
+                "uncertainty": 0.1,
+                "information_gain": 0.1,
+                "impact": 0.1,
+                "novelty": 0.1,
+                "urgency": 0.1,
+                "estimated_cost": 0.9,
+                "risk": 0.3,
+            }
+        }
+        result = self.coordinator.deliberate_follow_up(
+            "parent-low-value",
+            mappings,
+            cycle_id="cycle-follow-up",
+            investigation_store=self.store,
+            context=AutonomyContext(failed_cycles=2),
+        )
+        self.assertEqual("analyze_recent_failure", result["selected_goal_id"])
+        self.assertFalse(result["curiosity_goal_won"])
+        self.assertFalse(result["curiosity_goal_selected"])
+        self.assertIsNone(result["investigation"])
+        self.assertEqual(1, len(self.store.history()))
+        self.assertFalse(result["execution_performed"])
+
+    def test_follow_up_curiosity_rejects_open_parent_and_homeostatic_cycle_mismatch(self):
+        self.store.start_investigation(
+            "parent-open",
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Initial curiosity selection.",
+            cycle_id="cycle-parent",
+            goal_id="investigate_gap:memory-recall",
+        )
+        mappings = {"What changes after restart?": {"information_gain": 0.8}}
+        with self.assertRaisesRegex(ValueError, "closed investigation"):
+            self.coordinator.deliberate_follow_up(
+                "parent-open",
+                mappings,
+                cycle_id="cycle-follow-up",
+                investigation_store=self.store,
+            )
+        self.store.close_investigation(
+            "parent-open",
+            outcome="partially_answered",
+            answer_summary="One result was observed.",
+            remaining_unknowns=["What changes after restart?"],
+            cycle_id="cycle-parent-close",
+        )
+        mismatch = HomeostaticProposal(
+            cycle_id="wrong-cycle",
+            adjustments={},
+            deviations={"prediction_error": 0.4},
+            persistence={"prediction_error": 2},
+            evidence_refs=(),
+            rationale=(),
+        )
+        with self.assertRaisesRegex(ValueError, "cycle_id must match"):
+            self.coordinator.deliberate_follow_up(
+                "parent-open",
+                mappings,
+                cycle_id="cycle-follow-up",
+                investigation_store=self.store,
+                homeostatic_proposal=mismatch,
+            )
+
     def test_homeostatic_cycle_must_match_and_explicit_pressure_overrides_derived(self):
         proposal = HomeostaticProposal(
             cycle_id="other-cycle",
