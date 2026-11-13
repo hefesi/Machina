@@ -603,6 +603,88 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         )
         self.assertEqual("closed", self.store.get_investigation(parent_id)["status"])
 
+    def test_investigation_lineage_returns_ancestors_and_descendants_in_stable_order(self):
+        self.store.start_investigation(
+            "lineage-root",
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Root investigation.",
+            cycle_id="cycle-root",
+            goal_id="goal-root",
+        )
+        self.store.close_investigation(
+            "lineage-root",
+            outcome="partially_answered",
+            answer_summary="The initial result left two questions.",
+            remaining_unknowns=["Does recall survive restart?", "Does recall survive load?"],
+            cycle_id="cycle-root-close",
+        )
+        self.store.start_investigation(
+            "lineage-child",
+            gap_property="memory_recall",
+            question="Does recall survive restart?",
+            hypothesis="The index may persist.",
+            selection_reason="First follow-up.",
+            cycle_id="cycle-child",
+            goal_id="goal-child",
+            parent_investigation_id="lineage-root",
+        )
+        self.store.close_investigation(
+            "lineage-child",
+            outcome="partially_answered",
+            answer_summary="Restart behavior was measured.",
+            remaining_unknowns=["Does recall survive repeated restarts?"],
+            cycle_id="cycle-child-close",
+        )
+        self.store.start_investigation(
+            "lineage-grandchild",
+            gap_property="memory_recall",
+            question="Does recall survive repeated restarts?",
+            hypothesis="The index may remain durable.",
+            selection_reason="Second-generation follow-up.",
+            cycle_id="cycle-grandchild",
+            goal_id="goal-grandchild",
+            parent_investigation_id="lineage-child",
+        )
+        self.store.start_investigation(
+            "lineage-sibling",
+            gap_property="memory_recall",
+            question="Does recall survive load?",
+            hypothesis="Load may change retrieval behavior.",
+            selection_reason="Sibling follow-up.",
+            cycle_id="cycle-sibling",
+            goal_id="goal-sibling",
+            parent_investigation_id="lineage-root",
+        )
+
+        root_lineage = self.store.investigation_lineage("lineage-root")
+        self.assertEqual("lineage-root", root_lineage["investigation"]["investigation_id"])
+        self.assertEqual([], root_lineage["ancestors"])
+        self.assertEqual(
+            ["lineage-child", "lineage-grandchild", "lineage-sibling"],
+            [item["investigation_id"] for item in root_lineage["descendants"]],
+        )
+
+        child_lineage = self.store.investigation_lineage("lineage-child")
+        self.assertEqual(
+            ["lineage-root"],
+            [item["investigation_id"] for item in child_lineage["ancestors"]],
+        )
+        self.assertEqual(
+            ["lineage-grandchild"],
+            [item["investigation_id"] for item in child_lineage["descendants"]],
+        )
+
+        grandchild_lineage = self.store.investigation_lineage("lineage-grandchild")
+        self.assertEqual(
+            ["lineage-root", "lineage-child"],
+            [item["investigation_id"] for item in grandchild_lineage["ancestors"]],
+        )
+        self.assertEqual([], grandchild_lineage["descendants"])
+        with self.assertRaisesRegex(ValueError, "unknown investigation_id"):
+            self.store.investigation_lineage("missing-lineage-record")
+
 
 if __name__ == "__main__":
     unittest.main()

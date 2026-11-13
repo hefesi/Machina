@@ -190,6 +190,20 @@ result = brain.run_deliberated_cycle(
 )
 ```
 
+
+## Querying persisted investigation lineage
+
+`CuriosityInvestigationStore.investigation_lineage(investigation_id)`
+returns the selected investigation together with its ancestors and descendants.
+Ancestors are ordered oldest-first and descendants follow durable insertion
+order, preserving parent-before-child traversal. The method uses recursive
+SQLite queries and a single read transaction, so the returned graph is
+consistent within one database snapshot. It is read-only: it does not create
+goals, alter investigation status, infer semantic relationships, or execute
+research. This query surface makes multi-generation investigation history
+available to later follow-up planners without introducing a second memory
+store or changing the existing single-parent follow-up contract.
+
 ## Experience-backed strategic review and causal experiment registration
 
 `ExperienceMemoryStore` produces evaluator-grounded autobiographical reports. Their repeated

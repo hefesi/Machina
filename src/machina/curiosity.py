@@ -356,6 +356,78 @@ class CuriosityInvestigationStore:
         result["closed_cycle_id"] = closure["cycle_id"] if closure else None
         return result
 
+    def investigation_lineage(self, investigation_id: str) -> dict[str, Any]:
+        """Return one investigation's ancestors and descendants from durable lineage.
+
+        Ancestors are ordered oldest-first; descendants follow insertion order,
+        which is parent-before-child because a parent must be closed before a
+        child can be created. Recursive UNION deduplicates IDs, so even a
+        malformed legacy cycle cannot make the query recurse indefinitely.
+        The read transaction keeps all three result groups on one snapshot.
+        """
+        key = self._label(investigation_id, "investigation_id")
+        if self._db.in_transaction:
+            raise RuntimeError("investigation_lineage cannot run inside an existing transaction")
+        self._db.execute("BEGIN")
+        try:
+            root = self.get_investigation(key)
+            ancestor_rows = self._db.execute(
+                """WITH RECURSIVE ancestor_ids(investigation_id) AS (
+                    SELECT parent_investigation_id
+                    FROM curiosity_investigations
+                    WHERE investigation_id=? AND parent_investigation_id IS NOT NULL
+                    UNION
+                    SELECT parent.parent_investigation_id
+                    FROM curiosity_investigations AS parent
+                    JOIN ancestor_ids AS current
+                      ON parent.investigation_id = current.investigation_id
+                    WHERE parent.parent_investigation_id IS NOT NULL
+                )
+                SELECT investigation_id
+                FROM curiosity_investigations
+                WHERE investigation_id IN (
+                    SELECT investigation_id FROM ancestor_ids
+                ) AND investigation_id <> ?
+                ORDER BY rowid ASC""",
+                (key, key),
+            ).fetchall()
+            descendant_rows = self._db.execute(
+                """WITH RECURSIVE descendant_ids(investigation_id) AS (
+                    SELECT investigation_id
+                    FROM curiosity_investigations
+                    WHERE investigation_id=?
+                    UNION
+                    SELECT child.investigation_id
+                    FROM curiosity_investigations AS child
+                    JOIN descendant_ids AS parent
+                      ON child.parent_investigation_id = parent.investigation_id
+                )
+                SELECT investigation_id
+                FROM curiosity_investigations
+                WHERE investigation_id IN (
+                    SELECT investigation_id FROM descendant_ids
+                ) AND investigation_id <> ?
+                ORDER BY rowid ASC""",
+                (key, key),
+            ).fetchall()
+            ancestors = [
+                self.get_investigation(row["investigation_id"])
+                for row in ancestor_rows
+            ]
+            descendants = [
+                self.get_investigation(row["investigation_id"])
+                for row in descendant_rows
+            ]
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
+        return {
+            "investigation": root,
+            "ancestors": ancestors,
+            "descendants": descendants,
+        }
+
     def open_investigations(self) -> list[dict[str, Any]]:
         """Return all open investigations in creation order for goal generation."""
         rows = self._db.execute(
