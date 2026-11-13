@@ -535,5 +535,74 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
             migrated.close()
 
 
+    def test_investigation_lineage_foreign_key_rejects_orphans_and_parent_deletion(self):
+        parent_id = "lineage-fk-parent"
+        child_id = "lineage-fk-child"
+        self.store.start_investigation(
+            parent_id,
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Initial investigation.",
+            cycle_id="cycle-parent",
+            goal_id="investigate_gap:memory-recall",
+        )
+        self.store.close_investigation(
+            parent_id,
+            outcome="partially_answered",
+            answer_summary="The initial benchmark was inconclusive.",
+            remaining_unknowns=["Does recall survive restart?"],
+            cycle_id="cycle-parent-close",
+        )
+        self.store.start_investigation(
+            child_id,
+            gap_property="memory_recall",
+            question="Does recall survive restart?",
+            hypothesis="The index may persist.",
+            selection_reason="Follow-up investigation.",
+            cycle_id="cycle-child",
+            goal_id="follow_up:lineage-fk-parent:restart",
+            parent_investigation_id=parent_id,
+        )
+
+        self.assertEqual(
+            1,
+            self.store._db.execute("PRAGMA foreign_keys").fetchone()[0],
+        )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.store._db.execute(
+                """INSERT INTO curiosity_investigations
+                (investigation_id, gap_property, question, question_key,
+                 hypothesis, selection_reason, cycle_id, goal_id,
+                 parent_investigation_id, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
+                (
+                    "orphan-lineage-child",
+                    "memory_recall",
+                    "Can an orphan be stored?",
+                    "can an orphan be stored?",
+                    "No parent exists.",
+                    "Foreign-key regression.",
+                    "cycle-orphan",
+                    "orphan-goal",
+                    "missing-lineage-parent",
+                ),
+            )
+        self.store._db.rollback()
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.store._db.execute(
+                "DELETE FROM curiosity_investigations WHERE investigation_id=?",
+                (parent_id,),
+            )
+        self.store._db.rollback()
+
+        self.assertEqual(
+            parent_id,
+            self.store.get_investigation(child_id)["parent_investigation_id"],
+        )
+        self.assertEqual("closed", self.store.get_investigation(parent_id)["status"])
+
+
 if __name__ == "__main__":
     unittest.main()
