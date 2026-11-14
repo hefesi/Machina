@@ -200,6 +200,74 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         )
 
 
+    def test_close_investigation_rolls_back_when_closure_event_write_fails(self):
+        self.store.start_investigation(
+            "close-rollback",
+            gap_property="memory_recall",
+            question="Does closing preserve the lifecycle event?",
+            hypothesis="The closure event should commit with the status transition.",
+            selection_reason="Rollback regression.",
+            cycle_id="close-rollback-cycle",
+            goal_id="close-rollback-goal",
+        )
+        self.store._db.execute(
+            """CREATE TABLE curiosity_closures (
+                investigation_id TEXT PRIMARY KEY REFERENCES
+                    curiosity_investigations(investigation_id),
+                cycle_id TEXT NOT NULL,
+                closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )"""
+        )
+        self.store._db.execute(
+            """CREATE TRIGGER reject_curiosity_closure_event
+            BEFORE INSERT ON curiosity_closures
+            BEGIN
+                SELECT RAISE(ABORT, 'simulated closure event failure');
+            END"""
+        )
+        self.store._db.commit()
+
+        with self.assertRaisesRegex(
+            sqlite3.IntegrityError, "simulated closure event failure"
+        ):
+            self.store.close_investigation(
+                "close-rollback",
+                outcome="partially_answered",
+                answer_summary="The close event write is deliberately rejected.",
+                remaining_unknowns=["Can the close be retried safely?"],
+                cycle_id="close-rollback-failed-close",
+            )
+
+        self.assertFalse(self.store._db.in_transaction)
+        self.assertEqual(
+            "open", self.store.get_investigation("close-rollback")["status"]
+        )
+        self.assertEqual(
+            0,
+            self.store._db.execute(
+                "SELECT COUNT(*) FROM curiosity_closures"
+            ).fetchone()[0],
+        )
+
+        self.store._db.execute("DROP TRIGGER reject_curiosity_closure_event")
+        self.store._db.commit()
+        closed = self.store.close_investigation(
+            "close-rollback",
+            outcome="partially_answered",
+            answer_summary="The retry records the closure event atomically.",
+            remaining_unknowns=["Can the close be retried safely?"],
+            cycle_id="close-rollback-retry",
+        )
+        self.assertEqual("closed", closed["status"])
+        self.assertFalse(self.store._db.in_transaction)
+        self.assertEqual(
+            "close-rollback-retry",
+            self.store._db.execute(
+                "SELECT cycle_id FROM curiosity_closures "
+                "WHERE investigation_id='close-rollback'"
+            ).fetchone()["cycle_id"],
+        )
+
     def test_follow_up_curiosity_uses_selector_homeostasis_and_persists_selected_child(self):
         self.store.start_investigation(
             "parent-investigation",
