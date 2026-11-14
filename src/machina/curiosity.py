@@ -319,34 +319,45 @@ class CuriosityInvestigationStore:
         summary = self._label(answer_summary, "answer_summary")
         unknowns = self._unknowns(remaining_unknowns)
         cycle = self._label(cycle_id, "cycle_id")
-        cursor = self._db.execute(
-            """UPDATE curiosity_investigations
-            SET status='closed', outcome=?, answer_summary=?,
-                remaining_unknowns=?, closed_at=CURRENT_TIMESTAMP
-            WHERE investigation_id=? AND status='open'""",
-            (result, summary, json.dumps(unknowns, ensure_ascii=False), key),
-        )
-        if cursor.rowcount != 1:
+        if self._db.in_transaction:
+            raise RuntimeError("close_investigation cannot run inside an existing transaction")
+
+        # Serialize the status transition and its immutable closure event. If
+        # either write fails, both changes roll back and the store remains usable.
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            cursor = self._db.execute(
+                """UPDATE curiosity_investigations
+                SET status='closed', outcome=?, answer_summary=?,
+                    remaining_unknowns=?, closed_at=CURRENT_TIMESTAMP
+                WHERE investigation_id=? AND status='open'""",
+                (result, summary, json.dumps(unknowns, ensure_ascii=False), key),
+            )
+            if cursor.rowcount != 1:
+                exists = self._db.execute(
+                    "SELECT 1 FROM curiosity_investigations WHERE investigation_id=?",
+                    (key,),
+                ).fetchone()
+                if exists is None:
+                    raise ValueError("unknown investigation_id")
+                raise ValueError("investigation is already closed")
+
+            self._db.execute(
+                """CREATE TABLE IF NOT EXISTS curiosity_closures (
+                    investigation_id TEXT PRIMARY KEY REFERENCES
+                        curiosity_investigations(investigation_id),
+                    cycle_id TEXT NOT NULL,
+                    closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            self._db.execute(
+                "INSERT INTO curiosity_closures (investigation_id, cycle_id) VALUES (?, ?)",
+                (key, cycle),
+            )
+            self._db.commit()
+        except Exception:
             self._db.rollback()
-            if self._db.execute(
-                "SELECT 1 FROM curiosity_investigations WHERE investigation_id=?", (key,)
-            ).fetchone() is None:
-                raise ValueError("unknown investigation_id")
-            raise ValueError("investigation is already closed")
-        # Record the closing cycle in a dedicated immutable lifecycle event.
-        self._db.execute(
-            """CREATE TABLE IF NOT EXISTS curiosity_closures (
-                investigation_id TEXT PRIMARY KEY REFERENCES
-                    curiosity_investigations(investigation_id),
-                cycle_id TEXT NOT NULL,
-                closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )"""
-        )
-        self._db.execute(
-            "INSERT INTO curiosity_closures (investigation_id, cycle_id) VALUES (?, ?)",
-            (key, cycle),
-        )
-        self._db.commit()
+            raise
         return self.get_investigation(key)
 
     def record_review(self, review_id: str, investigation_id: str, report: dict[str, Any]) -> dict[str, Any]:
