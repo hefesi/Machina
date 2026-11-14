@@ -80,52 +80,76 @@ class CuriosityInvestigationStore:
         )
         # Additive migrations keep historical investigations intact. The explicit
         # sequence preserves insertion order even if SQLite later rewrites rowids
-        # (for example during VACUUM).
-        self._db.execute("BEGIN IMMEDIATE")
-        try:
-            columns = {
-                row["name"]
-                for row in self._db.execute("PRAGMA table_info(curiosity_investigations)")
-            }
-            if "parent_investigation_id" not in columns:
+        # (for example during VACUUM). Existing databases avoid a write lock on
+        # every open; only connections that observe incomplete migration work
+        # enter the serialized schema-upgrade transaction.
+        columns = {
+            row["name"]
+            for row in self._db.execute("PRAGMA table_info(curiosity_investigations)")
+        }
+        indexes = {
+            row["name"]
+            for row in self._db.execute("PRAGMA index_list(curiosity_investigations)")
+        }
+        needs_migration = (
+            "parent_investigation_id" not in columns
+            or "lineage_sequence" not in columns
+            or "idx_curiosity_lineage_sequence" not in indexes
+            or "idx_curiosity_parent_investigation" not in indexes
+        )
+        if "lineage_sequence" in columns:
+            needs_migration = needs_migration or (
                 self._db.execute(
-                    "ALTER TABLE curiosity_investigations "
-                    "ADD COLUMN parent_investigation_id TEXT "
-                    "REFERENCES curiosity_investigations(investigation_id)"
-                )
-            if "lineage_sequence" not in columns:
-                self._db.execute(
-                    "ALTER TABLE curiosity_investigations ADD COLUMN lineage_sequence INTEGER"
-                )
-
-            next_sequence = self._db.execute(
-                "SELECT COALESCE(MAX(lineage_sequence), 0) + 1 "
-                "FROM curiosity_investigations"
-            ).fetchone()[0]
-            legacy_rows = self._db.execute(
-                "SELECT investigation_id FROM curiosity_investigations "
-                "WHERE lineage_sequence IS NULL ORDER BY rowid"
-            ).fetchall()
-            for row in legacy_rows:
-                self._db.execute(
-                    "UPDATE curiosity_investigations SET lineage_sequence=? "
-                    "WHERE investigation_id=?",
-                    (next_sequence, row["investigation_id"]),
-                )
-                next_sequence += 1
-
-            self._db.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS idx_curiosity_lineage_sequence "
-                "ON curiosity_investigations(lineage_sequence)"
+                    "SELECT 1 FROM curiosity_investigations "
+                    "WHERE lineage_sequence IS NULL LIMIT 1"
+                ).fetchone() is not None
             )
-            self._db.execute(
-                "CREATE INDEX IF NOT EXISTS idx_curiosity_parent_investigation "
-                "ON curiosity_investigations(parent_investigation_id)"
-            )
-            self._db.commit()
-        except Exception:
-            self._db.rollback()
-            raise
+        if needs_migration:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                columns = {
+                    row["name"]
+                    for row in self._db.execute("PRAGMA table_info(curiosity_investigations)")
+                }
+                if "parent_investigation_id" not in columns:
+                    self._db.execute(
+                        "ALTER TABLE curiosity_investigations "
+                        "ADD COLUMN parent_investigation_id TEXT "
+                        "REFERENCES curiosity_investigations(investigation_id)"
+                    )
+                if "lineage_sequence" not in columns:
+                    self._db.execute(
+                        "ALTER TABLE curiosity_investigations ADD COLUMN lineage_sequence INTEGER"
+                    )
+
+                next_sequence = self._db.execute(
+                    "SELECT COALESCE(MAX(lineage_sequence), 0) + 1 "
+                    "FROM curiosity_investigations"
+                ).fetchone()[0]
+                legacy_rows = self._db.execute(
+                    "SELECT investigation_id FROM curiosity_investigations "
+                    "WHERE lineage_sequence IS NULL ORDER BY rowid"
+                ).fetchall()
+                for row in legacy_rows:
+                    self._db.execute(
+                        "UPDATE curiosity_investigations SET lineage_sequence=? "
+                        "WHERE investigation_id=?",
+                        (next_sequence, row["investigation_id"]),
+                    )
+                    next_sequence += 1
+
+                self._db.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_curiosity_lineage_sequence "
+                    "ON curiosity_investigations(lineage_sequence)"
+                )
+                self._db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_curiosity_parent_investigation "
+                    "ON curiosity_investigations(parent_investigation_id)"
+                )
+                self._db.commit()
+            except Exception:
+                self._db.rollback()
+                raise
 
     def close(self) -> None:
         self._db.close()
