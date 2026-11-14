@@ -40,6 +40,7 @@ class CuriosityInvestigationStore:
                 cycle_id TEXT NOT NULL,
                 goal_id TEXT NOT NULL,
                 parent_investigation_id TEXT REFERENCES curiosity_investigations(investigation_id),
+                lineage_sequence INTEGER,
                 status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
                 outcome TEXT CHECK (outcome IS NULL OR outcome IN
                     ('answered','partially_answered','unanswered','abandoned')),
@@ -77,23 +78,54 @@ class CuriosityInvestigationStore:
             );
             """
         )
-        # Additive migration for databases created before explicit investigation
-        # lineage was stored. Existing investigations remain root records.
-        columns = {
-            row["name"]
-            for row in self._db.execute("PRAGMA table_info(curiosity_investigations)")
-        }
-        if "parent_investigation_id" not in columns:
+        # Additive migrations keep historical investigations intact. The explicit
+        # sequence preserves insertion order even if SQLite later rewrites rowids
+        # (for example during VACUUM).
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            columns = {
+                row["name"]
+                for row in self._db.execute("PRAGMA table_info(curiosity_investigations)")
+            }
+            if "parent_investigation_id" not in columns:
+                self._db.execute(
+                    "ALTER TABLE curiosity_investigations "
+                    "ADD COLUMN parent_investigation_id TEXT "
+                    "REFERENCES curiosity_investigations(investigation_id)"
+                )
+            if "lineage_sequence" not in columns:
+                self._db.execute(
+                    "ALTER TABLE curiosity_investigations ADD COLUMN lineage_sequence INTEGER"
+                )
+
+            next_sequence = self._db.execute(
+                "SELECT COALESCE(MAX(lineage_sequence), 0) + 1 "
+                "FROM curiosity_investigations"
+            ).fetchone()[0]
+            legacy_rows = self._db.execute(
+                "SELECT investigation_id FROM curiosity_investigations "
+                "WHERE lineage_sequence IS NULL ORDER BY rowid"
+            ).fetchall()
+            for row in legacy_rows:
+                self._db.execute(
+                    "UPDATE curiosity_investigations SET lineage_sequence=? "
+                    "WHERE investigation_id=?",
+                    (next_sequence, row["investigation_id"]),
+                )
+                next_sequence += 1
+
             self._db.execute(
-                "ALTER TABLE curiosity_investigations "
-                "ADD COLUMN parent_investigation_id TEXT "
-                "REFERENCES curiosity_investigations(investigation_id)"
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_curiosity_lineage_sequence "
+                "ON curiosity_investigations(lineage_sequence)"
             )
-        self._db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_curiosity_parent_investigation "
-            "ON curiosity_investigations(parent_investigation_id)"
-        )
-        self._db.commit()
+            self._db.execute(
+                "CREATE INDEX IF NOT EXISTS idx_curiosity_parent_investigation "
+                "ON curiosity_investigations(parent_investigation_id)"
+            )
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
 
     def close(self) -> None:
         self._db.close()
@@ -178,15 +210,19 @@ class CuriosityInvestigationStore:
                     raise ValueError("unknown parent_investigation_id")
                 if parent["status"] != "closed":
                     raise ValueError("parent_investigation_id must refer to a closed investigation")
+            next_sequence = self._db.execute(
+                "SELECT COALESCE(MAX(lineage_sequence), 0) + 1 "
+                "FROM curiosity_investigations"
+            ).fetchone()[0]
             self._db.execute(
                 """INSERT INTO curiosity_investigations
                 (investigation_id, gap_property, question, question_key,
                  hypothesis, selection_reason, cycle_id, goal_id,
-                 parent_investigation_id, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
+                 parent_investigation_id, lineage_sequence, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
                 (
                     key, prop, prompt, self._question_key(prompt), theory, reason,
-                    cycle, goal, parent_key,
+                    cycle, goal, parent_key, next_sequence,
                 ),
             )
             self._db.commit()
@@ -388,7 +424,7 @@ class CuriosityInvestigationStore:
                 WHERE investigation_id IN (
                     SELECT investigation_id FROM ancestor_ids
                 ) AND investigation_id <> ?
-                ORDER BY rowid ASC""",
+                ORDER BY lineage_sequence ASC""",
                 (key, key),
             ).fetchall()
             descendant_rows = self._db.execute(
@@ -407,7 +443,7 @@ class CuriosityInvestigationStore:
                 WHERE investigation_id IN (
                     SELECT investigation_id FROM descendant_ids
                 ) AND investigation_id <> ?
-                ORDER BY rowid ASC""",
+                ORDER BY lineage_sequence ASC""",
                 (key, key),
             ).fetchall()
             ancestors = [
@@ -432,7 +468,7 @@ class CuriosityInvestigationStore:
         """Return all open investigations in creation order for goal generation."""
         rows = self._db.execute(
             "SELECT investigation_id FROM curiosity_investigations "
-            "WHERE status='open' ORDER BY rowid"
+            "WHERE status='open' ORDER BY lineage_sequence"
         ).fetchall()
         return [self.get_investigation(row["investigation_id"]) for row in rows]
 
@@ -442,7 +478,7 @@ class CuriosityInvestigationStore:
         if gap_property is not None:
             query += " WHERE gap_property=?"
             params = (self._label(gap_property, "gap_property"),)
-        query += " ORDER BY rowid"
+        query += " ORDER BY lineage_sequence"
         return [self.get_investigation(row["investigation_id"])
                 for row in self._db.execute(query, params).fetchall()]
 
