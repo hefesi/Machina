@@ -27,6 +27,7 @@ from .homeostasis import HomeostaticProposal
 from .self_history_influence import SelfHistoryInfluence
 from .mnn_strategy_event_bridge import MNNStrategyEventBridge
 from .curiosity import CuriosityInvestigationStore
+from .curiosity_coordination import CuriosityGoalCoordinator
 from .perception import NormalizedPerception
 from .internal_state import InternalStateSnapshot
 from .mnn_motivation import MotivationSystem
@@ -80,6 +81,7 @@ class VirtualBrain:
         curiosity_investigation_path: str | Path | None = None,
         motivation_system: MotivationSystem | None = None,
         causal_experiment_store: CausalExperimentStore | None = None,
+        curiosity_goal_coordinator: CuriosityGoalCoordinator | None = None,
     ) -> None:
         self.store = EventStore(storage_path)
         self.strategy_events = MNNStrategyEventBridge(self.store)
@@ -94,6 +96,11 @@ class VirtualBrain:
         if causal_experiment_store is not None and not isinstance(causal_experiment_store, CausalExperimentStore):
             raise TypeError("causal_experiment_store must be a CausalExperimentStore")
         self.causal_experiment_store = causal_experiment_store
+        if curiosity_goal_coordinator is not None and not isinstance(
+            curiosity_goal_coordinator, CuriosityGoalCoordinator
+        ):
+            raise TypeError("curiosity_goal_coordinator must be a CuriosityGoalCoordinator")
+        self.curiosity_goal_coordinator = curiosity_goal_coordinator
         self.curiosity_store = (
             CuriosityInvestigationStore(curiosity_investigation_path)
             if curiosity_investigation_path is not None else None
@@ -128,10 +135,14 @@ class VirtualBrain:
         constraints: Sequence[str] = (),
         success_criteria: Sequence[str] = (),
         priority: int = 0,
+        cycle_id: str | None = None,
     ) -> str:
         """Durably record an observation and goal before any reasoning occurs."""
 
-        cycle_id = new_id("cycle")
+        if cycle_id is None:
+            cycle_id = new_id("cycle")
+        elif not isinstance(cycle_id, str) or not cycle_id.strip():
+            raise ValueError("cycle_id must be a non-empty string")
         self.store.create_cycle(cycle_id)
         perception = observation if isinstance(observation, NormalizedPerception) else None
         if perception is not None:
@@ -241,6 +252,10 @@ class VirtualBrain:
         recent_goal_ids: Sequence[str] = (),
         motivational_fulfillment: Mapping[str, float] | None = None,
         strategy_experiment_id: str | None = None,
+        curiosity_gap_mappings: Mapping[str, Mapping[str, Any]] | None = None,
+        curiosity_follow_up_investigation_id: str | None = None,
+        curiosity_follow_up_mappings: Mapping[str, Mapping[str, Any]] | None = None,
+        cycle_id: str | None = None,
         **cycle_kwargs: Any,
     ) -> CycleResult:
         """Select an internal goal, journal its rationale, then run one brain cycle.
@@ -269,11 +284,42 @@ class VirtualBrain:
         )
         if self.motivation_system is None and validated_fulfillment:
             raise ValueError("motivational_fulfillment requires a configured MotivationSystem")
+        has_follow_up_input = (
+            curiosity_follow_up_investigation_id is not None
+            or curiosity_follow_up_mappings is not None
+        )
+        if curiosity_gap_mappings is not None and has_follow_up_input:
+            raise ValueError("initial curiosity gaps and follow-up mappings are mutually exclusive")
+        if curiosity_gap_mappings is not None:
+            if not isinstance(curiosity_gap_mappings, Mapping):
+                raise ValueError("curiosity_gap_mappings must be a mapping")
+        if has_follow_up_input:
+            if not isinstance(curiosity_follow_up_investigation_id, str) or not curiosity_follow_up_investigation_id.strip():
+                raise ValueError("curiosity_follow_up_investigation_id must be supplied with follow-up mappings")
+            if not isinstance(curiosity_follow_up_mappings, Mapping):
+                raise ValueError("curiosity_follow_up_mappings must be a mapping")
+        if curiosity_gap_mappings is not None or has_follow_up_input:
+            if self.curiosity_goal_coordinator is None:
+                raise RuntimeError(
+                    "curiosity mappings require a configured CuriosityGoalCoordinator"
+                )
+            if self.curiosity_store is None:
+                raise RuntimeError(
+                    "curiosity mappings require curiosity_investigation_path"
+                )
+        if cycle_id is not None and (
+            not isinstance(cycle_id, str) or not cycle_id.strip()
+        ):
+            raise ValueError("cycle_id must be a non-empty string")
         combined_adjustments = dict(drive_adjustments or {})
         homeostasis_trace = None
         if homeostatic_proposal is not None:
             if not isinstance(homeostatic_proposal, HomeostaticProposal):
                 raise TypeError("homeostatic_proposal must be a HomeostaticProposal")
+            if not isinstance(homeostatic_proposal.cycle_id, str) or not homeostatic_proposal.cycle_id.strip():
+                raise ValueError("homeostatic proposal cycle_id must be a non-empty string")
+            if cycle_id is not None and homeostatic_proposal.cycle_id != cycle_id:
+                raise ValueError("homeostatic proposal cycle_id must match the deliberation cycle")
             for drive, adjustment in homeostatic_proposal.adjustments.items():
                 if not isinstance(drive, str) or not drive.strip():
                     raise ValueError("homeostatic drive names must be non-empty strings")
@@ -288,6 +334,11 @@ class VirtualBrain:
                 "evidence_refs": list(homeostatic_proposal.evidence_refs),
                 "rationale": list(homeostatic_proposal.rationale),
             }
+        selected_cycle_id = cycle_id or (
+            homeostatic_proposal.cycle_id
+            if homeostatic_proposal is not None
+            else new_id("cycle")
+        )
         self_history_trace = None
         if self_history_influence is not None:
             if not isinstance(self_history_influence, SelfHistoryInfluence):
@@ -334,8 +385,45 @@ class VirtualBrain:
                 item["investigation_id"] for item in open_investigations
             ],
             "unresolved_question_count": len(open_investigations),
+            "follow_up_source_investigation_id": curiosity_follow_up_investigation_id,
             "policy": "open_investigations_raise_curiosity_goal_pressure",
         }
+        curiosity_preview = None
+        curiosity_candidates = ()
+        curiosity_sources: dict[str, str] = {}
+        if curiosity_gap_mappings is not None:
+            curiosity_preview = self.curiosity_goal_coordinator.deliberate(
+                curiosity_gap_mappings,
+                cycle_id=selected_cycle_id,
+                investigation_store=self.curiosity_store,
+                context=None,
+                motivation=None,
+                homeostatic_proposal=homeostatic_proposal,
+                recent_goal_ids=recent_goal_ids,
+                persist_selected=False,
+            )
+        elif curiosity_follow_up_mappings is not None:
+            curiosity_preview = self.curiosity_goal_coordinator.deliberate_follow_up(
+                curiosity_follow_up_investigation_id,
+                curiosity_follow_up_mappings,
+                cycle_id=selected_cycle_id,
+                investigation_store=self.curiosity_store,
+                context=None,
+                motivation=None,
+                homeostatic_proposal=homeostatic_proposal,
+                recent_goal_ids=recent_goal_ids,
+                persist_selected=False,
+            )
+        if curiosity_preview is not None:
+            candidate_id = curiosity_preview["curiosity_candidate_goal_id"]
+            if candidate_id is not None:
+                curiosity_candidates = tuple(
+                    goal for goal in curiosity_preview["proposals"]["goals"]
+                    if goal.goal_id == candidate_id
+                )
+                if len(curiosity_candidates) != 1:
+                    raise RuntimeError("curiosity selector candidate could not be resolved")
+                curiosity_sources[candidate_id] = "curiosity"
         strategy_guidance = None
         if strategy_experiment_id is not None:
             if self.causal_experiment_store is None:
@@ -349,6 +437,8 @@ class VirtualBrain:
             drive_adjustments=combined_adjustments,
             recent_goal_ids=recent_goal_ids,
             strategy_guidance=strategy_guidance,
+            additional_candidates=curiosity_candidates,
+            additional_sources=curiosity_sources,
         )
         selected = deliberation.selected_goal
         if selected is None:
@@ -365,9 +455,63 @@ class VirtualBrain:
                 "persistent_goal_record_id": deliberation.persistent_record_id,
                 "motivational_fulfillment": validated_fulfillment,
             },
+            cycle_id=selected_cycle_id,
             **cycle_kwargs,
         )
         active_goal = self._required(cycle_id, "goal.activated")
+        curiosity_investigation = None
+        if curiosity_preview is not None:
+            if curiosity_follow_up_mappings is not None:
+                curiosity_investigation = self.curiosity_goal_coordinator.persist_selected_follow_up_candidate(
+                    curiosity_preview,
+                    selected_goal_id=selected.goal_id,
+                    follow_up_mappings=curiosity_follow_up_mappings,
+                    cycle_id=selected_cycle_id,
+                    investigation_store=self.curiosity_store,
+                )
+            else:
+                curiosity_investigation = self.curiosity_goal_coordinator.persist_selected_candidate(
+                    curiosity_preview,
+                    selected_goal_id=selected.goal_id,
+                    gap_mappings=curiosity_gap_mappings,
+                    cycle_id=selected_cycle_id,
+                    investigation_store=self.curiosity_store,
+                )
+            selected_curiosity = (
+                curiosity_preview["curiosity_candidate_goal_id"] == selected.goal_id
+            )
+            curiosity_trace.update({
+                "candidate_goal_id": curiosity_preview["curiosity_candidate_goal_id"],
+                "selected_by_unified_deliberation": selected_curiosity,
+                "selector_decision": curiosity_preview["curiosity_decision"].to_dict(),
+                "stability_pressure": curiosity_preview["stability_pressure"],
+                "stability_pressure_source": curiosity_preview["stability_pressure_source"],
+                "selected_provenance": (
+                    curiosity_preview["provenance_by_goal"].get(selected.goal_id)
+                    if selected_curiosity else None
+                ),
+                "investigation": curiosity_investigation,
+                "persistence_policy": "after_unified_deliberation_selection",
+            })
+            if curiosity_investigation is not None:
+                provenance = curiosity_trace["selected_provenance"]
+                source_refs = []
+                evidence_ref = provenance.get("belief_evidence_ref")
+                if isinstance(evidence_ref, str) and evidence_ref:
+                    source_refs.append(evidence_ref)
+                source_investigation_id = provenance.get("source_investigation_id")
+                if isinstance(source_investigation_id, str) and source_investigation_id:
+                    parent = self.curiosity_store.get_investigation(source_investigation_id)
+                    source_refs.extend(
+                        item["evidence_ref"] for item in parent["evidence"]
+                    )
+                self._journal_curiosity_record(
+                    cycle_id,
+                    "investigation_started",
+                    curiosity_investigation["investigation_id"],
+                    curiosity_investigation,
+                    source_refs=list(dict.fromkeys(source_refs)),
+                )
         trace = Artifact.create(
             ContractKind.GOAL,
             cycle_id=cycle_id,

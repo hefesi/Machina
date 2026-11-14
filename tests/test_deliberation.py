@@ -158,6 +158,33 @@ class InternalDeliberatorTests(unittest.TestCase):
             store.close()
 
 
+    def test_curiosity_candidate_is_audited_as_a_distinct_deliberation_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            deliberator = InternalDeliberator(AutonomyController(), store)
+            curiosity = GoalCandidate(
+                "investigate_gap:memory",
+                "Investigate the evidence gap",
+                "curiosity",
+                0.95,
+                0.9,
+                0.95,
+                0.1,
+                0.02,
+            )
+            result = deliberator.deliberate(
+                AutonomyContext(memory_count=1),
+                additional_candidates=[curiosity],
+                additional_sources={curiosity.goal_id: "curiosity"},
+            )
+            self.assertEqual(curiosity.goal_id, result.selected_goal.goal_id)
+            self.assertEqual("curiosity", result.selected_source)
+            history = store.recent_deliberations(1)
+            self.assertEqual("curiosity", history[0]["selected_source"])
+            self.assertEqual(curiosity.goal_id, history[0]["selected_goal_id"])
+            store.close()
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -1,0 +1,853 @@
+import sqlite3
+import tempfile
+import threading
+import unittest
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+from machina.autonomy import AutonomyContext, AutonomyController
+from machina.curiosity import CuriosityInvestigationStore
+from machina.curiosity_coordination import CuriosityGoalCoordinator
+from machina.goal_outcome_learning import GoalOutcomeLearner
+from machina.homeostasis import HomeostaticProposal
+from machina.mnn_motivation import MotivationSystem, MotivationalDrive
+from machina.self_model import SelfModel
+from machina.self_model_learning import SelfModelLearningBridge
+
+
+class CuriosityGoalCoordinatorTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.model = SelfModel()
+        self.learner = GoalOutcomeLearner(Path(self.tmp.name) / "outcomes.sqlite3")
+        self.bridge = SelfModelLearningBridge(self.model, self.learner)
+        self.controller = AutonomyController()
+        self.coordinator = CuriosityGoalCoordinator(self.bridge, self.controller)
+        self.store = CuriosityInvestigationStore(Path(self.tmp.name) / "curiosity.sqlite3")
+
+    def tearDown(self):
+        self.store.close()
+        self.learner.close()
+        self.tmp.cleanup()
+
+    def mappings(self):
+        return {
+            "memory_gap": {
+                "question": "Which evidence explains the memory gap?",
+                "hypothesis": "A missing retrieval relation may explain the gap.",
+                "information_gain": 0.9,
+                "impact": 0.9,
+                "urgency": 0.8,
+                "estimated_cost": 0.1,
+                "risk": 0.02,
+            }
+        }
+
+    def test_curiosity_selection_is_integrated_and_persisted_only_after_autonomy(self):
+        result = self.coordinator.deliberate(
+            self.mappings(),
+            cycle_id="cycle-1",
+            investigation_store=self.store,
+        )
+        self.assertEqual("investigate_gap:memory-gap", result["selected_goal_id"])
+        self.assertTrue(result["curiosity_goal_selected"])
+        self.assertEqual("open", result["investigation"]["status"])
+        self.assertEqual("A missing retrieval relation may explain the gap.", result["investigation"]["hypothesis"])
+        self.assertFalse(result["execution_performed"])
+        self.assertEqual(1, len(self.store.open_investigations()))
+
+    def test_homeostatic_pressure_reduces_exploration_and_adjustments_reach_autonomy(self):
+        proposal = HomeostaticProposal(
+            cycle_id="cycle-1",
+            adjustments={"curiosity": 0.1},
+            deviations={"prediction_error": 0.6},
+            persistence={"prediction_error": 3},
+            evidence_refs=("telemetry:cycle-1",),
+            rationale=("prediction_error remained outside its range",),
+        )
+        motivation = MotivationSystem([
+            MotivationalDrive("curiosity", level=1.0, setpoint=0.5),
+        ])
+        result = self.coordinator.deliberate(
+            self.mappings(),
+            cycle_id="cycle-1",
+            investigation_store=self.store,
+            homeostatic_proposal=proposal,
+            motivation=motivation,
+        )
+        self.assertAlmostEqual(0.6, result["stability_pressure"])
+        self.assertEqual("homeostasis", result["stability_pressure_source"])
+        self.assertAlmostEqual(0.25, result["drive_adjustments"]["curiosity"])
+        curiosity_score = result["curiosity_decision"].ranked[0]["score"]
+        self.assertAlmostEqual(0.9, curiosity_score["uncertainty_information_gain"] / (
+            0.34 * result["curiosity_decision"].exploration_weight
+        ))
+        autonomy_score = result["autonomy_decision"].alternatives[0]["score"]
+        # AutonomyController intentionally clamps final drive feedback to ±0.15,
+        # even though the coordinator preserves the wider ±0.3 proposal bound.
+        self.assertAlmostEqual(0.15, autonomy_score["feedback_adjustment"])
+
+    def test_persisted_question_is_suppressed_on_later_cycles(self):
+        first = self.coordinator.deliberate(
+            self.mappings(), cycle_id="cycle-1", investigation_store=self.store,
+        )
+        self.assertIsNotNone(first["investigation"])
+        second = self.coordinator.deliberate(
+            self.mappings(), cycle_id="cycle-2", investigation_store=self.store,
+        )
+        self.assertIsNone(second["curiosity_candidate_goal_id"])
+        self.assertIsNone(second["investigation"])
+        self.assertEqual("prior_investigation_exists", second["proposals"]["suppressed"][0]["reason"])
+
+    def test_no_investigation_is_persisted_when_another_goal_wins(self):
+        low_value = self.mappings()
+        low_value["memory_gap"].update({
+            "information_gain": 0.2,
+            "impact": 0.2,
+            "urgency": 0.1,
+            "estimated_cost": 0.7,
+        })
+        result = self.coordinator.deliberate(
+            low_value,
+            cycle_id="cycle-1",
+            investigation_store=self.store,
+            context=AutonomyContext(failed_cycles=2),
+        )
+        self.assertEqual("analyze_recent_failure", result["selected_goal_id"])
+        self.assertFalse(result["curiosity_goal_selected"])
+        self.assertEqual([], self.store.open_investigations())
+
+    def test_evidence_append_serializes_with_concurrent_investigation_close(self):
+        database = Path(self.tmp.name) / "evidence-close-race.sqlite3"
+        seed = CuriosityInvestigationStore(database)
+        seed.start_investigation(
+            "investigation-race",
+            gap_property="memory_gap",
+            question="Which evidence explains the memory gap?",
+            hypothesis="A missing retrieval relation may explain the gap.",
+            selection_reason="High expected information value.",
+            cycle_id="cycle-start",
+            goal_id="investigate_gap:memory-gap",
+        )
+        seed.close()
+
+        status_checked = threading.Event()
+        release_evidence = threading.Event()
+        close_started = threading.Event()
+        close_finished = threading.Event()
+
+        def append_evidence():
+            store = CuriosityInvestigationStore(database)
+            original_get = store.get_investigation
+
+            def pause_after_status_read(investigation_id):
+                result = original_get(investigation_id)
+                status_checked.set()
+                if not release_evidence.wait(timeout=5):
+                    raise TimeoutError("test did not release the evidence append")
+                return result
+
+            store.get_investigation = pause_after_status_read
+            try:
+                return store.record_evidence(
+                    "investigation-race",
+                    evidence_ref="source:race",
+                    finding="The source contains a relevant observation.",
+                    cycle_id="cycle-evidence",
+                )
+            finally:
+                store.close()
+
+        def close_investigation():
+            store = CuriosityInvestigationStore(database)
+            try:
+                if not status_checked.wait(timeout=5):
+                    raise TimeoutError("evidence append did not reach its status check")
+                close_started.set()
+                return store.close_investigation(
+                    "investigation-race",
+                    outcome="partially_answered",
+                    answer_summary="One evidence item was recorded.",
+                    remaining_unknowns=["Which retrieval path was omitted?"],
+                    cycle_id="cycle-close",
+                )
+            finally:
+                close_finished.set()
+                store.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            evidence_future = executor.submit(append_evidence)
+            self.assertTrue(status_checked.wait(timeout=5))
+            close_future = executor.submit(close_investigation)
+            self.assertTrue(close_started.wait(timeout=5))
+            try:
+                self.assertFalse(
+                    close_finished.wait(timeout=0.2),
+                    "close committed while the evidence append held the write transaction",
+                )
+            finally:
+                release_evidence.set()
+
+            evidence = evidence_future.result(timeout=5)
+            closed = close_future.result(timeout=5)
+
+        self.assertEqual("source:race", evidence["evidence_ref"])
+        self.assertEqual("closed", closed["status"])
+        self.assertEqual("cycle-close", closed["closed_cycle_id"])
+        self.assertEqual(
+            ["source:race"],
+            [item["evidence_ref"] for item in closed["evidence"]],
+        )
+
+
+    def test_close_investigation_rolls_back_when_closure_event_write_fails(self):
+        self.store.start_investigation(
+            "close-rollback",
+            gap_property="memory_recall",
+            question="Does closing preserve the lifecycle event?",
+            hypothesis="The closure event should commit with the status transition.",
+            selection_reason="Rollback regression.",
+            cycle_id="close-rollback-cycle",
+            goal_id="close-rollback-goal",
+        )
+        self.store._db.execute(
+            """CREATE TABLE IF NOT EXISTS curiosity_closures (
+                investigation_id TEXT PRIMARY KEY REFERENCES
+                    curiosity_investigations(investigation_id),
+                cycle_id TEXT NOT NULL,
+                closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )"""
+        )
+        self.store._db.execute(
+            """CREATE TRIGGER reject_curiosity_closure_event
+            BEFORE INSERT ON curiosity_closures
+            BEGIN
+                SELECT RAISE(ABORT, 'simulated closure event failure');
+            END"""
+        )
+        self.store._db.commit()
+
+        with self.assertRaisesRegex(
+            sqlite3.IntegrityError, "simulated closure event failure"
+        ):
+            self.store.close_investigation(
+                "close-rollback",
+                outcome="partially_answered",
+                answer_summary="The close event write is deliberately rejected.",
+                remaining_unknowns=["Can the close be retried safely?"],
+                cycle_id="close-rollback-failed-close",
+            )
+
+        self.assertFalse(self.store._db.in_transaction)
+        self.assertEqual(
+            "open", self.store.get_investigation("close-rollback")["status"]
+        )
+        self.assertEqual(
+            0,
+            self.store._db.execute(
+                "SELECT COUNT(*) FROM curiosity_closures"
+            ).fetchone()[0],
+        )
+
+        self.store._db.execute("DROP TRIGGER reject_curiosity_closure_event")
+        self.store._db.commit()
+        closed = self.store.close_investigation(
+            "close-rollback",
+            outcome="partially_answered",
+            answer_summary="The retry records the closure event atomically.",
+            remaining_unknowns=["Can the close be retried safely?"],
+            cycle_id="close-rollback-retry",
+        )
+        self.assertEqual("closed", closed["status"])
+        self.assertFalse(self.store._db.in_transaction)
+        self.assertEqual(
+            "close-rollback-retry",
+            self.store._db.execute(
+                "SELECT cycle_id FROM curiosity_closures "
+                "WHERE investigation_id='close-rollback'"
+            ).fetchone()["cycle_id"],
+        )
+
+    def test_follow_up_curiosity_uses_selector_homeostasis_and_persists_selected_child(self):
+        self.store.start_investigation(
+            "parent-investigation",
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Initial curiosity selection.",
+            cycle_id="cycle-parent",
+            goal_id="investigate_gap:memory-recall",
+        )
+        self.store.close_investigation(
+            "parent-investigation",
+            outcome="partially_answered",
+            answer_summary="Recall improved in the initial benchmark.",
+            remaining_unknowns=["Does recall remain stable after restart?"],
+            cycle_id="cycle-parent-close",
+        )
+        mappings = {
+            "Does recall remain stable after restart?": {
+                "hypothesis": "The index may persist across process restarts.",
+                "uncertainty": 0.8,
+                "information_gain": 0.9,
+                "impact": 0.85,
+                "novelty": 0.95,
+                "urgency": 0.8,
+                "estimated_cost": 0.1,
+                "risk": 0.02,
+            }
+        }
+        proposal = HomeostaticProposal(
+            cycle_id="cycle-follow-up",
+            adjustments={"curiosity": 0.1},
+            deviations={"prediction_error": 0.6},
+            persistence={"prediction_error": 3},
+            evidence_refs=("telemetry:follow-up",),
+            rationale=("prediction error persisted",),
+        )
+        result = self.coordinator.deliberate_follow_up(
+            "parent-investigation",
+            mappings,
+            cycle_id="cycle-follow-up",
+            investigation_store=self.store,
+            homeostatic_proposal=proposal,
+        )
+        self.assertEqual(
+            "follow_up:parent-investigation:does-recall-remain-stable-after-restart",
+            result["selected_goal_id"],
+        )
+        self.assertTrue(result["curiosity_goal_won"])
+        self.assertTrue(result["curiosity_goal_selected"])
+        self.assertAlmostEqual(0.6, result["stability_pressure"])
+        self.assertAlmostEqual(0.55, result["curiosity_decision"].exploration_weight)
+        self.assertEqual("parent-investigation", result["selected_provenance"]["source_investigation_id"])
+        self.assertEqual("open", result["investigation"]["status"])
+        self.assertEqual(
+            "parent-investigation",
+            result["investigation"]["parent_investigation_id"],
+        )
+        self.assertEqual(
+            "The index may persist across process restarts.",
+            result["investigation"]["hypothesis"],
+        )
+        database = self.store.path
+        self.store.close()
+        self.store = CuriosityInvestigationStore(database)
+        restored_child = self.store.get_investigation(
+            result["investigation"]["investigation_id"]
+        )
+        self.assertEqual(
+            "parent-investigation",
+            restored_child["parent_investigation_id"],
+        )
+        self.assertIn("source_investigation_id=parent-investigation", result["investigation"]["selection_reason"])
+        self.assertFalse(result["execution_performed"])
+
+        repeated = self.coordinator.deliberate_follow_up(
+            "parent-investigation",
+            mappings,
+            cycle_id="cycle-follow-up-2",
+            investigation_store=self.store,
+        )
+        self.assertIsNone(repeated["curiosity_candidate_goal_id"])
+        self.assertFalse(repeated["curiosity_goal_won"])
+        self.assertIsNone(repeated["investigation"])
+        self.assertEqual(
+            "prior_investigation_exists",
+            repeated["proposals"]["suppressed"][0]["reason"],
+        )
+
+    def test_follow_up_curiosity_is_not_persisted_when_failure_recovery_wins(self):
+        self.store.start_investigation(
+            "parent-low-value",
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Initial curiosity selection.",
+            cycle_id="cycle-parent",
+            goal_id="investigate_gap:memory-recall",
+        )
+        self.store.close_investigation(
+            "parent-low-value",
+            outcome="unanswered",
+            answer_summary="The first investigation was inconclusive.",
+            remaining_unknowns=["Could the index be measured under load?"],
+            cycle_id="cycle-parent-close",
+        )
+        mappings = {
+            "Could the index be measured under load?": {
+                "uncertainty": 0.1,
+                "information_gain": 0.1,
+                "impact": 0.1,
+                "novelty": 0.1,
+                "urgency": 0.1,
+                "estimated_cost": 0.9,
+                "risk": 0.3,
+            }
+        }
+        result = self.coordinator.deliberate_follow_up(
+            "parent-low-value",
+            mappings,
+            cycle_id="cycle-follow-up",
+            investigation_store=self.store,
+            context=AutonomyContext(failed_cycles=2),
+        )
+        self.assertEqual("analyze_recent_failure", result["selected_goal_id"])
+        self.assertFalse(result["curiosity_goal_won"])
+        self.assertFalse(result["curiosity_goal_selected"])
+        self.assertIsNone(result["investigation"])
+        self.assertEqual(1, len(self.store.history()))
+        self.assertFalse(result["execution_performed"])
+
+    def test_follow_up_curiosity_rejects_open_parent_and_homeostatic_cycle_mismatch(self):
+        self.store.start_investigation(
+            "parent-open",
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Initial curiosity selection.",
+            cycle_id="cycle-parent",
+            goal_id="investigate_gap:memory-recall",
+        )
+        mappings = {"What changes after restart?": {"information_gain": 0.8}}
+        with self.assertRaisesRegex(ValueError, "closed investigation"):
+            self.coordinator.deliberate_follow_up(
+                "parent-open",
+                mappings,
+                cycle_id="cycle-follow-up",
+                investigation_store=self.store,
+            )
+        self.store.close_investigation(
+            "parent-open",
+            outcome="partially_answered",
+            answer_summary="One result was observed.",
+            remaining_unknowns=["What changes after restart?"],
+            cycle_id="cycle-parent-close",
+        )
+        mismatch = HomeostaticProposal(
+            cycle_id="wrong-cycle",
+            adjustments={},
+            deviations={"prediction_error": 0.4},
+            persistence={"prediction_error": 2},
+            evidence_refs=(),
+            rationale=(),
+        )
+        with self.assertRaisesRegex(ValueError, "cycle_id must match"):
+            self.coordinator.deliberate_follow_up(
+                "parent-open",
+                mappings,
+                cycle_id="cycle-follow-up",
+                investigation_store=self.store,
+                homeostatic_proposal=mismatch,
+            )
+
+    def test_homeostatic_cycle_must_match_and_explicit_pressure_overrides_derived(self):
+        proposal = HomeostaticProposal(
+            cycle_id="other-cycle",
+            adjustments={},
+            deviations={"prediction_error": 0.9},
+            persistence={"prediction_error": 3},
+            evidence_refs=(),
+            rationale=(),
+        )
+        with self.assertRaisesRegex(ValueError, "cycle_id must match"):
+            self.coordinator.deliberate(
+                self.mappings(), cycle_id="cycle-1", investigation_store=self.store,
+                homeostatic_proposal=proposal,
+            )
+
+        matching_proposal = HomeostaticProposal(
+            cycle_id="cycle-1", adjustments={},
+            deviations={"prediction_error": 0.9},
+            persistence={"prediction_error": 3}, evidence_refs=(), rationale=(),
+        )
+        result = self.coordinator.deliberate(
+            self.mappings(), cycle_id="cycle-1", investigation_store=self.store,
+            homeostatic_proposal=matching_proposal, stability_pressure=0.2,
+        )
+        self.assertAlmostEqual(0.2, result["stability_pressure"])
+        self.assertEqual("explicit", result["stability_pressure_source"])
+
+    def test_inferred_belief_evidence_is_preserved_in_selection_provenance(self):
+        self.model.update(
+            {"memory_gap": "tentative"},
+            cycle_id="belief-cycle",
+            evidence_refs={"memory_gap": "self-model:evidence-7"},
+            statuses={"memory_gap": "inferred"},
+            confidences={"memory_gap": 0.3},
+        )
+        result = self.coordinator.deliberate(
+            self.mappings(), cycle_id="cycle-1", investigation_store=self.store,
+        )
+        self.assertEqual("self-model:evidence-7", result["selected_provenance"]["belief_evidence_ref"])
+        self.assertIn("self-model:evidence-7", result["investigation"]["selection_reason"])
+
+    def test_invalid_homeostatic_adjustment_is_rejected(self):
+        proposal = HomeostaticProposal(
+            cycle_id="cycle-1",
+            adjustments={"curiosity": float("nan")},
+            deviations={},
+            persistence={},
+            evidence_refs=(),
+            rationale=(),
+        )
+        with self.assertRaisesRegex(ValueError, "finite number"):
+            self.coordinator.deliberate(
+                self.mappings(), cycle_id="cycle-1", investigation_store=self.store,
+                homeostatic_proposal=proposal,
+            )
+
+
+    def test_child_investigation_requires_an_existing_closed_parent(self):
+        self.store.start_investigation(
+            "parent-open-for-lineage",
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Initial investigation.",
+            cycle_id="cycle-parent",
+            goal_id="investigate_gap:memory-recall",
+        )
+        child_args = {
+            "gap_property": "memory_recall",
+            "question": "Does recall survive a restart?",
+            "hypothesis": "The index may persist.",
+            "selection_reason": "Follow-up investigation.",
+            "cycle_id": "cycle-child",
+            "goal_id": "follow_up:parent-open-for-lineage:restart",
+        }
+        with self.assertRaisesRegex(ValueError, "must refer to a closed"):
+            self.store.start_investigation(
+                "child-before-parent-close",
+                **child_args,
+                parent_investigation_id="parent-open-for-lineage",
+            )
+        with self.assertRaisesRegex(ValueError, "unknown parent_investigation_id"):
+            self.store.start_investigation(
+                "child-with-missing-parent",
+                **child_args,
+                parent_investigation_id="missing-parent",
+            )
+
+        self.store.close_investigation(
+            "parent-open-for-lineage",
+            outcome="partially_answered",
+            answer_summary="The initial benchmark was inconclusive.",
+            remaining_unknowns=["Does recall survive a restart?"],
+            cycle_id="cycle-parent-close",
+        )
+        child = self.store.start_investigation(
+            "child-after-parent-close",
+            **child_args,
+            parent_investigation_id="parent-open-for-lineage",
+        )
+        self.assertEqual(
+            "parent-open-for-lineage",
+            child["parent_investigation_id"],
+        )
+
+    def test_legacy_investigation_database_migrates_lineage_without_data_loss(self):
+        legacy_path = Path(self.tmp.name) / "legacy-curiosity.sqlite3"
+        connection = sqlite3.connect(legacy_path)
+        connection.execute(
+            """CREATE TABLE curiosity_investigations (
+                investigation_id TEXT PRIMARY KEY,
+                gap_property TEXT NOT NULL,
+                question TEXT NOT NULL,
+                question_key TEXT NOT NULL,
+                hypothesis TEXT NOT NULL,
+                selection_reason TEXT NOT NULL,
+                cycle_id TEXT NOT NULL,
+                goal_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+                outcome TEXT CHECK (outcome IS NULL OR outcome IN
+                    ('answered','partially_answered','unanswered','abandoned')),
+                answer_summary TEXT,
+                remaining_unknowns TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                closed_at TEXT
+            )"""
+        )
+        connection.execute(
+            """INSERT INTO curiosity_investigations
+            (investigation_id, gap_property, question, question_key, hypothesis,
+             selection_reason, cycle_id, goal_id, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "legacy-root", "memory_recall", "Does recall survive restart?",
+                "does recall survive restart?", "The index may persist.",
+                "Legacy investigation.", "legacy-cycle", "legacy-goal", "closed",
+            ),
+        )
+        connection.execute(
+            """INSERT INTO curiosity_investigations
+            (investigation_id, gap_property, question, question_key, hypothesis,
+             selection_reason, cycle_id, goal_id, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "legacy-second", "memory_recall", "Does load change recall?",
+                "does load change recall?", "Load may matter.",
+                "Second legacy investigation.", "legacy-cycle-2", "legacy-goal-2", "closed",
+            ),
+        )
+        connection.commit()
+        connection.close()
+
+        migrated = CuriosityInvestigationStore(legacy_path)
+        try:
+            record = migrated.get_investigation("legacy-root")
+            self.assertIsNone(record["parent_investigation_id"])
+            columns = {
+                row["name"]
+                for row in migrated._db.execute(
+                    "PRAGMA table_info(curiosity_investigations)"
+                )
+            }
+            self.assertIn("parent_investigation_id", columns)
+            self.assertIn("lineage_sequence", columns)
+            self.assertEqual(
+                [1, 2],
+                [item["lineage_sequence"] for item in migrated.history()],
+            )
+            self.assertEqual(
+                ["legacy-root", "legacy-second"],
+                [item["investigation_id"] for item in migrated.history()],
+            )
+            self.assertEqual([], migrated._db.execute(
+                "PRAGMA foreign_key_check"
+            ).fetchall())
+        finally:
+            migrated.close()
+
+
+    def test_investigation_lineage_foreign_key_rejects_orphans_and_parent_deletion(self):
+        parent_id = "lineage-fk-parent"
+        child_id = "lineage-fk-child"
+        self.store.start_investigation(
+            parent_id,
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Initial investigation.",
+            cycle_id="cycle-parent",
+            goal_id="investigate_gap:memory-recall",
+        )
+        self.store.close_investigation(
+            parent_id,
+            outcome="partially_answered",
+            answer_summary="The initial benchmark was inconclusive.",
+            remaining_unknowns=["Does recall survive restart?"],
+            cycle_id="cycle-parent-close",
+        )
+        self.store.start_investigation(
+            child_id,
+            gap_property="memory_recall",
+            question="Does recall survive restart?",
+            hypothesis="The index may persist.",
+            selection_reason="Follow-up investigation.",
+            cycle_id="cycle-child",
+            goal_id="follow_up:lineage-fk-parent:restart",
+            parent_investigation_id=parent_id,
+        )
+
+        self.assertEqual(
+            1,
+            self.store._db.execute("PRAGMA foreign_keys").fetchone()[0],
+        )
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.store._db.execute(
+                """INSERT INTO curiosity_investigations
+                (investigation_id, gap_property, question, question_key,
+                 hypothesis, selection_reason, cycle_id, goal_id,
+                 parent_investigation_id, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
+                (
+                    "orphan-lineage-child",
+                    "memory_recall",
+                    "Can an orphan be stored?",
+                    "can an orphan be stored?",
+                    "No parent exists.",
+                    "Foreign-key regression.",
+                    "cycle-orphan",
+                    "orphan-goal",
+                    "missing-lineage-parent",
+                ),
+            )
+        self.store._db.rollback()
+
+        with self.assertRaises(sqlite3.IntegrityError):
+            self.store._db.execute(
+                "DELETE FROM curiosity_investigations WHERE investigation_id=?",
+                (parent_id,),
+            )
+        self.store._db.rollback()
+
+        self.assertEqual(
+            parent_id,
+            self.store.get_investigation(child_id)["parent_investigation_id"],
+        )
+        self.assertEqual("closed", self.store.get_investigation(parent_id)["status"])
+
+    def test_investigation_lineage_returns_ancestors_and_descendants_in_stable_order(self):
+        self.store.start_investigation(
+            "lineage-root",
+            gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing may improve recall.",
+            selection_reason="Root investigation.",
+            cycle_id="cycle-root",
+            goal_id="goal-root",
+        )
+        self.store.close_investigation(
+            "lineage-root",
+            outcome="partially_answered",
+            answer_summary="The initial result left two questions.",
+            remaining_unknowns=["Does recall survive restart?", "Does recall survive load?"],
+            cycle_id="cycle-root-close",
+        )
+        self.store.start_investigation(
+            "lineage-child",
+            gap_property="memory_recall",
+            question="Does recall survive restart?",
+            hypothesis="The index may persist.",
+            selection_reason="First follow-up.",
+            cycle_id="cycle-child",
+            goal_id="goal-child",
+            parent_investigation_id="lineage-root",
+        )
+        self.store.close_investigation(
+            "lineage-child",
+            outcome="partially_answered",
+            answer_summary="Restart behavior was measured.",
+            remaining_unknowns=["Does recall survive repeated restarts?"],
+            cycle_id="cycle-child-close",
+        )
+        self.store.start_investigation(
+            "lineage-grandchild",
+            gap_property="memory_recall",
+            question="Does recall survive repeated restarts?",
+            hypothesis="The index may remain durable.",
+            selection_reason="Second-generation follow-up.",
+            cycle_id="cycle-grandchild",
+            goal_id="goal-grandchild",
+            parent_investigation_id="lineage-child",
+        )
+        self.store.start_investigation(
+            "lineage-sibling",
+            gap_property="memory_recall",
+            question="Does recall survive load?",
+            hypothesis="Load may change retrieval behavior.",
+            selection_reason="Sibling follow-up.",
+            cycle_id="cycle-sibling",
+            goal_id="goal-sibling",
+            parent_investigation_id="lineage-root",
+        )
+
+        root_lineage = self.store.investigation_lineage("lineage-root")
+        self.assertEqual("lineage-root", root_lineage["investigation"]["investigation_id"])
+        self.assertEqual([], root_lineage["ancestors"])
+        self.assertEqual(
+            ["lineage-child", "lineage-grandchild", "lineage-sibling"],
+            [item["investigation_id"] for item in root_lineage["descendants"]],
+        )
+
+        child_lineage = self.store.investigation_lineage("lineage-child")
+        self.assertEqual(
+            ["lineage-root"],
+            [item["investigation_id"] for item in child_lineage["ancestors"]],
+        )
+        self.assertEqual(
+            ["lineage-grandchild"],
+            [item["investigation_id"] for item in child_lineage["descendants"]],
+        )
+
+        grandchild_lineage = self.store.investigation_lineage("lineage-grandchild")
+        self.assertEqual(
+            ["lineage-root", "lineage-child"],
+            [item["investigation_id"] for item in grandchild_lineage["ancestors"]],
+        )
+        self.assertEqual([], grandchild_lineage["descendants"])
+        with self.assertRaisesRegex(ValueError, "unknown investigation_id"):
+            self.store.investigation_lineage("missing-lineage-record")
+
+
+    def test_investigation_order_survives_rowid_reassignment_and_vacuum(self):
+        self.store.start_investigation(
+            "stable-order-root",
+            gap_property="memory_recall",
+            question="Does retrieval remain stable?",
+            hypothesis="The index may preserve retrieval order.",
+            selection_reason="Root investigation.",
+            cycle_id="stable-root-cycle",
+            goal_id="stable-root-goal",
+        )
+        self.store.close_investigation(
+            "stable-order-root",
+            outcome="partially_answered",
+            answer_summary="The initial result was incomplete.",
+            remaining_unknowns=["Does order survive restart?", "Does order survive compaction?"],
+            cycle_id="stable-root-close",
+        )
+        expected = [
+            "stable-order-root",
+            "stable-order-child-1",
+            "stable-order-child-2",
+            "stable-order-child-3",
+        ]
+        for index, investigation_id in enumerate(expected[1:], start=1):
+            self.store.start_investigation(
+                investigation_id,
+                gap_property="memory_recall",
+                question=f"Which ordering property does child {index} test?",
+                hypothesis=f"Child {index} may preserve order.",
+                selection_reason=f"Follow-up {index}.",
+                cycle_id=f"stable-child-cycle-{index}",
+                goal_id=f"stable-child-goal-{index}",
+                parent_investigation_id="stable-order-root",
+            )
+
+        self.assertEqual(expected, [
+            item["investigation_id"] for item in self.store.history()
+        ])
+        self.store._db.execute(
+            "UPDATE curiosity_investigations SET rowid = 1000000 - rowid"
+        )
+        self.store._db.commit()
+        self.assertNotEqual(
+            expected,
+            [
+                row["investigation_id"]
+                for row in self.store._db.execute(
+                    "SELECT investigation_id FROM curiosity_investigations ORDER BY rowid"
+                ).fetchall()
+            ],
+        )
+        self.assertEqual(expected, [
+            item["investigation_id"] for item in self.store.history()
+        ])
+        self.assertEqual(
+            expected[1:],
+            [
+                item["investigation_id"]
+                for item in self.store.investigation_lineage("stable-order-root")["descendants"]
+            ],
+        )
+
+        database = self.store.path
+        self.store.close()
+        self.store = CuriosityInvestigationStore(database)
+        self.store._db.execute("VACUUM")
+        self.assertEqual(expected, [
+            item["investigation_id"] for item in self.store.history()
+        ])
+        self.assertEqual(
+            expected[1:],
+            [
+                item["investigation_id"]
+                for item in self.store.investigation_lineage("stable-order-root")["descendants"]
+            ],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

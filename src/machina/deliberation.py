@@ -6,7 +6,7 @@ phenomenal consciousness, subjective desire, or philosophical free will.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Iterable, Mapping
 
 from .autonomy import (
     AutonomyContext,
@@ -90,6 +90,8 @@ class InternalDeliberator:
         recent_goal_ids: tuple[str, ...] | list[str] = (),
         open_goal_limit: int = 20,
         strategy_guidance: dict[str, Any] | None = None,
+        additional_candidates: Iterable[GoalCandidate] = (),
+        additional_sources: Mapping[str, str] | None = None,
     ) -> DeliberationDecision:
         """Run one cycle and return the selected focus with score rationale."""
         if isinstance(open_goal_limit, bool) or not isinstance(open_goal_limit, int) or open_goal_limit < 1:
@@ -111,11 +113,40 @@ class InternalDeliberator:
         if motivation is not None:
             candidates.extend(self.controller.generate_motivational_goals(motivation))
 
+        extra_candidates = tuple(additional_candidates)
+        if any(not isinstance(goal, GoalCandidate) for goal in extra_candidates):
+            raise TypeError("additional_candidates must contain only GoalCandidate values")
+        extra_ids = {goal.goal_id for goal in extra_candidates}
+        if len(extra_ids) != len(extra_candidates):
+            raise ValueError("additional candidate goal_id values must be unique")
+        source_map = dict(additional_sources or {})
+        if set(source_map) - extra_ids:
+            raise ValueError("additional_sources may only name additional candidate IDs")
+        if any(
+            not isinstance(goal_id, str) or not goal_id.strip()
+            or not isinstance(source, str) or not source.strip()
+            for goal_id, source in source_map.items()
+        ):
+            raise ValueError("additional source IDs and names must be non-empty strings")
+
         # Prefer the durable representation when a proposal matches an already
         # open goal. This prevents duplicate candidates and preserves its progress.
         candidates_by_id = {goal.goal_id: goal for goal in candidates}
         for record in records:
             candidates_by_id[record["goal_id"]] = self._from_persistent(record)
+        for goal in extra_candidates:
+            existing_candidate = candidates_by_id.get(goal.goal_id)
+            if existing_candidate is not None:
+                if (
+                    goal.goal_id not in persistent_by_goal
+                    and existing_candidate != goal
+                ):
+                    raise ValueError(
+                        f"additional candidate conflicts with existing goal: {goal.goal_id}"
+                    )
+                # A persistent commitment remains authoritative when IDs match.
+                continue
+            candidates_by_id[goal.goal_id] = goal
 
         adjustments = dict(drive_adjustments or {})
         if motivation is not None and hasattr(motivation, "temporal_autonomy_adjustments"):
@@ -139,7 +170,7 @@ class InternalDeliberator:
                 source = "persistent"
                 record_id = int(existing["id"])
             else:
-                source = "generated"
+                source = source_map.get(selected.goal_id, "generated")
                 persisted = self.goals.register(selected)
                 record_id = int(persisted["id"])
 

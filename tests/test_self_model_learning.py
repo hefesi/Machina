@@ -1,5 +1,8 @@
 import tempfile
+import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from machina.autonomy import GoalCandidate
@@ -81,11 +84,292 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             self.assertEqual("inferred", self.model.beliefs["memory_recall"]["status"])
             self.assertEqual("mixed", self.model.beliefs["memory_recall"]["value"]["assessment"])
             repeated = self.bridge.review_curiosity_investigation(
-                store, "inv-review", review_id="review-2", cycle_id="c5",
+                store, "inv-review", review_id="review-2", cycle_id="c4",
                 evidence_assessments=assessments, apply_to_self_model=True,
             )
             self.assertTrue(repeated["already_reviewed"])
+            self.assertTrue(repeated["self_model_updated"])
+            self.assertFalse(repeated["self_model_update_performed_now"])
             self.assertEqual(0, len(self.model.belief_revision_history))
+            changed = {
+                **assessments,
+                "e1": {
+                    "classification": "contradict",
+                    "confidence": 0.9,
+                    "rationale": "Changed assessment under the same review ID",
+                },
+            }
+            with self.assertRaisesRegex(ValueError, "different review input"):
+                self.bridge.review_curiosity_investigation(
+                    store, "inv-review", review_id="review-2", cycle_id="c4",
+                    evidence_assessments=changed, apply_to_self_model=True,
+                )
+        finally:
+            store.close()
+
+    def test_curiosity_review_replay_reconciles_restored_self_model(self):
+        from machina.curiosity import CuriosityInvestigationStore
+
+        store = CuriosityInvestigationStore(Path(self.tmp.name) / "review-restored-model.sqlite3")
+        try:
+            store.start_investigation(
+                "inv-restored", gap_property="memory_recall",
+                question="Does indexing improve recall?",
+                hypothesis="Indexing improves recall", selection_reason="test",
+                cycle_id="c1", goal_id="g1",
+            )
+            store.record_evidence(
+                "inv-restored", evidence_ref="e1",
+                finding="A controlled benchmark showed improvement", cycle_id="c2",
+            )
+            store.record_evidence(
+                "inv-restored", evidence_ref="e2",
+                finding="An independent replication showed improvement", cycle_id="c2",
+            )
+            assessments = {
+                "e1": {
+                    "classification": "support", "confidence": 0.9,
+                    "rationale": "Controlled benchmark comparison",
+                },
+                "e2": {
+                    "classification": "support", "confidence": 0.85,
+                    "rationale": "Independent replication",
+                },
+            }
+            pre_review_snapshot = self.model.snapshot()
+            first = self.bridge.review_curiosity_investigation(
+                store, "inv-restored", review_id="durable-review",
+                cycle_id="c3", evidence_assessments=assessments,
+                apply_to_self_model=True,
+            )
+            self.assertTrue(first["self_model_updated"])
+
+            restored_model = SelfModel.from_snapshot(pre_review_snapshot)
+            restored_bridge = SelfModelLearningBridge(restored_model, self.learner)
+            replayed = restored_bridge.review_curiosity_investigation(
+                store, "inv-restored", review_id="durable-review",
+                cycle_id="c3", evidence_assessments=assessments,
+                apply_to_self_model=True,
+            )
+            self.assertTrue(replayed["already_reviewed"])
+            self.assertTrue(replayed["self_model_update_replayed_now"])
+            self.assertTrue(replayed["self_model_update_performed_now"])
+            belief = restored_model.beliefs["memory_recall"]
+            self.assertEqual("durable-review", belief["value"]["review_id"])
+            self.assertEqual("inferred", belief["status"])
+
+            repeated = restored_bridge.review_curiosity_investigation(
+                store, "inv-restored", review_id="durable-review",
+                cycle_id="c3", evidence_assessments=assessments,
+                apply_to_self_model=True,
+            )
+            self.assertTrue(repeated["already_reviewed"])
+            self.assertFalse(repeated["self_model_update_replayed_now"])
+            self.assertFalse(repeated["self_model_update_performed_now"])
+            self.assertEqual(belief, restored_model.beliefs["memory_recall"])
+        finally:
+            store.close()
+
+    def test_curiosity_review_recovers_after_model_update_before_ledger_write(self):
+        from machina.curiosity import CuriosityInvestigationStore
+
+        store = CuriosityInvestigationStore(Path(self.tmp.name) / "review-recovery.sqlite3")
+        try:
+            self.model.update(
+                {"memory_recall": "tentative"},
+                cycle_id="initial",
+                evidence_refs={"memory_recall": "initial-evidence"},
+                statuses={"memory_recall": "inferred"},
+                confidences={"memory_recall": 0.4},
+            )
+            store.start_investigation(
+                "inv-recovery", gap_property="memory_recall",
+                question="Does indexing improve recall?",
+                hypothesis="Indexing improves recall", selection_reason="test",
+                cycle_id="c1", goal_id="g1",
+            )
+            store.record_evidence(
+                "inv-recovery", evidence_ref="e1",
+                finding="Recall improved in a controlled benchmark", cycle_id="c2",
+            )
+            store.record_evidence(
+                "inv-recovery", evidence_ref="e2",
+                finding="An independent replication also improved recall", cycle_id="c2",
+            )
+            assessments = {
+                "e1": {
+                    "classification": "support",
+                    "confidence": 0.9,
+                    "rationale": "Controlled benchmark comparison",
+                },
+                "e2": {
+                    "classification": "support",
+                    "confidence": 0.85,
+                    "rationale": "Independent replication",
+                },
+            }
+            original_record_review = store.record_review
+
+            def fail_review_write(*args, **kwargs):
+                raise RuntimeError("simulated review-ledger write failure")
+
+            store.record_review = fail_review_write
+            with self.assertRaisesRegex(RuntimeError, "simulated review-ledger"):
+                self.bridge.review_curiosity_investigation(
+                    store, "inv-recovery", review_id="recoverable-review",
+                    cycle_id="c3", evidence_assessments=assessments,
+                    apply_to_self_model=True,
+                )
+            self.assertEqual(1, len(self.model.belief_revision_history))
+            store.record_review = original_record_review
+
+            # A later review may supersede the belief before the failed first
+            # review is retried. Recovery must recognize the first review in
+            # the previous side of the later revision and must not roll back
+            # the newer belief.
+            later_assessments = {
+                "e1": {
+                    "classification": "contradict",
+                    "confidence": 0.9,
+                    "rationale": "A later contradictory replication",
+                },
+                "e2": {
+                    "classification": "contradict",
+                    "confidence": 0.85,
+                    "rationale": "A second contradictory replication",
+                },
+            }
+            later = self.bridge.review_curiosity_investigation(
+                store, "inv-recovery", review_id="later-review",
+                cycle_id="c4", evidence_assessments=later_assessments,
+                apply_to_self_model=True,
+            )
+            self.assertTrue(later["self_model_updated"])
+            self.assertEqual(2, len(self.model.belief_revision_history))
+
+            recovered = self.bridge.review_curiosity_investigation(
+                store, "inv-recovery", review_id="recoverable-review",
+                cycle_id="c3", evidence_assessments=assessments,
+                apply_to_self_model=True,
+            )
+            self.assertTrue(recovered["self_model_updated"])
+            self.assertTrue(recovered["self_model_update_recovered"])
+            self.assertFalse(recovered["self_model_update_performed_now"])
+            self.assertEqual(2, len(self.model.belief_revision_history))
+            self.assertEqual(
+                "later-review",
+                self.model.beliefs["memory_recall"]["value"]["review_id"],
+            )
+            self.assertIsNotNone(store.find_review("recoverable-review"))
+        finally:
+            store.close()
+
+    def test_concurrent_curiosity_review_id_applies_self_model_once(self):
+        from machina.curiosity import CuriosityInvestigationStore
+
+        database = Path(self.tmp.name) / "review-concurrent.sqlite3"
+        setup = CuriosityInvestigationStore(database)
+        setup.start_investigation(
+            "inv-concurrent", gap_property="memory_recall",
+            question="Does indexing improve recall?",
+            hypothesis="Indexing improves recall", selection_reason="test",
+            cycle_id="c1", goal_id="g1",
+        )
+        setup.record_evidence(
+            "inv-concurrent", evidence_ref="e1",
+            finding="A controlled benchmark showed improvement", cycle_id="c2",
+        )
+        setup.record_evidence(
+            "inv-concurrent", evidence_ref="e2",
+            finding="An independent replication showed improvement", cycle_id="c2",
+        )
+        setup.close()
+        self.model.update(
+            {"memory_recall": "tentative"},
+            cycle_id="initial",
+            evidence_refs={"memory_recall": "initial-evidence"},
+            statuses={"memory_recall": "inferred"},
+            confidences={"memory_recall": 0.4},
+        )
+        original_revise = self.model.revise_belief
+
+        def slow_revise(*args, **kwargs):
+            # Keep the first reviewer inside the mutation window long enough
+            # for the second independent SQLite connection to contend.
+            time.sleep(0.05)
+            return original_revise(*args, **kwargs)
+
+        self.model.revise_belief = slow_revise
+        assessments = {
+            "e1": {
+                "classification": "support", "confidence": 0.9,
+                "rationale": "Controlled benchmark comparison",
+            },
+            "e2": {
+                "classification": "support", "confidence": 0.85,
+                "rationale": "Independent replication",
+            },
+        }
+        barrier = threading.Barrier(2)
+
+        def review(_):
+            store = CuriosityInvestigationStore(database)
+            bridge = SelfModelLearningBridge(self.model, self.learner)
+            try:
+                barrier.wait(timeout=5)
+                return bridge.review_curiosity_investigation(
+                    store, "inv-concurrent", review_id="shared-review",
+                    cycle_id="c3", evidence_assessments=assessments,
+                    apply_to_self_model=True,
+                )
+            finally:
+                store.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(review, range(2)))
+
+        self.assertEqual(1, sum(not item["already_reviewed"] for item in results))
+        self.assertEqual(1, sum(item["already_reviewed"] for item in results))
+        self.assertEqual(1, sum(item["self_model_update_performed_now"] for item in results))
+        self.assertEqual(1, len(self.model.belief_revision_history))
+        verification = CuriosityInvestigationStore(database)
+        try:
+            persisted = verification.find_review("shared-review")
+            self.assertIsNotNone(persisted)
+            self.assertEqual("memory_recall", persisted["report"]["belief_property"])
+        finally:
+            verification.close()
+
+    def test_curiosity_review_requires_non_empty_cycle_id_and_safe_classification(self):
+        from machina.curiosity import CuriosityInvestigationStore
+
+        store = CuriosityInvestigationStore(Path(self.tmp.name) / "review-validation.sqlite3")
+        try:
+            store.start_investigation(
+                "inv-validation", gap_property="capability",
+                question="Can it do X?", hypothesis="It can do X",
+                selection_reason="test", cycle_id="c1", goal_id="g1",
+            )
+            store.record_evidence(
+                "inv-validation", evidence_ref="e1",
+                finding="A measured result", cycle_id="c2",
+            )
+            with self.assertRaisesRegex(ValueError, "cycle_id must be a non-empty string"):
+                self.bridge.review_curiosity_investigation(
+                    store, "inv-validation", review_id="invalid-cycle",
+                    cycle_id=" ", evidence_assessments={},
+                )
+            with self.assertRaisesRegex(ValueError, "classification must be"):
+                self.bridge.review_curiosity_investigation(
+                    store, "inv-validation", review_id="invalid-classification",
+                    cycle_id="c3",
+                    evidence_assessments={
+                        "e1": {
+                            "classification": ["support"],
+                            "rationale": "Malformed classification",
+                        }
+                    },
+                )
         finally:
             store.close()
 

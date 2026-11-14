@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Iterator
 
 
 class CuriosityInvestigationStore:
@@ -38,6 +39,8 @@ class CuriosityInvestigationStore:
                 selection_reason TEXT NOT NULL,
                 cycle_id TEXT NOT NULL,
                 goal_id TEXT NOT NULL,
+                parent_investigation_id TEXT REFERENCES curiosity_investigations(investigation_id),
+                lineage_sequence INTEGER,
                 status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
                 outcome TEXT CHECK (outcome IS NULL OR outcome IN
                     ('answered','partially_answered','unanswered','abandoned')),
@@ -75,10 +78,101 @@ class CuriosityInvestigationStore:
             );
             """
         )
-        self._db.commit()
+        # Additive migrations keep historical investigations intact. The explicit
+        # sequence preserves insertion order even if SQLite later rewrites rowids
+        # (for example during VACUUM). Existing databases avoid a write lock on
+        # every open; only connections that observe incomplete migration work
+        # enter the serialized schema-upgrade transaction.
+        columns = {
+            row["name"]
+            for row in self._db.execute("PRAGMA table_info(curiosity_investigations)")
+        }
+        indexes = {
+            row["name"]
+            for row in self._db.execute("PRAGMA index_list(curiosity_investigations)")
+        }
+        needs_migration = (
+            "parent_investigation_id" not in columns
+            or "lineage_sequence" not in columns
+            or "idx_curiosity_lineage_sequence" not in indexes
+            or "idx_curiosity_parent_investigation" not in indexes
+        )
+        if "lineage_sequence" in columns:
+            needs_migration = needs_migration or (
+                self._db.execute(
+                    "SELECT 1 FROM curiosity_investigations "
+                    "WHERE lineage_sequence IS NULL LIMIT 1"
+                ).fetchone() is not None
+            )
+        if needs_migration:
+            self._db.execute("BEGIN IMMEDIATE")
+            try:
+                columns = {
+                    row["name"]
+                    for row in self._db.execute("PRAGMA table_info(curiosity_investigations)")
+                }
+                if "parent_investigation_id" not in columns:
+                    self._db.execute(
+                        "ALTER TABLE curiosity_investigations "
+                        "ADD COLUMN parent_investigation_id TEXT "
+                        "REFERENCES curiosity_investigations(investigation_id)"
+                    )
+                if "lineage_sequence" not in columns:
+                    self._db.execute(
+                        "ALTER TABLE curiosity_investigations ADD COLUMN lineage_sequence INTEGER"
+                    )
+
+                next_sequence = self._db.execute(
+                    "SELECT COALESCE(MAX(lineage_sequence), 0) + 1 "
+                    "FROM curiosity_investigations"
+                ).fetchone()[0]
+                legacy_rows = self._db.execute(
+                    "SELECT investigation_id FROM curiosity_investigations "
+                    "WHERE lineage_sequence IS NULL ORDER BY rowid"
+                ).fetchall()
+                for row in legacy_rows:
+                    self._db.execute(
+                        "UPDATE curiosity_investigations SET lineage_sequence=? "
+                        "WHERE investigation_id=?",
+                        (next_sequence, row["investigation_id"]),
+                    )
+                    next_sequence += 1
+
+                self._db.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS idx_curiosity_lineage_sequence "
+                    "ON curiosity_investigations(lineage_sequence)"
+                )
+                self._db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_curiosity_parent_investigation "
+                    "ON curiosity_investigations(parent_investigation_id)"
+                )
+                self._db.commit()
+            except Exception:
+                self._db.rollback()
+                raise
 
     def close(self) -> None:
         self._db.close()
+
+    @contextmanager
+    def review_transaction(self) -> Iterator[None]:
+        """Serialize review lookup, model update and immutable report write.
+
+        The immediate transaction is held across the caller's self-model
+        mutation so independent connections cannot apply the same review ID
+        concurrently. The self-model and investigation ledger are still
+        separate stores; retry recovery remains necessary after a process
+        failure between their writes.
+        """
+        if self._db.in_transaction:
+            raise RuntimeError("curiosity review transaction cannot be nested")
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            yield
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
 
     @staticmethod
     def _label(value: str, name: str) -> str:
@@ -112,6 +206,7 @@ class CuriosityInvestigationStore:
         selection_reason: str,
         cycle_id: str,
         goal_id: str,
+        parent_investigation_id: str | None = None,
     ) -> dict[str, Any]:
         key = self._label(investigation_id, "investigation_id")
         prop = self._label(gap_property, "gap_property")
@@ -120,13 +215,39 @@ class CuriosityInvestigationStore:
         reason = self._label(selection_reason, "selection_reason")
         cycle = self._label(cycle_id, "cycle_id")
         goal = self._label(goal_id, "goal_id")
+        parent_key = (
+            self._label(parent_investigation_id, "parent_investigation_id")
+            if parent_investigation_id is not None else None
+        )
+        if self._db.in_transaction:
+            raise RuntimeError("start_investigation cannot run inside an existing transaction")
+        self._db.execute("BEGIN IMMEDIATE")
         try:
+            if parent_key is not None:
+                if parent_key == key:
+                    raise ValueError("an investigation cannot be its own parent")
+                parent = self._db.execute(
+                    "SELECT status FROM curiosity_investigations WHERE investigation_id=?",
+                    (parent_key,),
+                ).fetchone()
+                if parent is None:
+                    raise ValueError("unknown parent_investigation_id")
+                if parent["status"] != "closed":
+                    raise ValueError("parent_investigation_id must refer to a closed investigation")
+            next_sequence = self._db.execute(
+                "SELECT COALESCE(MAX(lineage_sequence), 0) + 1 "
+                "FROM curiosity_investigations"
+            ).fetchone()[0]
             self._db.execute(
                 """INSERT INTO curiosity_investigations
                 (investigation_id, gap_property, question, question_key,
-                 hypothesis, selection_reason, cycle_id, goal_id, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
-                (key, prop, prompt, self._question_key(prompt), theory, reason, cycle, goal),
+                 hypothesis, selection_reason, cycle_id, goal_id,
+                 parent_investigation_id, lineage_sequence, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')""",
+                (
+                    key, prop, prompt, self._question_key(prompt), theory, reason,
+                    cycle, goal, parent_key, next_sequence,
+                ),
             )
             self._db.commit()
         except sqlite3.IntegrityError as exc:
@@ -134,6 +255,9 @@ class CuriosityInvestigationStore:
             raise ValueError(
                 "investigation_id already exists or an equivalent question is already open"
             ) from exc
+        except Exception:
+            self._db.rollback()
+            raise
         return self.get_investigation(key)
 
     def record_evidence(
@@ -144,14 +268,23 @@ class CuriosityInvestigationStore:
         finding: str,
         cycle_id: str,
     ) -> dict[str, Any]:
+        """Append evidence only while the investigation is still open.
+
+        Reserve the SQLite write lock before reading lifecycle status. This
+        prevents a concurrent close from committing between the status check
+        and the evidence insert.
+        """
         key = self._label(investigation_id, "investigation_id")
         ref = self._label(evidence_ref, "evidence_ref")
         note = self._label(finding, "finding")
         cycle = self._label(cycle_id, "cycle_id")
-        investigation = self.get_investigation(key)
-        if investigation["status"] != "open":
-            raise ValueError("cannot add evidence to a closed investigation")
+        if self._db.in_transaction:
+            raise RuntimeError("record_evidence cannot run inside an existing transaction")
+        self._db.execute("BEGIN IMMEDIATE")
         try:
+            investigation = self.get_investigation(key)
+            if investigation["status"] != "open":
+                raise ValueError("cannot add evidence to a closed investigation")
             cursor = self._db.execute(
                 """INSERT INTO curiosity_evidence
                 (investigation_id, evidence_ref, finding, cycle_id)
@@ -162,6 +295,9 @@ class CuriosityInvestigationStore:
         except sqlite3.IntegrityError as exc:
             self._db.rollback()
             raise ValueError("evidence_ref has already been recorded for this investigation") from exc
+        except Exception:
+            self._db.rollback()
+            raise
         return {
             "record_id": int(cursor.lastrowid), "investigation_id": key,
             "evidence_ref": ref, "finding": note, "cycle_id": cycle,
@@ -183,53 +319,73 @@ class CuriosityInvestigationStore:
         summary = self._label(answer_summary, "answer_summary")
         unknowns = self._unknowns(remaining_unknowns)
         cycle = self._label(cycle_id, "cycle_id")
-        cursor = self._db.execute(
-            """UPDATE curiosity_investigations
-            SET status='closed', outcome=?, answer_summary=?,
-                remaining_unknowns=?, closed_at=CURRENT_TIMESTAMP
-            WHERE investigation_id=? AND status='open'""",
-            (result, summary, json.dumps(unknowns, ensure_ascii=False), key),
-        )
-        if cursor.rowcount != 1:
+        if self._db.in_transaction:
+            raise RuntimeError("close_investigation cannot run inside an existing transaction")
+
+        # Serialize the status transition and its immutable closure event. If
+        # either write fails, both changes roll back and the store remains usable.
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            cursor = self._db.execute(
+                """UPDATE curiosity_investigations
+                SET status='closed', outcome=?, answer_summary=?,
+                    remaining_unknowns=?, closed_at=CURRENT_TIMESTAMP
+                WHERE investigation_id=? AND status='open'""",
+                (result, summary, json.dumps(unknowns, ensure_ascii=False), key),
+            )
+            if cursor.rowcount != 1:
+                exists = self._db.execute(
+                    "SELECT 1 FROM curiosity_investigations WHERE investigation_id=?",
+                    (key,),
+                ).fetchone()
+                if exists is None:
+                    raise ValueError("unknown investigation_id")
+                raise ValueError("investigation is already closed")
+
+            self._db.execute(
+                """CREATE TABLE IF NOT EXISTS curiosity_closures (
+                    investigation_id TEXT PRIMARY KEY REFERENCES
+                        curiosity_investigations(investigation_id),
+                    cycle_id TEXT NOT NULL,
+                    closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            self._db.execute(
+                "INSERT INTO curiosity_closures (investigation_id, cycle_id) VALUES (?, ?)",
+                (key, cycle),
+            )
+            self._db.commit()
+        except Exception:
             self._db.rollback()
-            if self._db.execute(
-                "SELECT 1 FROM curiosity_investigations WHERE investigation_id=?", (key,)
-            ).fetchone() is None:
-                raise ValueError("unknown investigation_id")
-            raise ValueError("investigation is already closed")
-        # Record the closing cycle in a dedicated immutable lifecycle event.
-        self._db.execute(
-            """CREATE TABLE IF NOT EXISTS curiosity_closures (
-                investigation_id TEXT PRIMARY KEY REFERENCES
-                    curiosity_investigations(investigation_id),
-                cycle_id TEXT NOT NULL,
-                closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )"""
-        )
-        self._db.execute(
-            "INSERT INTO curiosity_closures (investigation_id, cycle_id) VALUES (?, ?)",
-            (key, cycle),
-        )
-        self._db.commit()
+            raise
         return self.get_investigation(key)
 
     def record_review(self, review_id: str, investigation_id: str, report: dict[str, Any]) -> dict[str, Any]:
         """Persist one immutable assessment report per caller-supplied review ID."""
         review = self._label(review_id, "review_id")
         key = self._label(investigation_id, "investigation_id")
-        self.get_investigation(key)
         if not isinstance(report, dict):
             raise ValueError("report must be a mapping")
         payload = json.dumps(report, ensure_ascii=False, sort_keys=True, allow_nan=False)
+        owns_transaction = not self._db.in_transaction
+        if owns_transaction:
+            self._db.execute("BEGIN IMMEDIATE")
         try:
+            self.get_investigation(key)
             self._db.execute(
                 "INSERT INTO curiosity_reviews (review_id, investigation_id, report) VALUES (?, ?, ?)",
                 (review, key, payload),
             )
-            self._db.commit()
+            if owns_transaction:
+                self._db.commit()
         except sqlite3.IntegrityError as exc:
-            self._db.rollback()
+            if owns_transaction:
+                self._db.rollback()
             raise ValueError("review_id already exists") from exc
+        except Exception:
+            if owns_transaction:
+                self._db.rollback()
+            raise
         return self.get_review(review)
 
     def get_review(self, review_id: str) -> dict[str, Any]:
@@ -271,11 +427,83 @@ class CuriosityInvestigationStore:
         result["closed_cycle_id"] = closure["cycle_id"] if closure else None
         return result
 
+    def investigation_lineage(self, investigation_id: str) -> dict[str, Any]:
+        """Return one investigation's ancestors and descendants from durable lineage.
+
+        Ancestors are ordered oldest-first; descendants follow insertion order,
+        which is parent-before-child because a parent must be closed before a
+        child can be created. Recursive UNION deduplicates IDs, so even a
+        malformed legacy cycle cannot make the query recurse indefinitely.
+        The read transaction keeps all three result groups on one snapshot.
+        """
+        key = self._label(investigation_id, "investigation_id")
+        if self._db.in_transaction:
+            raise RuntimeError("investigation_lineage cannot run inside an existing transaction")
+        self._db.execute("BEGIN")
+        try:
+            root = self.get_investigation(key)
+            ancestor_rows = self._db.execute(
+                """WITH RECURSIVE ancestor_ids(investigation_id) AS (
+                    SELECT parent_investigation_id
+                    FROM curiosity_investigations
+                    WHERE investigation_id=? AND parent_investigation_id IS NOT NULL
+                    UNION
+                    SELECT parent.parent_investigation_id
+                    FROM curiosity_investigations AS parent
+                    JOIN ancestor_ids AS current
+                      ON parent.investigation_id = current.investigation_id
+                    WHERE parent.parent_investigation_id IS NOT NULL
+                )
+                SELECT investigation_id
+                FROM curiosity_investigations
+                WHERE investigation_id IN (
+                    SELECT investigation_id FROM ancestor_ids
+                ) AND investigation_id <> ?
+                ORDER BY lineage_sequence ASC""",
+                (key, key),
+            ).fetchall()
+            descendant_rows = self._db.execute(
+                """WITH RECURSIVE descendant_ids(investigation_id) AS (
+                    SELECT investigation_id
+                    FROM curiosity_investigations
+                    WHERE investigation_id=?
+                    UNION
+                    SELECT child.investigation_id
+                    FROM curiosity_investigations AS child
+                    JOIN descendant_ids AS parent
+                      ON child.parent_investigation_id = parent.investigation_id
+                )
+                SELECT investigation_id
+                FROM curiosity_investigations
+                WHERE investigation_id IN (
+                    SELECT investigation_id FROM descendant_ids
+                ) AND investigation_id <> ?
+                ORDER BY lineage_sequence ASC""",
+                (key, key),
+            ).fetchall()
+            ancestors = [
+                self.get_investigation(row["investigation_id"])
+                for row in ancestor_rows
+            ]
+            descendants = [
+                self.get_investigation(row["investigation_id"])
+                for row in descendant_rows
+            ]
+            self._db.commit()
+        except Exception:
+            self._db.rollback()
+            raise
+        return {
+            "investigation": root,
+            "ancestors": ancestors,
+            "descendants": descendants,
+        }
+
     def open_investigations(self) -> list[dict[str, Any]]:
         """Return all open investigations in creation order for goal generation."""
         rows = self._db.execute(
             "SELECT investigation_id FROM curiosity_investigations "
-            "WHERE status='open' ORDER BY rowid"
+            "WHERE status='open' ORDER BY lineage_sequence"
         ).fetchall()
         return [self.get_investigation(row["investigation_id"]) for row in rows]
 
@@ -285,7 +513,7 @@ class CuriosityInvestigationStore:
         if gap_property is not None:
             query += " WHERE gap_property=?"
             params = (self._label(gap_property, "gap_property"),)
-        query += " ORDER BY rowid"
+        query += " ORDER BY lineage_sequence"
         return [self.get_investigation(row["investigation_id"])
                 for row in self._db.execute(query, params).fetchall()]
 

@@ -321,8 +321,8 @@ class PersistentGoalStore:
         """Persist one deliberation and its evidence for continuity across restarts."""
         if selected_goal_id is not None and (not isinstance(selected_goal_id, str) or not selected_goal_id.strip()):
             raise ValueError("selected_goal_id must be a non-empty string or None")
-        if selected_source not in {None, "generated", "persistent"}:
-            raise ValueError("selected_source must be generated, persistent, or None")
+        if selected_source not in {None, "generated", "persistent", "curiosity"}:
+            raise ValueError("selected_source must be generated, persistent, curiosity, or None")
         if not isinstance(rationale, str) or not rationale.strip():
             raise ValueError("rationale must be non-empty")
         if not isinstance(alternatives, list) or not isinstance(context, dict):
