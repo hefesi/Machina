@@ -211,7 +211,7 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
             goal_id="close-rollback-goal",
         )
         self.store._db.execute(
-            """CREATE TABLE curiosity_closures (
+            """CREATE TABLE IF NOT EXISTS curiosity_closures (
                 investigation_id TEXT PRIMARY KEY REFERENCES
                     curiosity_investigations(investigation_id),
                 cycle_id TEXT NOT NULL,
