@@ -511,6 +511,17 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
                 "Legacy investigation.", "legacy-cycle", "legacy-goal", "closed",
             ),
         )
+        connection.execute(
+            """INSERT INTO curiosity_investigations
+            (investigation_id, gap_property, question, question_key, hypothesis,
+             selection_reason, cycle_id, goal_id, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                "legacy-second", "memory_recall", "Does load change recall?",
+                "does load change recall?", "Load may matter.",
+                "Second legacy investigation.", "legacy-cycle-2", "legacy-goal-2", "closed",
+            ),
+        )
         connection.commit()
         connection.close()
 
@@ -525,9 +536,15 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
                 )
             }
             self.assertIn("parent_investigation_id", columns)
-            self.assertEqual(["legacy-root"], [
-                item["investigation_id"] for item in migrated.history()
-            ])
+            self.assertIn("lineage_sequence", columns)
+            self.assertEqual(
+                [1, 2],
+                [item["lineage_sequence"] for item in migrated.history()],
+            )
+            self.assertEqual(
+                ["legacy-root", "legacy-second"],
+                [item["investigation_id"] for item in migrated.history()],
+            )
             self.assertEqual([], migrated._db.execute(
                 "PRAGMA foreign_key_check"
             ).fetchall())
@@ -684,6 +701,84 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         self.assertEqual([], grandchild_lineage["descendants"])
         with self.assertRaisesRegex(ValueError, "unknown investigation_id"):
             self.store.investigation_lineage("missing-lineage-record")
+
+
+    def test_investigation_order_survives_rowid_reassignment_and_vacuum(self):
+        self.store.start_investigation(
+            "stable-order-root",
+            gap_property="memory_recall",
+            question="Does retrieval remain stable?",
+            hypothesis="The index may preserve retrieval order.",
+            selection_reason="Root investigation.",
+            cycle_id="stable-root-cycle",
+            goal_id="stable-root-goal",
+        )
+        self.store.close_investigation(
+            "stable-order-root",
+            outcome="partially_answered",
+            answer_summary="The initial result was incomplete.",
+            remaining_unknowns=["Does order survive restart?", "Does order survive compaction?"],
+            cycle_id="stable-root-close",
+        )
+        expected = [
+            "stable-order-root",
+            "stable-order-child-1",
+            "stable-order-child-2",
+            "stable-order-child-3",
+        ]
+        for index, investigation_id in enumerate(expected[1:], start=1):
+            self.store.start_investigation(
+                investigation_id,
+                gap_property="memory_recall",
+                question=f"Which ordering property does child {index} test?",
+                hypothesis=f"Child {index} may preserve order.",
+                selection_reason=f"Follow-up {index}.",
+                cycle_id=f"stable-child-cycle-{index}",
+                goal_id=f"stable-child-goal-{index}",
+                parent_investigation_id="stable-order-root",
+            )
+
+        self.assertEqual(expected, [
+            item["investigation_id"] for item in self.store.history()
+        ])
+        self.store._db.execute(
+            "UPDATE curiosity_investigations SET rowid = 1000000 - rowid"
+        )
+        self.store._db.commit()
+        self.assertNotEqual(
+            expected,
+            [
+                row["investigation_id"]
+                for row in self.store._db.execute(
+                    "SELECT investigation_id FROM curiosity_investigations ORDER BY rowid"
+                ).fetchall()
+            ],
+        )
+        self.assertEqual(expected, [
+            item["investigation_id"] for item in self.store.history()
+        ])
+        self.assertEqual(
+            expected[1:],
+            [
+                item["investigation_id"]
+                for item in self.store.investigation_lineage("stable-order-root")["descendants"]
+            ],
+        )
+
+        database = self.store.path
+        self.store.close()
+        self.store = CuriosityInvestigationStore(database)
+        self.store._db.execute("VACUUM")
+        self.assertEqual(expected, [
+            item["investigation_id"] for item in self.store.history()
+        ])
+        self.assertEqual(
+            expected[1:],
+            [
+                item["investigation_id"]
+                for item in self.store.investigation_lineage("stable-order-root")["descendants"]
+            ],
+        )
 
 
 if __name__ == "__main__":
