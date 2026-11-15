@@ -482,6 +482,139 @@ class VirtualBrainLoopTests(unittest.TestCase):
         )
         restarted.close()
 
+    def test_curiosity_close_recovers_when_brain_journal_append_fails(self) -> None:
+        curiosity_path = Path(self.temporary_directory.name) / "curiosity-close-retry.sqlite"
+        brain = VirtualBrain(
+            self.database_path,
+            curiosity_investigation_path=curiosity_path,
+        )
+        cycle = brain.run_cycle("An unresolved causal question.", "Record the context.")
+        brain.start_curiosity_investigation(
+            cycle.cycle_id,
+            "close-retry-investigation",
+            gap_property="causal_memory",
+            question="Which evidence supports the proposed relation?",
+            hypothesis="The relation may be causal.",
+            selection_reason="Test journal recovery after closure.",
+            goal_id="curiosity:causal-memory",
+        )
+        original_append = brain.store.append
+
+        def fail_before_journal_write(event_type, artifact, **kwargs):
+            if event_type == "curiosity.investigation_closed":
+                raise RuntimeError("simulated journal write failure")
+            return original_append(event_type, artifact, **kwargs)
+
+        brain.store.append = fail_before_journal_write
+        try:
+            with self.assertRaisesRegex(RuntimeError, "simulated journal write failure"):
+                brain.close_curiosity_investigation(
+                    cycle.cycle_id,
+                    "close-retry-investigation",
+                    outcome="partially_answered",
+                    answer_summary="The first evidence is not conclusive.",
+                    remaining_unknowns=["Can the relation be reproduced?"],
+                )
+        finally:
+            brain.store.append = original_append
+
+        persisted = brain.curiosity_store.get_investigation("close-retry-investigation")
+        self.assertEqual("closed", persisted["status"])
+        self.assertEqual(cycle.cycle_id, persisted["closed_cycle_id"])
+        self.assertEqual(
+            0,
+            sum(
+                event.event_type == "curiosity.investigation_closed"
+                for event in brain.store.events_for_cycle(cycle.cycle_id)
+            ),
+        )
+
+        recovered = brain.close_curiosity_investigation(
+            cycle.cycle_id,
+            "close-retry-investigation",
+            outcome="partially_answered",
+            answer_summary="The first evidence is not conclusive.",
+            remaining_unknowns=["Can the relation be reproduced?"],
+        )
+        self.assertEqual("closed", recovered["status"])
+        self.assertEqual(
+            1,
+            sum(
+                event.event_type == "curiosity.investigation_closed"
+                for event in brain.store.events_for_cycle(cycle.cycle_id)
+            ),
+        )
+        brain.close()
+
+    def test_curiosity_close_retry_recognizes_committed_journal_without_duplicate(self) -> None:
+        curiosity_path = Path(self.temporary_directory.name) / "curiosity-close-ack.sqlite"
+        brain = VirtualBrain(
+            self.database_path,
+            curiosity_investigation_path=curiosity_path,
+        )
+        cycle = brain.run_cycle("An unresolved memory question.", "Record the context.")
+        brain.start_curiosity_investigation(
+            cycle.cycle_id,
+            "close-ack-investigation",
+            gap_property="memory_recall",
+            question="Does the evidence survive a restart?",
+            hypothesis="The durable store should retain the evidence.",
+            selection_reason="Test recovery after a lost journal acknowledgement.",
+            goal_id="curiosity:memory-recall",
+        )
+        original_append = brain.store.append
+
+        def append_then_lose_ack(event_type, artifact, **kwargs):
+            result = original_append(event_type, artifact, **kwargs)
+            if event_type == "curiosity.investigation_closed":
+                raise RuntimeError("simulated lost journal acknowledgement")
+            return result
+
+        brain.store.append = append_then_lose_ack
+        try:
+            with self.assertRaisesRegex(RuntimeError, "simulated lost journal acknowledgement"):
+                brain.close_curiosity_investigation(
+                    cycle.cycle_id,
+                    "close-ack-investigation",
+                    outcome="answered",
+                    answer_summary="The evidence remained available after reopening.",
+                    remaining_unknowns=[],
+                )
+        finally:
+            brain.store.append = original_append
+
+        recovered = brain.close_curiosity_investigation(
+            cycle.cycle_id,
+            "close-ack-investigation",
+            outcome="answered",
+            answer_summary="The evidence remained available after reopening.",
+            remaining_unknowns=[],
+        )
+        replayed = brain.close_curiosity_investigation(
+            cycle.cycle_id,
+            "close-ack-investigation",
+            outcome="answered",
+            answer_summary="The evidence remained available after reopening.",
+            remaining_unknowns=[],
+        )
+        self.assertEqual(recovered, replayed)
+        self.assertEqual(
+            1,
+            sum(
+                event.event_type == "curiosity.investigation_closed"
+                for event in brain.store.events_for_cycle(cycle.cycle_id)
+            ),
+        )
+        with self.assertRaisesRegex(ValueError, "different closure details"):
+            brain.close_curiosity_investigation(
+                cycle.cycle_id,
+                "close-ack-investigation",
+                outcome="answered",
+                answer_summary="A conflicting retry must not rewrite the closure.",
+                remaining_unknowns=[],
+            )
+        brain.close()
+
     def test_curiosity_journaling_requires_explicit_store_configuration(self) -> None:
         brain = VirtualBrain(self.database_path)
         cycle = brain.run_cycle("Context", "Complete a simple cycle.")
