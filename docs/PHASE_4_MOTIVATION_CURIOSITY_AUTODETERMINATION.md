@@ -290,3 +290,11 @@ The model snapshot and investigation ledger are still not one atomic storage
 transaction. Callers remain responsible for persisting and restoring
 `SelfModel.snapshot()`; replay reconciles a restored snapshot with the durable
 review report rather than claiming cross-store atomicity.
+
+
+## Drive-aware curiosity ranking
+
+- Curiosity questions retain the drive that generated each candidate; the default remains `curiosity` for callers that do not specify one.
+- `CuriositySelector` accepts bounded per-drive feedback and adds a clamped adjustment ([-0.15, 0.15]) to the candidate score. The coordinator combines homeostatic adjustments with temporal motivational urgency before invoking the selector.
+- `VirtualBrain.run_deliberated_cycle` supplies the configured `MotivationSystem` to both initial and follow-up curiosity previews. The same final motivation/homeostasis feedback still participates in the unified `InternalDeliberator` decision, while the preview remains non-persistent until that final decision selects the candidate.
+- This is a bounded ranking heuristic; it does not execute an investigation or imply subjective needs or consciousness.

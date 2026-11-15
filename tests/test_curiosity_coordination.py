@@ -87,6 +87,59 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         # even though the coordinator preserves the wider ±0.3 proposal bound.
         self.assertAlmostEqual(0.15, autonomy_score["feedback_adjustment"])
 
+    def test_follow_up_selector_uses_homeostatic_and_motivational_drive_adjustments(self):
+        self.store.start_investigation(
+            "follow-up-drive-parent",
+            gap_property="memory_gap",
+            question="Does the retrieval path preserve evidence?",
+            hypothesis="The retrieval path may preserve evidence.",
+            selection_reason="Initial evidence-backed inquiry.",
+            cycle_id="follow-up-drive-parent-cycle",
+            goal_id="investigate_gap:memory-gap",
+        )
+        self.store.close_investigation(
+            "follow-up-drive-parent",
+            outcome="partially_answered",
+            answer_summary="The initial retrieval test passed, but one path remains unknown.",
+            remaining_unknowns=["Which retrieval path is still missing?"],
+            cycle_id="follow-up-drive-parent-close",
+        )
+        proposal = HomeostaticProposal(
+            cycle_id="follow-up-drive-cycle",
+            adjustments={"memory": 0.05},
+            deviations={"prediction_error": 0.6},
+            persistence={"prediction_error": 3},
+            evidence_refs=("telemetry:follow-up-drive",),
+            rationale=("prediction error persisted across the cycle window",),
+        )
+        motivation = MotivationSystem([
+            MotivationalDrive("memory", level=0.7, setpoint=0.5, pressure=0.7),
+        ])
+        result = self.coordinator.deliberate_follow_up(
+            "follow-up-drive-parent",
+            {
+                "Which retrieval path is still missing?": {
+                    "drive": "memory",
+                    "hypothesis": "A secondary retrieval path may be omitted.",
+                    "information_gain": 0.9,
+                    "impact": 0.7,
+                    "urgency": 0.8,
+                    "estimated_cost": 0.1,
+                    "risk": 0.02,
+                }
+            },
+            cycle_id="follow-up-drive-cycle",
+            investigation_store=self.store,
+            motivation=motivation,
+            homeostatic_proposal=proposal,
+            persist_selected=False,
+        )
+        self.assertEqual("memory", result["curiosity_decision"].selected.drive)
+        self.assertAlmostEqual(0.11, result["drive_adjustments"]["memory"])
+        score = result["curiosity_decision"].ranked[0]["score"]
+        self.assertAlmostEqual(0.11, score["drive_adjustment"])
+        self.assertEqual([], self.store.open_investigations())
+
     def test_persisted_question_is_suppressed_on_later_cycles(self):
         first = self.coordinator.deliberate(
             self.mappings(), cycle_id="cycle-1", investigation_store=self.store,

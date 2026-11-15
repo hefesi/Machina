@@ -260,8 +260,9 @@ class CuriosityGoalCoordinator:
             questions.append(CuriosityQuestion(
                 question_id=item["goal_id"],
                 gap_property=item["belief_property"],
+                drive=item["drive"],
                 question=item["question"],
-                hypothesis=hypothesis.strip(),
+                  hypothesis=hypothesis.strip(),
                 uncertainty=1.0 - item["belief_confidence"],
                 expected_information_gain=item["information_gain"],
                 relevance=item["impact"],
@@ -277,6 +278,7 @@ class CuriosityGoalCoordinator:
             questions,
             stability_pressure=selected_pressure,
             recent_question_ids=recent,
+            drive_adjustments=drive_adjustments,
             allow_external_actions=False,
         )
         curiosity_goal: GoalCandidate | None = None
@@ -424,6 +426,7 @@ class CuriosityGoalCoordinator:
             questions.append(CuriosityQuestion(
                 question_id=item["goal_id"],
                 gap_property=parent["gap_property"],
+                drive=item["drive"],
                 question=item["question"],
                 hypothesis=hypothesis.strip(),
                 uncertainty=uncertainty,
@@ -479,6 +482,7 @@ class CuriosityGoalCoordinator:
             questions,
             stability_pressure=selected_pressure,
             recent_question_ids=recent,
+            drive_adjustments=drive_adjustments,
             allow_external_actions=False,
         )
         curiosity_goal = None

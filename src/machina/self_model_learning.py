@@ -362,7 +362,7 @@ class SelfModelLearningBridge:
                 "goal_id": goal_id, "belief_property": prop,
                 "belief_status": status, "belief_confidence": confidence,
                 "belief_evidence_ref": belief.get("evidence_ref") if belief else None,
-                "question": question.strip(), **values,
+                "drive": drive.strip(), "question": question.strip(), **values,
                 "expected_information_value": benefit,
                 "execution_performed": False,
             })
@@ -442,7 +442,8 @@ class SelfModelLearningBridge:
             provenance.append({
                 "goal_id": goal_id, "source_investigation_id": investigation_id,
                 "source_outcome": investigation["outcome"], "belief_property": investigation["gap_property"],
-                "remaining_unknown": raw_unknown, "question": question.strip(), **values,
+                "remaining_unknown": raw_unknown, "drive": drive.strip(),
+                "question": question.strip(), **values,
                 "expected_information_value": benefit, "execution_performed": False,
             })
         return {

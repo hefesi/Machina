@@ -57,5 +57,28 @@ class CuriositySelectorTests(unittest.TestCase):
             self.selector.choose([q, q])
 
 
+    def test_drive_adjustments_bias_matching_questions_and_are_bounded(self):
+        memory = self.question("memory", drive="memory", relevance=0.65)
+        curiosity = self.question("curiosity", drive="curiosity", relevance=0.8)
+
+        baseline = self.selector.choose([memory, curiosity])
+        self.assertEqual("curiosity", baseline.selected.question_id)
+
+        adjusted = self.selector.choose(
+            [memory, curiosity], drive_adjustments={"memory": 0.06}
+        )
+        self.assertEqual("memory", adjusted.selected.question_id)
+        memory_score = next(
+            item["score"] for item in adjusted.ranked
+            if item["question"]["question_id"] == "memory"
+        )
+        self.assertAlmostEqual(0.06, memory_score["drive_adjustment"])
+
+        capped = self.selector.choose([memory], drive_adjustments={"memory": 0.3})
+        self.assertAlmostEqual(0.15, capped.ranked[0]["score"]["drive_adjustment"])
+        with self.assertRaisesRegex(ValueError, "within \\[-0.3, 0.3\\]"):
+            self.selector.choose([memory], drive_adjustments={"memory": 0.31})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import math
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 
 def _unit(name: str, value: float) -> float:
@@ -31,6 +31,7 @@ class CuriosityQuestion:
     estimated_cost: float
     risk: float = 0.0
     requires_external_action: bool = False
+    drive: str = "curiosity"
 
     def __post_init__(self) -> None:
         for field in ("question_id", "gap_property", "question", "hypothesis"):
@@ -42,6 +43,8 @@ class CuriosityQuestion:
             _unit(field, getattr(self, field))
         if not isinstance(self.requires_external_action, bool):
             raise ValueError("requires_external_action must be a boolean")
+        if not isinstance(self.drive, str) or not self.drive.strip():
+            raise ValueError("drive must be a non-empty string")
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +72,11 @@ class CuriositySelector:
         self.min_score = _unit("min_score", min_score)
 
     @staticmethod
-    def _score(question: CuriosityQuestion, exploration_weight: float) -> dict[str, float]:
+    def _score(
+        question: CuriosityQuestion,
+        exploration_weight: float,
+        drive_adjustment: float = 0.0,
+    ) -> dict[str, float]:
         information_value = question.uncertainty * question.expected_information_gain
         parts = {
             "uncertainty_information_gain": 0.34 * exploration_weight * information_value,
@@ -78,6 +85,7 @@ class CuriositySelector:
             "stability_value": 0.12 * (1.0 - question.risk),
             "cost_penalty": -0.12 * question.estimated_cost,
             "risk_penalty": -0.45 * question.risk,
+            "drive_adjustment": drive_adjustment,
         }
         parts["total"] = sum(parts.values())
         parts["information_value_raw"] = information_value
@@ -89,11 +97,28 @@ class CuriositySelector:
         *,
         stability_pressure: float = 0.0,
         recent_question_ids: Iterable[str] = (),
+        drive_adjustments: Mapping[str, float] | None = None,
         allow_external_actions: bool = False,
     ) -> CuriosityDecision:
         stability = _unit("stability_pressure", stability_pressure)
         if not isinstance(allow_external_actions, bool):
             raise ValueError("allow_external_actions must be a boolean")
+        if drive_adjustments is None:
+            adjustments: dict[str, float] = {}
+        elif not isinstance(drive_adjustments, Mapping):
+            raise ValueError("drive_adjustments must be a mapping")
+        else:
+            adjustments = dict(drive_adjustments)
+        for drive, adjustment in adjustments.items():
+            if not isinstance(drive, str) or not drive.strip():
+                raise ValueError("drive adjustment names must be non-empty strings")
+            if (
+                isinstance(adjustment, bool)
+                or not isinstance(adjustment, (int, float))
+                or not math.isfinite(adjustment)
+                or not -0.3 <= adjustment <= 0.3
+            ):
+                raise ValueError("drive adjustments must be finite and within [-0.3, 0.3]")
         exploration_weight = 1.0 - 0.75 * stability
         questions = list(candidates)
         if any(not isinstance(q, CuriosityQuestion) for q in questions):
@@ -109,7 +134,10 @@ class CuriositySelector:
             if question.requires_external_action and not allow_external_actions:
                 rejected.append({"question_id": question.question_id, "reason": "external_action_not_authorized"})
                 continue
-            score = self._score(question, exploration_weight)
+            drive_adjustment = max(
+                -0.15, min(0.15, float(adjustments.get(question.drive, 0.0)))
+            )
+            score = self._score(question, exploration_weight, drive_adjustment)
             score["repetition_penalty"] = -0.10 if question.question_id in recent else 0.0
             score["total"] += score["repetition_penalty"]
             ranked.append({"question": asdict(question), "score": score})
