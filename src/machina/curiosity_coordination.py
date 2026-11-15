@@ -262,7 +262,7 @@ class CuriosityGoalCoordinator:
                 gap_property=item["belief_property"],
                 drive=item["drive"],
                 question=item["question"],
-                  hypothesis=hypothesis.strip(),
+                hypothesis=hypothesis.strip(),
                 uncertainty=1.0 - item["belief_confidence"],
                 expected_information_gain=item["information_gain"],
                 relevance=item["impact"],
