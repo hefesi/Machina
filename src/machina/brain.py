@@ -608,14 +608,64 @@ class VirtualBrain:
         outcome: str, answer_summary: str,
         remaining_unknowns: Sequence[str],
     ) -> dict[str, Any]:
-        """Close an investigation once and journal its unresolved questions."""
+        """Close an investigation and recover its journal mirror after interruption.
+
+        The investigation store and brain event journal are separate SQLite
+        databases, so their writes cannot share one atomic transaction. A
+        retry therefore reconciles the durable closure with the cycle journal:
+        it appends a missing closure event, or recognizes an event whose commit
+        succeeded even if the original caller did not receive its result.
+        """
         self._require_cycle(cycle_id)
         store = self._require_curiosity_store()
-        record = store.close_investigation(
-            investigation_id, outcome=outcome,
-            answer_summary=answer_summary,
-            remaining_unknowns=remaining_unknowns, cycle_id=cycle_id,
-        )
+        normalized_outcome = store._label(outcome, "outcome")
+        if normalized_outcome not in store.OUTCOMES:
+            raise ValueError(
+                "outcome must be answered, partially_answered, unanswered, or abandoned"
+            )
+        normalized_summary = store._label(answer_summary, "answer_summary")
+        normalized_unknowns = store._unknowns(remaining_unknowns)
+
+        current = store.get_investigation(investigation_id)
+        if current["status"] == "open":
+            record = store.close_investigation(
+                investigation_id,
+                outcome=normalized_outcome,
+                answer_summary=normalized_summary,
+                remaining_unknowns=normalized_unknowns,
+                cycle_id=cycle_id,
+            )
+        else:
+            if current.get("closed_cycle_id") != cycle_id:
+                raise ValueError(
+                    "investigation was already closed in a different cycle"
+                )
+            if (
+                current["outcome"] != normalized_outcome
+                or current["answer_summary"] != normalized_summary
+                or current["remaining_unknowns"] != normalized_unknowns
+            ):
+                raise ValueError(
+                    "investigation is already closed with different closure details"
+                )
+            record = current
+
+        matching_events = [
+            event for event in self.store.events_for_cycle(cycle_id)
+            if event.event_type == "curiosity.investigation_closed"
+            and event.artifact.data.get("investigation_id") == investigation_id
+        ]
+        if matching_events:
+            if len(matching_events) != 1:
+                raise RuntimeError(
+                    "multiple curiosity closure events exist for one investigation"
+                )
+            if matching_events[0].artifact.data.get("record") != record:
+                raise RuntimeError(
+                    "persisted curiosity closure conflicts with its brain journal event"
+                )
+            return record
+
         evidence_refs = tuple(
             item["evidence_ref"] for item in record.get("evidence", [])
         )
