@@ -298,3 +298,8 @@ review report rather than claiming cross-store atomicity.
 - `CuriositySelector` accepts bounded per-drive feedback and adds a clamped adjustment ([-0.15, 0.15]) to the candidate score. The coordinator combines homeostatic adjustments with temporal motivational urgency before invoking the selector.
 - `VirtualBrain.run_deliberated_cycle` supplies the configured `MotivationSystem` to both initial and follow-up curiosity previews. The same final motivation/homeostasis feedback still participates in the unified `InternalDeliberator` decision, while the preview remains non-persistent until that final decision selects the candidate.
 - This is a bounded ranking heuristic; it does not execute an investigation or imply subjective needs or consciousness.
+
+
+### Shared motivational feedback policy
+
+The curiosity coordinator prefers `MotivationSystem.temporal_autonomy_adjustments()`, the same canonical feedback mapping used by `InternalDeliberator`. This keeps curiosity preview ranking aligned with the final autonomy policy if the motivation implementation later adds calibrated or conflict-aware adjustments. For backward compatibility, structural motivation providers that expose only `temporal_urgencies()` retain the existing bounded urgency-based fallback. Both paths validate drive names and finite adjustment bounds before the selector receives them. Initial and follow-up regressions verify that the canonical provider is reused rather than independently re-deriving its policy.
