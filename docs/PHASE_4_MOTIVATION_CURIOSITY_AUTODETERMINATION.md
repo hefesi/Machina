@@ -303,3 +303,8 @@ review report rather than claiming cross-store atomicity.
 ### Shared motivational feedback policy
 
 The curiosity coordinator prefers `MotivationSystem.temporal_autonomy_adjustments()`, the same canonical feedback mapping used by `InternalDeliberator`. This keeps curiosity preview ranking aligned with the final autonomy policy if the motivation implementation later adds calibrated or conflict-aware adjustments. For backward compatibility, structural motivation providers that expose only `temporal_urgencies()` retain the existing bounded urgency-based fallback. Both paths validate drive names and finite adjustment bounds before the selector receives them. Initial and follow-up regressions verify that the canonical provider is reused rather than independently re-deriving its policy.
+
+
+### Aggregating homeostatic signals by drive
+
+When multiple sustained telemetry rules target the same drive, `HomeostaticRegulator` now adds their signed corrections and clamps the aggregate to [-0.3, 0.3]. This prevents mapping insertion order from silently discarding all but the last metric and gives `CuriosityGoalCoordinator` and `InternalDeliberator` one deterministic, bounded adjustment per drive. A regression evaluates the same rules in opposite insertion orders and verifies an identical aggregate.
