@@ -140,6 +140,72 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         self.assertAlmostEqual(0.11, score["drive_adjustment"])
         self.assertEqual([], self.store.open_investigations())
 
+    def test_initial_and_follow_up_reuse_canonical_motivation_adjustments(self):
+        class CalibratedMotivation:
+            def temporal_urgencies(self):
+                return {"memory": 0.9}
+
+            def temporal_autonomy_adjustments(self):
+                # The canonical policy may incorporate calibrated feedback that
+                # cannot be reconstructed from raw temporal urgency alone.
+                return {"memory": -0.2}
+
+        motivation = CalibratedMotivation()
+        initial_mappings = self.mappings()
+        initial_mappings["memory_gap"]["drive"] = "memory"
+        initial = self.coordinator.deliberate(
+            initial_mappings,
+            cycle_id="canonical-motivation-initial",
+            investigation_store=self.store,
+            motivation=motivation,
+            persist_selected=False,
+        )
+        self.assertAlmostEqual(-0.2, initial["drive_adjustments"]["memory"])
+        self.assertAlmostEqual(
+            -0.15,
+            initial["curiosity_decision"].ranked[0]["score"]["drive_adjustment"],
+        )
+
+        self.store.start_investigation(
+            "canonical-motivation-parent",
+            gap_property="memory_gap",
+            question="Does the retrieval path preserve evidence?",
+            hypothesis="The retrieval path may preserve evidence.",
+            selection_reason="Initial evidence-backed inquiry.",
+            cycle_id="canonical-motivation-parent-cycle",
+            goal_id="investigate_gap:memory-gap",
+        )
+        self.store.close_investigation(
+            "canonical-motivation-parent",
+            outcome="partially_answered",
+            answer_summary="One retrieval path remains unknown.",
+            remaining_unknowns=["Which retrieval path remains unverified?"],
+            cycle_id="canonical-motivation-parent-close",
+        )
+        follow_up = self.coordinator.deliberate_follow_up(
+            "canonical-motivation-parent",
+            {
+                "Which retrieval path remains unverified?": {
+                    "drive": "memory",
+                    "information_gain": 0.9,
+                    "impact": 0.8,
+                    "urgency": 0.8,
+                    "estimated_cost": 0.1,
+                    "risk": 0.02,
+                }
+            },
+            cycle_id="canonical-motivation-follow-up",
+            investigation_store=self.store,
+            motivation=motivation,
+            persist_selected=False,
+        )
+        self.assertAlmostEqual(-0.2, follow_up["drive_adjustments"]["memory"])
+        self.assertAlmostEqual(
+            -0.15,
+            follow_up["curiosity_decision"].ranked[0]["score"]["drive_adjustment"],
+        )
+        self.assertEqual(1, len(self.store.history()))
+
     def test_persisted_question_is_suppressed_on_later_cycles(self):
         first = self.coordinator.deliberate(
             self.mappings(), cycle_id="cycle-1", investigation_store=self.store,
