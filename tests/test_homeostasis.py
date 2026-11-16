@@ -58,6 +58,44 @@ class HomeostaticRegulatorTests(unittest.TestCase):
         self.assertEqual({}, result.adjustments)
         self.assertEqual((), result.evidence_refs)
 
+    def test_multiple_rules_for_one_drive_aggregate_order_independently(self):
+        low_metric = HomeostaticRule(
+            "metric.low", "memory",
+            lower=0.2, upper=0.8,
+            below_adjustment=0.2, above_adjustment=-0.1,
+        )
+        high_metric = HomeostaticRule(
+            "metric.high", "memory",
+            lower=0.2, upper=0.8,
+            below_adjustment=0.1, above_adjustment=-0.05,
+        )
+        observations = {
+            "metric.low": 0.1,
+            "metric.high": 0.9,
+        }
+        evidence = {
+            "metric.low": "telemetry:low",
+            "metric.high": "telemetry:high",
+        }
+
+        def assess(rules):
+            model = SelfModel()
+            model.update(
+                observations,
+                cycle_id="multi-metric-cycle",
+                evidence_refs=evidence,
+                statuses={name: "observed" for name in observations},
+            )
+            regulator = HomeostaticRegulator(
+                model, rules, persistence_cycles=1
+            )
+            return regulator.assess().adjustments
+
+        forward = assess({"low": low_metric, "high": high_metric})
+        reverse = assess({"high": high_metric, "low": low_metric})
+        self.assertEqual({"memory": 0.15}, forward)
+        self.assertEqual(forward, reverse)
+
     def test_snapshot_restores_temporal_state(self):
         self.observe("c1", 0.8)
         self.regulator.assess()
