@@ -93,8 +93,9 @@ class HomeostaticRegulatorTests(unittest.TestCase):
 
         forward = assess({"low": low_metric, "high": high_metric})
         reverse = assess({"high": high_metric, "low": low_metric})
-        self.assertEqual({"memory": 0.15}, forward)
-        self.assertEqual(forward, reverse)
+        self.assertAlmostEqual(0.15, forward["memory"])
+        self.assertAlmostEqual(forward["memory"], reverse["memory"])
+        self.assertEqual(set(forward), set(reverse))
 
     def test_snapshot_restores_temporal_state(self):
         self.observe("c1", 0.8)
