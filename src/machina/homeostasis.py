@@ -121,7 +121,10 @@ class HomeostaticRegulator:
                 evidence.add(ref)
             if count >= self.persistence_cycles:
                 amount = rule.below_adjustment if direction == "below" else rule.above_adjustment
-                adjustments[rule.drive] = max(-0.3, min(0.3, amount))
+                adjustments[rule.drive] = max(
+                    -0.3,
+                    min(0.3, adjustments.get(rule.drive, 0.0) + amount),
+                )
             rationale.append(
                 f"{name}: {direction} range by {abs(deviation):.6f}; "
                 f"persistent cycles={count}/{self.persistence_cycles}; "
