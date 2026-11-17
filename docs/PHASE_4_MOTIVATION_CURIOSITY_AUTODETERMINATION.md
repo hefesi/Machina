@@ -307,4 +307,4 @@ The curiosity coordinator prefers `MotivationSystem.temporal_autonomy_adjustment
 
 ### Aggregating homeostatic signals by drive
 
-When multiple sustained telemetry rules target the same drive, `HomeostaticRegulator` now adds their signed corrections and clamps the aggregate to [-0.3, 0.3]. This prevents mapping insertion order from silently discarding all but the last metric and gives `CuriosityGoalCoordinator` and `InternalDeliberator` one deterministic, bounded adjustment per drive. A regression evaluates the same rules in opposite insertion orders and verifies an identical aggregate.
+When multiple sustained telemetry rules target the same drive, `HomeostaticRegulator` collects every signed correction, sums the contributions with stable summation, and clamps only the final aggregate to [-0.3, 0.3]. Clamping intermediate partial sums would make mixed positive and negative corrections depend on mapping insertion order near the bound. The regulator therefore produces one deterministic, bounded adjustment per drive; regressions cover both unsaturated and saturated mixed-sign aggregates in opposite insertion orders.
