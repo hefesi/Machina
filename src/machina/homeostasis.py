@@ -90,6 +90,7 @@ class HomeostaticRegulator:
         if selected_cycle == self._last_cycle_id:
             raise ValueError("cycle_id has already been assessed")
         beliefs = self.self_model.beliefs
+        adjustment_contributions: dict[str, list[float]] = {}
         adjustments: dict[str, float] = {}
         deviations: dict[str, float] = {}
         evidence: set[str] = set()
@@ -119,17 +120,26 @@ class HomeostaticRegulator:
             ref = belief.get("evidence_ref")
             if isinstance(ref, str) and ref:
                 evidence.add(ref)
+            amount = 0.0
             if count >= self.persistence_cycles:
                 amount = rule.below_adjustment if direction == "below" else rule.above_adjustment
-                adjustments[rule.drive] = max(
-                    -0.3,
-                    min(0.3, adjustments.get(rule.drive, 0.0) + amount),
-                )
+                adjustment_contributions.setdefault(rule.drive, []).append(float(amount))
             rationale.append(
                 f"{name}: {direction} range by {abs(deviation):.6f}; "
                 f"persistent cycles={count}/{self.persistence_cycles}; "
-                f"drive={rule.drive}; proposal="
-                f"{adjustments.get(rule.drive, 0.0):.6f}"
+                f"drive={rule.drive}; rule_adjustment={amount:.6f}"
+            )
+        # Aggregate every rule for a drive before applying the global bound.
+        # Clamping each intermediate sum makes mixed positive/negative rules
+        # depend on mapping insertion order. Sorting plus fsum gives a stable
+        # aggregate, and the final clamp is applied exactly once per drive.
+        adjustments = {
+            drive: max(-0.3, min(0.3, math.fsum(sorted(values))))
+            for drive, values in sorted(adjustment_contributions.items())
+        }
+        for drive, value in adjustments.items():
+            rationale.append(
+                f"{drive}: aggregate homeostatic proposal={value:.6f}"
             )
         self._last_cycle_id = selected_cycle
         return HomeostaticProposal(
