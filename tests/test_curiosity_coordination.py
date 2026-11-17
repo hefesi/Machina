@@ -43,6 +43,24 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
             }
         }
 
+    def test_drive_adjustment_merge_clamps_once_independent_of_source_order(self):
+        sources = (
+            {"memory": 0.3},
+            {"memory": 0.3},
+            {"memory": -0.3},
+            {"curiosity": -0.2},
+            {"curiosity": 0.1},
+        )
+        forward = self.coordinator._merge_drive_adjustments(*sources)
+        reverse = self.coordinator._merge_drive_adjustments(*reversed(sources))
+
+        self.assertAlmostEqual(0.3, forward["memory"])
+        self.assertAlmostEqual(-0.1, forward["curiosity"])
+        self.assertEqual(set(forward), set(reverse))
+        for drive in forward:
+            self.assertAlmostEqual(forward[drive], reverse[drive])
+        self.assertEqual({"memory": 0.3}, sources[0])
+
     def test_curiosity_selection_is_integrated_and_persisted_only_after_autonomy(self):
         result = self.coordinator.deliberate(
             self.mappings(),

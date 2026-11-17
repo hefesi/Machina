@@ -308,3 +308,15 @@ The curiosity coordinator prefers `MotivationSystem.temporal_autonomy_adjustment
 ### Aggregating homeostatic signals by drive
 
 When multiple sustained telemetry rules target the same drive, `HomeostaticRegulator` collects every signed correction, sums the contributions with stable summation, and clamps only the final aggregate to [-0.3, 0.3]. Clamping intermediate partial sums would make mixed positive and negative corrections depend on mapping insertion order near the bound. The regulator therefore produces one deterministic, bounded adjustment per drive; regressions cover both unsaturated and saturated mixed-sign aggregates in opposite insertion orders.
+
+
+## Stable multi-source drive feedback aggregation
+
+The curiosity coordinator combines homeostatic and motivational feedback before
+passing one bounded adjustment per drive to the selector and final autonomy
+decision. The merge helper validates each source in the existing
+`[-0.3, 0.3]` range, uses stable summation across all providers, and applies
+the shared bound once after aggregation. This avoids source-order effects when
+future integrations add a third or later feedback provider with mixed-sign
+contributions. The change does not alter the current two-source values or
+increase the allowed feedback range.

@@ -86,7 +86,14 @@ class CuriosityGoalCoordinator:
     def _merge_drive_adjustments(
         *sources: Mapping[str, float],
     ) -> dict[str, float]:
-        combined: dict[str, float] = {}
+        """Combine every feedback source before applying the per-drive bound.
+
+        Clamping intermediate sums makes the result depend on source order
+        when three or more providers contribute mixed-sign adjustments.
+        Stable summation followed by one final clamp keeps the policy
+        deterministic as additional bounded feedback sources are integrated.
+        """
+        contributions: dict[str, list[float]] = {}
         for source in sources:
             if not isinstance(source, Mapping):
                 raise ValueError("drive adjustments must be mappings")
@@ -94,8 +101,11 @@ class CuriosityGoalCoordinator:
                 if not isinstance(drive, str) or not drive.strip():
                     raise ValueError("drive adjustment names must be non-empty")
                 value = _bounded(f"drive_adjustments[{drive}]", raw_value, -0.3, 0.3)
-                combined[drive] = max(-0.3, min(0.3, combined.get(drive, 0.0) + value))
-        return combined
+                contributions.setdefault(drive, []).append(value)
+        return {
+            drive: max(-0.3, min(0.3, math.fsum(sorted(values))))
+            for drive, values in sorted(contributions.items())
+        }
 
     @staticmethod
     def _motivational_drive_adjustments(motivation: Any) -> dict[str, float]:
