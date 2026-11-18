@@ -986,5 +986,141 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         )
 
 
+    def test_follow_up_curiosity_continues_across_multiple_generations(self):
+        root_id = "multi-generation-root"
+        first_unknown = "Does the retrieval path survive a process restart?"
+        second_unknown = "Does restored recall remain accurate after repeated restarts?"
+        self.store.start_investigation(
+            root_id,
+            gap_property="memory_recall",
+            question="Which baseline retrieval path should be measured first?",
+            hypothesis="The baseline path may lose evidence after restart.",
+            selection_reason="Initial evidence-backed investigation.",
+            cycle_id="multi-generation-root-cycle",
+            goal_id="multi-generation-root-goal",
+        )
+        self.store.close_investigation(
+            root_id,
+            outcome="partially_answered",
+            answer_summary="The baseline path was measured, but restart behavior remains unknown.",
+            remaining_unknowns=[first_unknown],
+            cycle_id="multi-generation-root-close",
+        )
+
+        first_mapping = {
+            first_unknown: {
+                "hypothesis": "The retrieval index may survive a process restart.",
+                "uncertainty": 0.85,
+                "novelty": 0.9,
+                "information_gain": 0.9,
+                "impact": 0.85,
+                "urgency": 0.8,
+                "estimated_cost": 0.1,
+                "risk": 0.02,
+            }
+        }
+        first = self.coordinator.deliberate_follow_up(
+            root_id,
+            first_mapping,
+            cycle_id="multi-generation-follow-up-1",
+            investigation_store=self.store,
+        )
+        self.assertTrue(first["curiosity_goal_won"])
+        child_id = first["investigation"]["investigation_id"]
+        self.assertEqual(
+            root_id,
+            self.store.get_investigation(child_id)["parent_investigation_id"],
+        )
+
+        self.store.close_investigation(
+            child_id,
+            outcome="partially_answered",
+            answer_summary="The first restart succeeded, but repeated restart accuracy remains unknown.",
+            remaining_unknowns=[second_unknown],
+            cycle_id="multi-generation-child-close",
+        )
+        second_mapping = {
+            second_unknown: {
+                "hypothesis": "Repeated restoration may preserve retrieval accuracy.",
+                "uncertainty": 0.8,
+                "novelty": 0.9,
+                "information_gain": 0.9,
+                "impact": 0.85,
+                "urgency": 0.8,
+                "estimated_cost": 0.1,
+                "risk": 0.02,
+            }
+        }
+        second = self.coordinator.deliberate_follow_up(
+            child_id,
+            second_mapping,
+            cycle_id="multi-generation-follow-up-2",
+            investigation_store=self.store,
+        )
+        self.assertTrue(second["curiosity_goal_won"])
+        grandchild_id = second["investigation"]["investigation_id"]
+        self.assertEqual(
+            child_id,
+            self.store.get_investigation(grandchild_id)["parent_investigation_id"],
+        )
+        self.assertEqual(
+            child_id,
+            second["selected_provenance"]["source_investigation_id"],
+        )
+        self.assertIn(
+            f"source_investigation_id={child_id}",
+            second["investigation"]["selection_reason"],
+        )
+
+        self.store.close_investigation(
+            grandchild_id,
+            outcome="answered",
+            answer_summary="Repeated restoration preserved the measured retrieval accuracy.",
+            remaining_unknowns=[],
+            cycle_id="multi-generation-grandchild-close",
+        )
+        lineage = self.store.investigation_lineage(root_id)
+        self.assertEqual(
+            [child_id, grandchild_id],
+            [item["investigation_id"] for item in lineage["descendants"]],
+        )
+
+        database = self.store.path
+        self.store.close()
+        self.store = CuriosityInvestigationStore(database)
+        restored = self.store.investigation_lineage(root_id)
+        self.assertEqual(
+            [child_id, grandchild_id],
+            [item["investigation_id"] for item in restored["descendants"]],
+        )
+        self.assertEqual(
+            "closed",
+            self.store.get_investigation(grandchild_id)["status"],
+        )
+
+        repeated_root = self.coordinator.deliberate_follow_up(
+            root_id,
+            first_mapping,
+            cycle_id="multi-generation-repeat-root",
+            investigation_store=self.store,
+        )
+        self.assertIsNone(repeated_root["curiosity_candidate_goal_id"])
+        self.assertEqual(
+            "prior_investigation_exists",
+            repeated_root["proposals"]["suppressed"][0]["reason"],
+        )
+        repeated_child = self.coordinator.deliberate_follow_up(
+            child_id,
+            second_mapping,
+            cycle_id="multi-generation-repeat-child",
+            investigation_store=self.store,
+        )
+        self.assertIsNone(repeated_child["curiosity_candidate_goal_id"])
+        self.assertEqual(
+            "prior_investigation_exists",
+            repeated_child["proposals"]["suppressed"][0]["reason"],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
