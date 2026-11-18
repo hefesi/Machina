@@ -1052,6 +1052,14 @@ class VirtualBrainLoopTests(unittest.TestCase):
                 if item["question"]["question_id"] == "investigate_gap:memory-gap"
             )
             self.assertAlmostEqual(0.11, memory_score["drive_adjustment"])
+            autonomy_memory_option = next(
+                item for item in trace.data["deliberation"]["autonomy"]["alternatives"]
+                if item["goal"]["goal_id"] == "investigate_gap:memory-gap"
+            )
+            self.assertAlmostEqual(
+                0.11,
+                autonomy_memory_option["score"]["feedback_adjustment"],
+            )
             self.assertTrue(curiosity["selected_by_unified_deliberation"])
             self.assertEqual("curiosity", trace.data["selected_source"])
             self.assertEqual(1, len(brain.curiosity_store.open_investigations()))
