@@ -339,3 +339,15 @@ that questions already investigated in descendant records are suppressed.
 The test validates continuity and duplicate suppression; it does not claim
 that the resulting decisions are empirically better. That requires a separate
 controlled longitudinal evaluation.
+
+
+### System-level temporal feedback contract
+
+`MotivationSystem.temporal_autonomy_adjustments()` is the canonical mapping
+consumed by both curiosity preview ranking and `InternalDeliberator`.
+It delegates to each drive's persisted temporal pressure and returns one bounded
+adjustment per drive. `MotivationalDrive.temporal_autonomy_adjustments()`
+provides the corresponding single-drive value. This keeps the final autonomy
+score aligned with the feedback used to rank a curiosity candidate; the
+instantaneous conflict-adjusted `autonomy_adjustments()` API remains a
+separate signal.
