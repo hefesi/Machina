@@ -320,3 +320,22 @@ the shared bound once after aggregation. This avoids source-order effects when
 future integrations add a third or later feedback provider with mixed-sign
 contributions. The change does not alter the current two-source values or
 increase the allowed feedback range.
+
+## Multi-generation follow-up continuity
+
+A follow-up investigation can itself close with new caller-authored unresolved
+questions and become the parent of another follow-up. Each generation is linked
+through `parent_investigation_id`; `CuriosityInvestigationStore.investigation_lineage()`
+returns the durable ancestry and descendants in insertion order. The bridge
+suppresses an exact normalized question already recorded for the same belief
+gap, including questions investigated in later generations, while allowing a
+new unresolved question to continue the chain. This preserves provenance
+without treating a repeated question as new information.
+
+The integration regression `test_follow_up_curiosity_continues_across_multiple_generations`
+exercises two follow-up generations, closes the final investigation, reopens
+the store, verifies parent/child lineage and source provenance, and confirms
+that questions already investigated in descendant records are suppressed.
+The test validates continuity and duplicate suppression; it does not claim
+that the resulting decisions are empirically better. That requires a separate
+controlled longitudinal evaluation.
