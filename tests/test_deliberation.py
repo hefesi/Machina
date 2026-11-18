@@ -7,6 +7,7 @@ from pathlib import Path
 from machina.autonomy import AutonomyContext, AutonomyController, GoalCandidate
 from machina.deliberation import InternalDeliberator
 from machina.goal_store import PersistentGoalStore
+from machina.mnn_motivation import MotivationalDrive, MotivationSystem
 
 
 class InternalDeliberatorTests(unittest.TestCase):
@@ -76,6 +77,24 @@ class InternalDeliberatorTests(unittest.TestCase):
                 if item["goal"]["goal_id"] == "sustain_drive:curiosity"
             )
             self.assertAlmostEqual(0.15, selected["score"]["feedback_adjustment"])
+            store.close()
+
+    def test_motivation_system_temporal_feedback_reaches_final_goal_score(self):
+        motivation = MotivationSystem([
+            MotivationalDrive("curiosity", level=0.8, pressure=0.8),
+        ])
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            deliberator = InternalDeliberator(AutonomyController(), store)
+            result = deliberator.deliberate(
+                AutonomyContext(),
+                motivation=motivation,
+            )
+            selected = next(
+                item for item in result.autonomy.alternatives
+                if item["goal"]["goal_id"] == "sustain_drive:curiosity"
+            )
+            self.assertAlmostEqual(0.09, selected["score"]["feedback_adjustment"])
             store.close()
 
     def test_open_goal_limit_is_validated(self):
