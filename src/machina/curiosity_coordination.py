@@ -8,7 +8,10 @@ from __future__ import annotations
 import math
 from typing import Any, Iterable, Mapping
 
-from .autonomy import AutonomyContext, AutonomyController, AutonomyDecision, GoalCandidate
+from .autonomy import (
+    AutonomyContext, AutonomyController, AutonomyDecision, GoalCandidate,
+    merge_drive_adjustments,
+)
 from .curiosity import CuriosityInvestigationStore
 from .curiosity_policy import CuriosityDecision, CuriosityQuestion, CuriositySelector
 from .homeostasis import HomeostaticProposal
@@ -86,26 +89,8 @@ class CuriosityGoalCoordinator:
     def _merge_drive_adjustments(
         *sources: Mapping[str, float],
     ) -> dict[str, float]:
-        """Combine every feedback source before applying the per-drive bound.
-
-        Clamping intermediate sums makes the result depend on source order
-        when three or more providers contribute mixed-sign adjustments.
-        Stable summation followed by one final clamp keeps the policy
-        deterministic as additional bounded feedback sources are integrated.
-        """
-        contributions: dict[str, list[float]] = {}
-        for source in sources:
-            if not isinstance(source, Mapping):
-                raise ValueError("drive adjustments must be mappings")
-            for drive, raw_value in source.items():
-                if not isinstance(drive, str) or not drive.strip():
-                    raise ValueError("drive adjustment names must be non-empty")
-                value = _bounded(f"drive_adjustments[{drive}]", raw_value, -0.3, 0.3)
-                contributions.setdefault(drive, []).append(value)
-        return {
-            drive: max(-0.3, min(0.3, math.fsum(sorted(values))))
-            for drive, values in sorted(contributions.items())
-        }
+        """Delegate to the shared deterministic feedback aggregation policy."""
+        return merge_drive_adjustments(*sources)
 
     @staticmethod
     def _motivational_drive_adjustments(motivation: Any) -> dict[str, float]:
@@ -216,6 +201,7 @@ class CuriosityGoalCoordinator:
         investigation_store: CuriosityInvestigationStore,
         context: AutonomyContext | None = None,
         motivation: Any | None = None,
+        drive_adjustment_sources: Iterable[Mapping[str, float]] = (),
         homeostatic_proposal: HomeostaticProposal | None = None,
         stability_pressure: float | None = None,
         homeostatic_persistence_horizon: int = 3,
@@ -273,7 +259,14 @@ class CuriosityGoalCoordinator:
             motivational_adjustments = self._motivational_drive_adjustments(motivation)
             motivational_goals = self.controller.generate_motivational_goals(motivation)
 
+        if isinstance(drive_adjustment_sources, (str, bytes)):
+            raise ValueError("drive_adjustment_sources must contain mappings")
+        try:
+            additional_sources = tuple(drive_adjustment_sources)
+        except TypeError as exc:
+            raise ValueError("drive_adjustment_sources must be iterable") from exc
         drive_adjustments = self._merge_drive_adjustments(
+            *additional_sources,
             homeostatic_adjustments,
             motivational_adjustments,
         )
