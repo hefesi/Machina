@@ -385,6 +385,7 @@ class CuriosityGoalCoordinator:
         investigation_store: CuriosityInvestigationStore,
         context: AutonomyContext | None = None,
         motivation: Any | None = None,
+        drive_adjustment_sources: Iterable[Mapping[str, float]] = (),
         homeostatic_proposal: HomeostaticProposal | None = None,
         stability_pressure: float | None = None,
         homeostatic_persistence_horizon: int = 3,
