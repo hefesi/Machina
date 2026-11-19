@@ -1165,13 +1165,14 @@ class VirtualBrainLoopTests(unittest.TestCase):
                 if event.event_type == "goal.deliberated"
             )
             curiosity = trace.data["curiosity_context"]
+            candidate_id = curiosity["candidate_goal_id"]
             selector_score = next(
                 item["score"] for item in curiosity["selector_decision"]["ranked"]
-                if item["question"]["question_id"] == "investigate_gap:memory-recall"
+                if item["question"]["question_id"] == candidate_id
             )
             autonomy_score = next(
                 item["score"] for item in trace.data["deliberation"]["autonomy"]["alternatives"]
-                if item["goal"]["goal_id"] == "investigate_gap:memory-recall"
+                if item["goal"]["goal_id"] == candidate_id
             )
             # +0.08 caller +0.02 self-history -0.03 homeostasis +0.00
             # temporal motivation = +0.07 in both preview and final choice.
