@@ -13,6 +13,7 @@ from .autonomy import (
     AutonomyController,
     AutonomyDecision,
     GoalCandidate,
+    merge_drive_adjustments,
 )
 from .goal_store import PersistentGoalStore
 
@@ -87,6 +88,7 @@ class InternalDeliberator:
         *,
         motivation: Any | None = None,
         drive_adjustments: dict[str, float] | None = None,
+        drive_adjustment_sources: Iterable[Mapping[str, float]] = (),
         recent_goal_ids: tuple[str, ...] | list[str] = (),
         open_goal_limit: int = 20,
         strategy_guidance: dict[str, Any] | None = None,
@@ -148,12 +150,19 @@ class InternalDeliberator:
                 continue
             candidates_by_id[goal.goal_id] = goal
 
-        adjustments = dict(drive_adjustments or {})
+        if isinstance(drive_adjustment_sources, (str, bytes)):
+            raise ValueError("drive_adjustment_sources must contain mappings")
+        try:
+            additional_adjustment_sources = tuple(drive_adjustment_sources)
+        except TypeError as exc:
+            raise ValueError("drive_adjustment_sources must be iterable") from exc
+        feedback_sources = [
+            drive_adjustments if drive_adjustments is not None else {},
+            *additional_adjustment_sources,
+        ]
         if motivation is not None and hasattr(motivation, "temporal_autonomy_adjustments"):
-            temporal_adjustments = motivation.temporal_autonomy_adjustments()
-            for drive, adjustment in temporal_adjustments.items():
-                combined = float(adjustments.get(drive, 0.0)) + float(adjustment)
-                adjustments[drive] = max(-0.3, min(0.3, combined))
+            feedback_sources.append(motivation.temporal_autonomy_adjustments())
+        adjustments = merge_drive_adjustments(*feedback_sources)
 
         decision = self.controller.choose(
             candidates_by_id.values(),
