@@ -311,7 +311,13 @@ class VirtualBrain:
             not isinstance(cycle_id, str) or not cycle_id.strip()
         ):
             raise ValueError("cycle_id must be a non-empty string")
-        combined_adjustments = dict(drive_adjustments or {})
+        if drive_adjustments is not None and not isinstance(drive_adjustments, Mapping):
+            raise ValueError("drive_adjustments must be a mapping")
+        external_drive_adjustment_sources: list[Mapping[str, float]] = []
+        final_drive_adjustment_sources: list[Mapping[str, float]] = []
+        if drive_adjustments is not None:
+            external_drive_adjustment_sources.append(drive_adjustments)
+            final_drive_adjustment_sources.append(drive_adjustments)
         homeostasis_trace = None
         if homeostatic_proposal is not None:
             if not isinstance(homeostatic_proposal, HomeostaticProposal):
@@ -320,12 +326,9 @@ class VirtualBrain:
                 raise ValueError("homeostatic proposal cycle_id must be a non-empty string")
             if cycle_id is not None and homeostatic_proposal.cycle_id != cycle_id:
                 raise ValueError("homeostatic proposal cycle_id must match the deliberation cycle")
-            for drive, adjustment in homeostatic_proposal.adjustments.items():
-                if not isinstance(drive, str) or not drive.strip():
-                    raise ValueError("homeostatic drive names must be non-empty strings")
-                if isinstance(adjustment, bool) or not isinstance(adjustment, (int, float)) or not (-0.3 <= adjustment <= 0.3):
-                    raise ValueError("homeostatic adjustments must be within [-0.3, 0.3]")
-                combined_adjustments[drive] = max(-0.3, min(0.3, combined_adjustments.get(drive, 0.0) + adjustment))
+            if not isinstance(homeostatic_proposal.adjustments, Mapping):
+                raise ValueError("homeostatic adjustments must be a mapping")
+            final_drive_adjustment_sources.append(homeostatic_proposal.adjustments)
             homeostasis_trace = {
                 "cycle_id": homeostatic_proposal.cycle_id,
                 "adjustments": dict(homeostatic_proposal.adjustments),
@@ -343,12 +346,10 @@ class VirtualBrain:
         if self_history_influence is not None:
             if not isinstance(self_history_influence, SelfHistoryInfluence):
                 raise TypeError("self_history_influence must be a SelfHistoryInfluence")
-            for drive, adjustment in self_history_influence.adjustments.items():
-                if not isinstance(drive, str) or not drive.strip():
-                    raise ValueError("self-history drive names must be non-empty strings")
-                if isinstance(adjustment, bool) or not isinstance(adjustment, (int, float)) or not (-0.3 <= adjustment <= 0.3):
-                    raise ValueError("self-history adjustments must be within [-0.3, 0.3]")
-                combined_adjustments[drive] = max(-0.3, min(0.3, combined_adjustments.get(drive, 0.0) + adjustment))
+            if not isinstance(self_history_influence.adjustments, Mapping):
+                raise ValueError("self-history adjustments must be a mapping")
+            external_drive_adjustment_sources.append(self_history_influence.adjustments)
+            final_drive_adjustment_sources.append(self_history_influence.adjustments)
             self_history_trace = {
                 "adjustments": dict(self_history_influence.adjustments),
                 "transitions": [
@@ -398,6 +399,7 @@ class VirtualBrain:
                 investigation_store=self.curiosity_store,
                 context=None,
                 motivation=motivation,
+                drive_adjustment_sources=tuple(external_drive_adjustment_sources),
                 homeostatic_proposal=homeostatic_proposal,
                 recent_goal_ids=recent_goal_ids,
                 persist_selected=False,
@@ -434,7 +436,7 @@ class VirtualBrain:
         deliberation = self.internal_deliberator.deliberate(
             context,
             motivation=motivation,
-            drive_adjustments=combined_adjustments,
+            drive_adjustment_sources=tuple(final_drive_adjustment_sources),
             recent_goal_ids=recent_goal_ids,
             strategy_guidance=strategy_guidance,
             additional_candidates=curiosity_candidates,
