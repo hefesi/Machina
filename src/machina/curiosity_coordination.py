@@ -93,6 +93,18 @@ class CuriosityGoalCoordinator:
         return merge_drive_adjustments(*sources)
 
     @staticmethod
+    def _normalize_drive_adjustment_sources(
+        sources: Iterable[Mapping[str, float]],
+    ) -> tuple[Mapping[str, float], ...]:
+        """Materialize optional feedback sources once and reject invalid containers."""
+        if isinstance(sources, (str, bytes)):
+            raise ValueError("drive_adjustment_sources must contain mappings")
+        try:
+            return tuple(sources)
+        except TypeError as exc:
+            raise ValueError("drive_adjustment_sources must be iterable") from exc
+
+    @staticmethod
     def _motivational_drive_adjustments(motivation: Any) -> dict[str, float]:
         """Reuse the canonical motivation-to-autonomy feedback policy.
 
@@ -259,12 +271,9 @@ class CuriosityGoalCoordinator:
             motivational_adjustments = self._motivational_drive_adjustments(motivation)
             motivational_goals = self.controller.generate_motivational_goals(motivation)
 
-        if isinstance(drive_adjustment_sources, (str, bytes)):
-            raise ValueError("drive_adjustment_sources must contain mappings")
-        try:
-            additional_sources = tuple(drive_adjustment_sources)
-        except TypeError as exc:
-            raise ValueError("drive_adjustment_sources must be iterable") from exc
+        additional_sources = self._normalize_drive_adjustment_sources(
+            drive_adjustment_sources
+        )
         drive_adjustments = self._merge_drive_adjustments(
             *additional_sources,
             homeostatic_adjustments,
@@ -493,7 +502,11 @@ class CuriosityGoalCoordinator:
             motivational_adjustments = self._motivational_drive_adjustments(motivation)
             motivational_goals = self.controller.generate_motivational_goals(motivation)
 
+        additional_sources = self._normalize_drive_adjustment_sources(
+            drive_adjustment_sources
+        )
         drive_adjustments = self._merge_drive_adjustments(
+            *additional_sources,
             homeostatic_adjustments,
             motivational_adjustments,
         )
