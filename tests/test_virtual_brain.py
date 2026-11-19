@@ -1070,5 +1070,97 @@ class VirtualBrainLoopTests(unittest.TestCase):
             goals.close()
 
 
+
+    def test_all_feedback_sources_match_curiosity_preview_and_final_autonomy(self):
+        from machina.curiosity_coordination import CuriosityGoalCoordinator
+        from machina.goal_outcome_learning import GoalOutcomeLearner
+        from machina.self_model import SelfModel
+        from machina.self_model_learning import SelfModelLearningBridge
+
+        goals = PersistentGoalStore(
+            Path(self.temporary_directory.name) / "feedback-aggregation-goals.sqlite"
+        )
+        learner = GoalOutcomeLearner(
+            Path(self.temporary_directory.name) / "feedback-aggregation-outcomes.sqlite"
+        )
+        controller = AutonomyController()
+        coordinator = CuriosityGoalCoordinator(
+            SelfModelLearningBridge(SelfModel(), learner), controller
+        )
+        motivation = MotivationSystem([
+            MotivationalDrive(
+                "curiosity", level=0.0, setpoint=0.0, pressure=0.0
+            ),
+        ])
+        brain = VirtualBrain(
+            self.database_path,
+            internal_deliberator=InternalDeliberator(controller, goals),
+            curiosity_investigation_path=(
+                Path(self.temporary_directory.name) / "feedback-aggregation-curiosity.sqlite"
+            ),
+            curiosity_goal_coordinator=coordinator,
+            motivation_system=motivation,
+        )
+        proposal = HomeostaticProposal(
+            cycle_id="feedback-aggregation-cycle",
+            adjustments={"curiosity": 0.3},
+            deviations={},
+            persistence={},
+            evidence_refs=("telemetry:feedback-aggregation",),
+            rationale=("bounded homeostatic contribution",),
+        )
+        history = SelfHistoryInfluence(
+            adjustments={"curiosity": -0.3},
+            transitions=(),
+            evidence_refs=("self-history:feedback-aggregation",),
+            rationale=("bounded autobiographical contribution",),
+        )
+        try:
+            result = brain.run_deliberated_cycle(
+                "Compare the evidence-backed curiosity candidate.",
+                AutonomyContext(memory_count=1),
+                motivation=motivation,
+                drive_adjustments={"curiosity": 0.3},
+                homeostatic_proposal=proposal,
+                self_history_influence=history,
+                curiosity_gap_mappings={
+                    "memory_gap": {
+                        "question": "Which evidence explains the memory gap?",
+                        "hypothesis": "A missing retrieval relation may explain the gap.",
+                        "information_gain": 0.9,
+                        "impact": 0.9,
+                        "urgency": 0.9,
+                        "estimated_cost": 0.1,
+                        "risk": 0.02,
+                    }
+                },
+            )
+            trace = next(
+                event.artifact for event in result.events
+                if event.event_type == "goal.deliberated"
+            )
+            curiosity = trace.data["curiosity_context"]
+            self.assertEqual("curiosity", trace.data["selected_source"])
+            self.assertTrue(curiosity["selected_by_unified_deliberation"])
+            selector_score = next(
+                item["score"] for item in curiosity["selector_decision"]["ranked"]
+                if item["question"]["question_id"] == "investigate_gap:memory-gap"
+            )
+            autonomy_score = next(
+                item["score"] for item in trace.data["deliberation"]["autonomy"]["alternatives"]
+                if item["goal"]["goal_id"] == "investigate_gap:memory-gap"
+            )
+            # +0.3 caller +0.3 homeostasis -0.3 self-history -0.15
+            # temporal motivation = +0.15 for both preview and final choice.
+            self.assertAlmostEqual(0.15, selector_score["drive_adjustment"])
+            self.assertAlmostEqual(0.15, autonomy_score["feedback_adjustment"])
+            self.assertEqual(1, len(brain.curiosity_store.open_investigations()))
+            self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+        finally:
+            brain.close()
+            learner.close()
+            goals.close()
+
+
 if __name__ == "__main__":
     unittest.main()
