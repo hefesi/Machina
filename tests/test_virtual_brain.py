@@ -1071,6 +1071,125 @@ class VirtualBrainLoopTests(unittest.TestCase):
 
 
 
+    def test_follow_up_feedback_sources_match_curiosity_preview_and_final_autonomy(self) -> None:
+        from machina.curiosity_coordination import CuriosityGoalCoordinator
+        from machina.goal_outcome_learning import GoalOutcomeLearner
+        from machina.self_model import SelfModel
+        from machina.self_model_learning import SelfModelLearningBridge
+
+        goals = PersistentGoalStore(
+            Path(self.temporary_directory.name) / "follow-up-feedback-goals.sqlite"
+        )
+        learner = GoalOutcomeLearner(
+            Path(self.temporary_directory.name) / "follow-up-feedback-outcomes.sqlite"
+        )
+        controller = AutonomyController()
+        coordinator = CuriosityGoalCoordinator(
+            SelfModelLearningBridge(SelfModel(), learner), controller
+        )
+        motivation = MotivationSystem([
+            MotivationalDrive(
+                "curiosity", level=0.5, setpoint=0.5, pressure=0.5
+            ),
+        ])
+        brain = VirtualBrain(
+            self.database_path,
+            internal_deliberator=InternalDeliberator(controller, goals),
+            curiosity_investigation_path=(
+                Path(self.temporary_directory.name) / "follow-up-feedback-curiosity.sqlite"
+            ),
+            curiosity_goal_coordinator=coordinator,
+            motivation_system=motivation,
+        )
+        unknown = "Does recall remain stable after restart?"
+        try:
+            parent_cycle = brain.run_cycle(
+                "A first recall benchmark was completed.",
+                "Record the initial result.",
+            )
+            brain.start_curiosity_investigation(
+                parent_cycle.cycle_id,
+                "follow-up-feedback-parent",
+                gap_property="memory_recall",
+                question="Does indexing improve recall?",
+                hypothesis="Indexing may improve recall.",
+                selection_reason="Initial evidence-backed inquiry.",
+                goal_id="investigate_gap:memory-recall",
+            )
+            brain.close_curiosity_investigation(
+                parent_cycle.cycle_id,
+                "follow-up-feedback-parent",
+                outcome="partially_answered",
+                answer_summary="The initial benchmark improved, but restart stability is unknown.",
+                remaining_unknowns=[unknown],
+            )
+
+            proposal = HomeostaticProposal(
+                cycle_id="follow-up-feedback-cycle",
+                adjustments={"curiosity": -0.03},
+                deviations={},
+                persistence={},
+                evidence_refs=("telemetry:follow-up-feedback",),
+                rationale=("small homeostatic correction",),
+            )
+            history = SelfHistoryInfluence(
+                adjustments={"curiosity": 0.02},
+                transitions=(),
+                evidence_refs=("self-history:follow-up-feedback",),
+                rationale=("small autobiographical correction",),
+            )
+            result = brain.run_deliberated_cycle(
+                "Revisit the unresolved recall question.",
+                AutonomyContext(memory_count=1),
+                motivation=motivation,
+                drive_adjustments={"curiosity": 0.08},
+                homeostatic_proposal=proposal,
+                self_history_influence=history,
+                curiosity_follow_up_investigation_id="follow-up-feedback-parent",
+                curiosity_follow_up_mappings={
+                    unknown: {
+                        "drive": "curiosity",
+                        "hypothesis": "The index may persist across process restarts.",
+                        "uncertainty": 0.8,
+                        "information_gain": 0.9,
+                        "impact": 0.85,
+                        "novelty": 0.95,
+                        "urgency": 0.8,
+                        "estimated_cost": 0.1,
+                        "risk": 0.02,
+                    }
+                },
+            )
+            trace = next(
+                event.artifact for event in result.events
+                if event.event_type == "goal.deliberated"
+            )
+            curiosity = trace.data["curiosity_context"]
+            selector_score = next(
+                item["score"] for item in curiosity["selector_decision"]["ranked"]
+                if item["question"]["question_id"] == "investigate_gap:memory-recall"
+            )
+            autonomy_score = next(
+                item["score"] for item in trace.data["deliberation"]["autonomy"]["alternatives"]
+                if item["goal"]["goal_id"] == "investigate_gap:memory-recall"
+            )
+            # +0.08 caller +0.02 self-history -0.03 homeostasis +0.00
+            # temporal motivation = +0.07 in both preview and final choice.
+            self.assertAlmostEqual(0.07, selector_score["drive_adjustment"])
+            self.assertAlmostEqual(0.07, autonomy_score["feedback_adjustment"])
+            self.assertTrue(curiosity["selected_by_unified_deliberation"])
+            self.assertEqual("curiosity", trace.data["selected_source"])
+            self.assertEqual(
+                "follow-up-feedback-parent",
+                curiosity["follow_up_source_investigation_id"],
+            )
+            self.assertEqual(1, len(brain.curiosity_store.open_investigations()))
+            self.assertTrue(brain.audit_cycle(result.cycle_id).valid)
+        finally:
+            brain.close()
+            learner.close()
+            goals.close()
+
     def test_all_feedback_sources_match_curiosity_preview_and_final_autonomy(self):
         from machina.curiosity_coordination import CuriosityGoalCoordinator
         from machina.goal_outcome_learning import GoalOutcomeLearner
