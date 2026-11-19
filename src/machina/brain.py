@@ -412,6 +412,7 @@ class VirtualBrain:
                 investigation_store=self.curiosity_store,
                 context=None,
                 motivation=motivation,
+                drive_adjustment_sources=tuple(external_drive_adjustment_sources),
                 homeostatic_proposal=homeostatic_proposal,
                 recent_goal_ids=recent_goal_ids,
                 persist_selected=False,
