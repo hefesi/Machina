@@ -1122,5 +1122,68 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         )
 
 
+
+    def test_follow_up_merges_external_homeostatic_self_history_and_motivation_feedback(self):
+        unknown = "Does the retrieval index survive a process restart?"
+        self.store.start_investigation(
+            "feedback-follow-up-parent",
+            gap_property="memory_gap",
+            question="Does the retrieval index preserve evidence?",
+            hypothesis="The retrieval index may preserve evidence.",
+            selection_reason="Initial controlled inquiry.",
+            cycle_id="feedback-follow-up-parent-cycle",
+            goal_id="investigate_gap:memory-gap",
+        )
+        self.store.close_investigation(
+            "feedback-follow-up-parent",
+            outcome="partially_answered",
+            answer_summary="Initial retrieval succeeded; restart persistence remains unknown.",
+            remaining_unknowns=[unknown],
+            cycle_id="feedback-follow-up-parent-close",
+        )
+        motivation = MotivationSystem([
+            MotivationalDrive("curiosity", level=0.0, setpoint=0.0, pressure=0.0),
+        ])
+        proposal = HomeostaticProposal(
+            cycle_id="feedback-follow-up-cycle",
+            adjustments={"curiosity": 0.3},
+            deviations={},
+            persistence={},
+            evidence_refs=("telemetry:follow-up-feedback",),
+            rationale=("homeostatic contribution",),
+        )
+        result = self.coordinator.deliberate_follow_up(
+            "feedback-follow-up-parent",
+            {
+                unknown: {
+                    "hypothesis": "The retrieval index may survive a restart.",
+                    "uncertainty": 0.9,
+                    "information_gain": 0.9,
+                    "impact": 0.9,
+                    "novelty": 0.9,
+                    "urgency": 0.9,
+                    "estimated_cost": 0.1,
+                    "risk": 0.02,
+                }
+            },
+            cycle_id="feedback-follow-up-cycle",
+            investigation_store=self.store,
+            motivation=motivation,
+            homeostatic_proposal=proposal,
+            drive_adjustment_sources=(
+                {"curiosity": 0.3},
+                {"curiosity": -0.3},
+            ),
+            persist_selected=False,
+        )
+        self.assertAlmostEqual(0.15, result["drive_adjustments"]["curiosity"])
+        self.assertIsNotNone(result["curiosity_decision"].selected)
+        self.assertAlmostEqual(
+            0.15,
+            result["curiosity_decision"].ranked[0]["score"]["drive_adjustment"],
+        )
+        self.assertEqual([], self.store.open_investigations())
+
+
 if __name__ == "__main__":
     unittest.main()
