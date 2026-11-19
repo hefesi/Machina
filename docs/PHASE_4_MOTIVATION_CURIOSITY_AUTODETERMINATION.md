@@ -351,3 +351,23 @@ provides the corresponding single-drive value. This keeps the final autonomy
 score aligned with the feedback used to rank a curiosity candidate; the
 instantaneous conflict-adjusted `autonomy_adjustments()` API remains a
 separate signal.
+
+
+### Unified multi-source drive feedback
+
+`merge_drive_adjustments()` is the shared aggregation policy used by
+curiosity coordination and final internal deliberation. `VirtualBrain` passes
+caller, homeostatic and self-history contributions as separate bounded sources;
+the coordinator and final deliberator add the same persisted temporal
+motivational mapping before applying one aggregate clamp per drive.
+
+Each source must be finite and within `[-0.3, 0.3]`. Contributions are summed
+with stable ordering and `math.fsum()`, then the aggregate is clamped once to
+`[-0.3, 0.3]`. The curiosity selector and autonomy scorer apply their existing
+downstream per-drive effect bound of `[-0.15, 0.15]`.
+
+This keeps the preview ranking and final unified decision aligned when
+caller-supplied, homeostatic, autobiographical and motivational feedback have
+mixed signs. It also avoids intermediate saturation changing the sign or
+magnitude of the final signal. The integration tests cover both initial and
+follow-up curiosity paths.
