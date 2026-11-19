@@ -32,9 +32,10 @@ def merge_drive_adjustments(*sources: Mapping[str, float]) -> dict[str, float]:
                 isinstance(raw_value, bool)
                 or not isinstance(raw_value, (int, float))
                 or not math.isfinite(raw_value)
-                or not -0.3 <= raw_value <= 0.3
             ):
-                raise ValueError("each drive adjustment must be finite and within [-0.3, 0.3]")
+                raise ValueError(f"drive adjustment for {drive} must be a finite number")
+            if not -0.3 <= raw_value <= 0.3:
+                raise ValueError("each drive adjustment must be within [-0.3, 0.3]")
             contributions.setdefault(drive, []).append(float(raw_value))
     return {
         drive: max(-0.3, min(0.3, math.fsum(sorted(values))))
