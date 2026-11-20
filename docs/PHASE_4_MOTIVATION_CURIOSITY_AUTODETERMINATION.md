@@ -371,3 +371,13 @@ caller-supplied, homeostatic, autobiographical and motivational feedback have
 mixed signs. It also avoids intermediate saturation changing the sign or
 magnitude of the final signal. The integration tests cover both initial and
 follow-up curiosity paths.
+
+
+### Direct autonomy feedback validation
+
+Direct calls to `AutonomyController.choose()` use the same
+`merge_drive_adjustments()` validation contract as the coordinator and
+deliberator. Each source must be a mapping of non-empty drive names to finite
+numbers in `[-0.3, 0.3]`; the downstream per-goal effect remains clamped to
+`[-0.15, 0.15]`. This prevents callers from bypassing the shared feedback
+contract by invoking the lower-level choice API directly.

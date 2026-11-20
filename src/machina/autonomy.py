@@ -212,7 +212,9 @@ class AutonomyController:
             raise ValueError("goal_id values must be unique")
         approved = set(approved_external_goal_ids)
         recent = set(recent_goal_ids)
-        adjustments = drive_adjustments or {}
+        adjustments = merge_drive_adjustments(
+            {} if drive_adjustments is None else drive_adjustments
+        )
         eligible: list[tuple[GoalCandidate, dict[str, float]]] = []
         rejected: list[dict[str, str]] = []
 

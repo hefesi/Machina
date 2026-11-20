@@ -179,5 +179,33 @@ class AutonomyControllerTests(unittest.TestCase):
             AutonomyContext(memory_count=-1)
 
 
+    def test_choose_uses_shared_drive_adjustment_validation_and_bounds(self):
+        goal = GoalCandidate(
+            "explore", "Explore a relevant unknown", "curiosity",
+            0.5, 0.5, 0.8, 0.2, 0.01,
+        )
+        decision = self.controller.choose(
+            [goal], drive_adjustments={"curiosity": 0.3}
+        )
+        self.assertEqual(
+            0.15,
+            decision.alternatives[0]["score"]["feedback_adjustment"],
+        )
+
+        invalid_sources = (
+            {"curiosity": True},
+            {"curiosity": float("nan")},
+            {"curiosity": float("inf")},
+            {"curiosity": 0.31},
+            {"curiosity": -0.31},
+            {"": 0.1},
+            ["curiosity", 0.1],
+        )
+        for source in invalid_sources:
+            with self.subTest(source=source):
+                with self.assertRaises(ValueError):
+                    self.controller.choose([goal], drive_adjustments=source)
+
+
 if __name__ == "__main__":
     unittest.main()
