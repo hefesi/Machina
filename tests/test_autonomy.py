@@ -38,6 +38,23 @@ class AutonomyControllerTests(unittest.TestCase):
         scores = {item["goal"]["goal_id"]: item["score"]["total"] for item in decision.alternatives}
         self.assertGreater(scores["explore"], scores["stabilize"])
 
+    def test_step_merges_caller_and_temporal_motivation_adjustments(self):
+        motivation = MotivationSystem([
+            MotivationalDrive("curiosity", level=0.9, priority=1.0),
+        ])
+        decision = self.controller.step(
+            AutonomyContext(memory_count=4),
+            drive_adjustments={"curiosity": -0.1},
+            motivation=motivation,
+        )
+        curiosity_goal = next(
+            item for item in decision.alternatives
+            if item["goal"]["goal_id"] == "sustain_drive:curiosity"
+        )
+        # Caller feedback (-0.10) and temporal motivation (+0.12) must be
+        # combined, not overwritten by whichever source is applied last.
+        self.assertAlmostEqual(0.02, curiosity_goal["score"]["feedback_adjustment"])
+
     def test_sustained_motivational_pressure_generates_internal_goal(self):
         motivation = MotivationSystem([
             MotivationalDrive("curiosity", level=0.9, priority=1.0, persistence=0.5),
