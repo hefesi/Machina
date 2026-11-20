@@ -292,11 +292,15 @@ class AutonomyController:
     ) -> AutonomyDecision:
         """Generate and choose a goal from context and sustained internal pressure."""
         candidates = self.generate_goals(context)
-        adjustments = dict(drive_adjustments or {})
+        adjustment_sources: list[Mapping[str, float]] = []
+        if drive_adjustments is not None:
+            adjustment_sources.append(drive_adjustments)
         if motivation is not None:
             candidates.extend(self.generate_motivational_goals(motivation))
-            if hasattr(motivation, "temporal_autonomy_adjustments"):
-                adjustments.update(motivation.temporal_autonomy_adjustments())
+            provider = getattr(motivation, "temporal_autonomy_adjustments", None)
+            if callable(provider):
+                adjustment_sources.append(provider())
+        adjustments = merge_drive_adjustments(*adjustment_sources)
         return self.choose(
             candidates,
             drive_adjustments=adjustments,
