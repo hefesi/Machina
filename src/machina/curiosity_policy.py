@@ -9,6 +9,8 @@ from dataclasses import asdict, dataclass
 import math
 from typing import Any, Iterable, Mapping
 
+from .drive_feedback import merge_drive_adjustments
+
 
 def _unit(name: str, value: float) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
@@ -108,17 +110,7 @@ class CuriositySelector:
         elif not isinstance(drive_adjustments, Mapping):
             raise ValueError("drive_adjustments must be a mapping")
         else:
-            adjustments = dict(drive_adjustments)
-        for drive, adjustment in adjustments.items():
-            if not isinstance(drive, str) or not drive.strip():
-                raise ValueError("drive adjustment names must be non-empty strings")
-            if (
-                isinstance(adjustment, bool)
-                or not isinstance(adjustment, (int, float))
-                or not math.isfinite(adjustment)
-                or not -0.3 <= adjustment <= 0.3
-            ):
-                raise ValueError("drive adjustments must be finite and within [-0.3, 0.3]")
+            adjustments = merge_drive_adjustments(drive_adjustments)
         exploration_weight = 1.0 - 0.75 * stability
         questions = list(candidates)
         if any(not isinstance(q, CuriosityQuestion) for q in questions):
