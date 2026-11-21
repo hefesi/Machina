@@ -386,3 +386,26 @@ contract by invoking the lower-level choice API directly.
 ### Shared drive-feedback contract
 
 The canonical `merge_drive_adjustments()` implementation lives in `machina.drive_feedback` and is imported by both the autonomy and curiosity-policy layers. This keeps mapping validation, finite-value checks, per-source bounds, stable summation and the single aggregate clamp identical for curiosity preview and final goal scoring. The historical `machina.autonomy.merge_drive_adjustments` import remains available through the module-level re-export.
+
+
+### Conflict-strength feedback in integrated goal selection
+
+`MotivationSystem.effective_urgencies()` applies each conflict edge as its
+strength multiplied by the competing drive's urgency, averages those
+strength-scaled contributions across active links, and then applies the
+configured conflict gain. A single edge's strength therefore remains
+meaningful: increasing it increases inhibition without mutating either raw
+drive deficit. Cooperation uses the same bounded mean-contribution pattern.
+
+`MotivationSystem.step()` updates each drive's persistent temporal pressure
+from these conflict-adjusted effective urgencies. The canonical
+`temporal_autonomy_adjustments()` mapping then carries that pressure into
+both curiosity preview and final autonomy scoring. This is intentionally
+cycle-based: changing a conflict relation does not mutate stored pressure
+until the next motivation step.
+
+The regression suite compares weak and strong single-edge conflicts and
+verifies that the resulting adjustment is identical in `CuriositySelector`
+and the coordinator's final `AutonomyController` decision. The values are
+operational heuristics, not a claim that the system experiences competing
+needs.

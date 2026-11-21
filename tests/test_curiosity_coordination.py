@@ -10,7 +10,11 @@ from machina.curiosity import CuriosityInvestigationStore
 from machina.curiosity_coordination import CuriosityGoalCoordinator
 from machina.goal_outcome_learning import GoalOutcomeLearner
 from machina.homeostasis import HomeostaticProposal
-from machina.mnn_motivation import MotivationSystem, MotivationalDrive
+from machina.mnn_motivation import (
+    MotivationSystem,
+    MotivationalConflict,
+    MotivationalDrive,
+)
 from machina.self_model import SelfModel
 from machina.self_model_learning import SelfModelLearningBridge
 
@@ -157,6 +161,62 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         score = result["curiosity_decision"].ranked[0]["score"]
         self.assertAlmostEqual(0.11, score["drive_adjustment"])
         self.assertEqual([], self.store.open_investigations())
+
+
+    def test_conflict_strength_reaches_curiosity_preview_and_final_autonomy_scores(self):
+        def evaluate(strength, cycle_id):
+            motivation = MotivationSystem(
+                [
+                    MotivationalDrive(
+                        "curiosity", level=0.9, setpoint=0.9, persistence=0.0
+                    ),
+                    MotivationalDrive(
+                        "stability", level=0.7, setpoint=0.7, persistence=0.0
+                    ),
+                ],
+                [
+                    MotivationalConflict(
+                        "curiosity", "stability", strength=strength
+                    )
+                ],
+                conflict_gain=0.5,
+            )
+            # The normal motivation step integrates conflict-adjusted urgency
+            # into the temporal pressure consumed by both selection layers.
+            motivation.step()
+            result = self.coordinator.deliberate(
+                self.mappings(),
+                cycle_id=cycle_id,
+                investigation_store=self.store,
+                motivation=motivation,
+                persist_selected=False,
+            )
+            candidate_id = result["curiosity_candidate_goal_id"]
+            self.assertIsNotNone(candidate_id)
+            curiosity_score = next(
+                item["score"]
+                for item in result["curiosity_decision"].ranked
+                if item["question"]["question_id"] == candidate_id
+            )
+            autonomy_score = next(
+                item["score"]
+                for item in result["autonomy_decision"].alternatives
+                if item["goal"]["goal_id"] == candidate_id
+            )
+            return (
+                result["drive_adjustments"]["curiosity"],
+                curiosity_score["drive_adjustment"],
+                autonomy_score["feedback_adjustment"],
+            )
+
+        weak_conflict = evaluate(0.2, "conflict-feedback-weak")
+        strong_conflict = evaluate(0.8, "conflict-feedback-strong")
+        self.assertGreater(weak_conflict[0], strong_conflict[0])
+        for feedback, selector_score, autonomy_score in (weak_conflict, strong_conflict):
+            self.assertAlmostEqual(feedback, selector_score)
+            self.assertAlmostEqual(feedback, autonomy_score)
+        self.assertAlmostEqual(0.099, weak_conflict[0])
+        self.assertAlmostEqual(0.036, strong_conflict[0])
 
     def test_initial_and_follow_up_reuse_canonical_motivation_adjustments(self):
         class CalibratedMotivation:

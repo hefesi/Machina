@@ -139,10 +139,29 @@ class MotivationSystemTests(unittest.TestCase):
         )
         raw = {name: drive.urgency for name, drive in system.drives.items()}
         effective = system.effective_urgencies()
-        self.assertAlmostEqual(0.55, effective["explore"])
-        self.assertAlmostEqual(0.25, effective["rest"])
+        self.assertAlmostEqual(0.62, effective["explore"])
+        self.assertAlmostEqual(0.34, effective["rest"])
         self.assertAlmostEqual(0.8, effective["create"])
         self.assertEqual(raw, {name: drive.urgency for name, drive in system.drives.items()})
+
+
+    def test_conflict_strength_scales_single_edge_inhibition(self):
+        def effective_curiosity(strength):
+            system = MotivationSystem(
+                [
+                    MotivationalDrive("curiosity", level=0.9),
+                    MotivationalDrive("stability", level=0.7),
+                ],
+                [MotivationalConflict("curiosity", "stability", strength=strength)],
+                conflict_gain=0.5,
+            )
+            return system.effective_urgencies()["curiosity"]
+
+        weak = effective_curiosity(0.2)
+        strong = effective_curiosity(0.8)
+        self.assertAlmostEqual(0.83, weak)
+        self.assertAlmostEqual(0.62, strong)
+        self.assertGreater(weak, strong)
 
     def test_conflict_arbitration_is_independent_of_registration_order(self):
         drives = [

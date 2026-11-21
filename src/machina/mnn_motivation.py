@@ -202,9 +202,9 @@ class MotivationSystem:
     def effective_urgencies(self, *, gain: float | None = None) -> dict[str, float]:
         """Return urgency after symmetric, order-independent competition.
 
-        Cooperative partners contribute a bounded positive boost first;
-        competing partners then contribute bounded inhibition. The raw drive
-        deficit is never overwritten.
+        Cooperative and competing links contribute strength-scaled partner
+        pressure. Their mean contribution is bounded by the configured gain,
+        and the raw drive deficit is never overwritten.
         """
         selected_gain = self.conflict_gain if gain is None else _bounded("gain", gain)
         opponents: dict[str, list[tuple[float, float]]] = {
@@ -232,13 +232,16 @@ class MotivationSystem:
             cooperative_links = partners[name]
             boost = 0.0
             if cooperative_links:
-                partner_pressure = sum(weight * urgency for weight, urgency in cooperative_links) / len(cooperative_links)
+                partner_pressure = math.fsum(
+                    weight * urgency for weight, urgency in cooperative_links
+                ) / len(cooperative_links)
                 boost = self.cooperation_gain * partner_pressure
             conflict_links = opponents[name]
             inhibition = 0.0
             if conflict_links:
-                total_weight = sum(weight for weight, _ in conflict_links)
-                competing_pressure = sum(weight * urgency for weight, urgency in conflict_links) / total_weight
+                competing_pressure = math.fsum(
+                    weight * urgency for weight, urgency in conflict_links
+                ) / len(conflict_links)
                 inhibition = selected_gain * competing_pressure
             result[name] = max(0.0, min(1.0, drive.urgency + boost - inhibition))
         return result
