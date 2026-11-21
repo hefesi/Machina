@@ -1,5 +1,7 @@
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from machina.causal_learning import CausalExperimentStore
@@ -20,8 +22,8 @@ class CausalExperimentStoreTests(unittest.TestCase):
     def _register(self, design="randomized"):
         return self.store.register_experiment(
             "retrieval-v1", design=design,
-            treatment_name="new_retrieval_strategy",
-            control_name="baseline_strategy",
+            treatment_name="retrieve",
+            control_name="archive",
             protocol_ref="protocol:retrieval-v1",
         )
 
@@ -113,13 +115,136 @@ class CausalExperimentStoreTests(unittest.TestCase):
             replayed = self.store.record_strategy_outcome(
                 "retrieval-v1", "treatment", outcome
             )
-            self.assertEqual(projected["trial_id"], replayed["trial_id"])
+            self.assertEqual(projected, replayed)
             self.assertEqual(1, self.store.report("retrieval-v1")["treatment"]["n"])
             self.assertEqual(outcome.artifact.id, projected["evidence_ref"])
-            with self.assertRaisesRegex(ValueError, "different trial data"):
+            with self.assertRaisesRegex(ValueError, "does not match the experiment arm"):
                 self.store.record_strategy_outcome(
                     "retrieval-v1", "control", outcome
                 )
+            self.assertEqual(0, self.store.report("retrieval-v1")["control"]["n"])
+
+            bridge.record_proposal(
+                cycle_id,
+                {"status": "proposed", "action": "archive", "context": "same task", "evidence_ids": ["obs-2"]},
+                expected_reward=0.5,
+                proposal_id="proposal-2",
+            )
+            control_outcome = bridge.record_outcome(
+                cycle_id,
+                "proposal-2",
+                execution_confirmed=True,
+                executed_action="archive",
+                observed_reward=0.4,
+                operation_id="operation-2",
+            )
+            control_trial = self.store.record_strategy_outcome(
+                "retrieval-v1", "control", control_outcome
+            )
+            self.assertEqual("control", control_trial["arm"])
+            self.assertEqual(1, self.store.report("retrieval-v1")["control"]["n"])
+            event_store.close()
+
+    def test_concurrent_confirmed_strategy_outcome_projection_is_idempotent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            event_store = EventStore(Path(directory) / "events.sqlite3")
+            try:
+                cycle_id = "cycle-causal-concurrent-projection"
+                event_store.create_cycle(cycle_id)
+                bridge = MNNStrategyEventBridge(event_store)
+                bridge.record_proposal(
+                    cycle_id,
+                    {"status": "proposed", "action": "retrieve", "context": "same task", "evidence_ids": ["obs-concurrent"]},
+                    expected_reward=0.6,
+                    proposal_id="proposal-concurrent",
+                )
+                outcome = bridge.record_outcome(
+                    cycle_id,
+                    "proposal-concurrent",
+                    execution_confirmed=True,
+                    executed_action="retrieve",
+                    observed_reward=0.9,
+                    operation_id="operation-concurrent",
+                )
+                self._register("randomized")
+                database = Path(self.tmp.name) / "causal.sqlite3"
+                barrier = threading.Barrier(4)
+
+                def project(_):
+                    # Each worker owns its SQLite connection. The barrier makes
+                    # independent callers contend for the same operation ID.
+                    store = CausalExperimentStore(database)
+                    try:
+                        barrier.wait(timeout=5)
+                        return store.record_strategy_outcome(
+                            "retrieval-v1", "treatment", outcome
+                        )
+                    finally:
+                        store.close()
+
+                with ThreadPoolExecutor(max_workers=4) as executor:
+                    results = list(executor.map(project, range(4)))
+
+                self.assertTrue(all(item == results[0] for item in results[1:]))
+                self.assertEqual(1, self.store.report("retrieval-v1")["treatment"]["n"])
+            finally:
+                event_store.close()
+
+    def test_matched_strategy_outcomes_require_the_recorded_context(self):
+        with tempfile.TemporaryDirectory() as directory:
+            event_store = EventStore(Path(directory) / "events.sqlite3")
+            cycle_id = "cycle-matched-context"
+            event_store.create_cycle(cycle_id)
+            bridge = MNNStrategyEventBridge(event_store)
+            self._register("matched")
+
+            bridge.record_proposal(
+                cycle_id,
+                {"status": "proposed", "action": "retrieve", "context": " Task   A ", "evidence_ids": ["obs-t"]},
+                expected_reward=0.6,
+                proposal_id="matched-treatment",
+            )
+            treatment_outcome = bridge.record_outcome(
+                cycle_id,
+                "matched-treatment",
+                execution_confirmed=True,
+                executed_action="retrieve",
+                observed_reward=0.9,
+                operation_id="matched-operation-treatment",
+            )
+            with self.assertRaisesRegex(ValueError, "must match the recorded strategy outcome context"):
+                self.store.record_strategy_outcome(
+                    "retrieval-v1", "treatment", treatment_outcome, context_key="task b"
+                )
+            self.assertEqual([], self.store.report("retrieval-v1")["trials"])
+
+            projected_treatment = self.store.record_strategy_outcome(
+                "retrieval-v1", "treatment", treatment_outcome, context_key="task a"
+            )
+            self.assertEqual("task a", projected_treatment["context_key"])
+
+            bridge.record_proposal(
+                cycle_id,
+                {"status": "proposed", "action": "archive", "context": "TASK A", "evidence_ids": ["obs-c"]},
+                expected_reward=0.5,
+                proposal_id="matched-control",
+            )
+            control_outcome = bridge.record_outcome(
+                cycle_id,
+                "matched-control",
+                execution_confirmed=True,
+                executed_action="archive",
+                observed_reward=0.4,
+                operation_id="matched-operation-control",
+            )
+            projected_control = self.store.record_strategy_outcome(
+                "retrieval-v1", "control", control_outcome, context_key="task a"
+            )
+            self.assertEqual("task a", projected_control["context_key"])
+            self.assertEqual(
+                ["task a", "task a"],
+                [trial["context_key"] for trial in self.store.report("retrieval-v1")["trials"]],
+            )
             event_store.close()
 
     def test_unconfirmed_or_non_strategy_events_cannot_be_projected(self):

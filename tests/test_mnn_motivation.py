@@ -248,5 +248,24 @@ class MotivationSystemTests(unittest.TestCase):
         self.assertEqual([], restored.snapshot()["cooperations"])
 
 
+    def test_temporal_autonomy_adjustments_are_available_per_drive_and_system(self):
+        system = MotivationSystem([
+            MotivationalDrive("curiosity", level=0.9, pressure=0.9),
+            MotivationalDrive("stability", level=0.1, pressure=0.1),
+            MotivationalDrive("neutral", level=0.5, pressure=0.5),
+        ])
+
+        adjustments = system.temporal_autonomy_adjustments()
+        self.assertAlmostEqual(0.12, adjustments["curiosity"])
+        self.assertAlmostEqual(-0.12, adjustments["stability"])
+        self.assertAlmostEqual(0.0, adjustments["neutral"])
+        self.assertEqual(
+            {"curiosity": 0.12},
+            system.drives["curiosity"].temporal_autonomy_adjustments(),
+        )
+        with self.assertRaises(ValueError):
+            system.temporal_autonomy_adjustments(gain=0.5)
+
+
 if __name__ == "__main__":
     unittest.main()

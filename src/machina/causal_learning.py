@@ -54,6 +54,30 @@ class CausalExperimentStore:
             "CREATE INDEX IF NOT EXISTS idx_causal_trials_experiment "
             "ON causal_trials(experiment_id, arm, id)"
         )
+        duplicate_context = self._db.execute(
+            """
+            SELECT experiment_id, arm, context_key, COUNT(*) AS observations
+            FROM causal_trials
+            WHERE context_key IS NOT NULL
+            GROUP BY experiment_id, arm, context_key
+            HAVING COUNT(*) > 1
+            LIMIT 1
+            """
+        ).fetchone()
+        if duplicate_context is not None:
+            self._db.rollback()
+            self._db.close()
+            raise RuntimeError(
+                "causal trial ledger contains duplicate matched context/arm rows; "
+                "resolve the conflicting historical observations before opening it"
+            )
+        self._db.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_causal_trials_context_arm_unique
+            ON causal_trials(experiment_id, arm, context_key)
+            WHERE context_key IS NOT NULL
+            """
+        )
         self._db.commit()
 
     def close(self) -> None:
@@ -148,7 +172,19 @@ class CausalExperimentStore:
             self._db.commit()
         except sqlite3.IntegrityError as exc:
             self._db.rollback()
-            raise ValueError("trial_id has already been recorded") from exc
+            if self._db.execute(
+                "SELECT 1 FROM causal_trials WHERE trial_id = ?", (token,)
+            ).fetchone():
+                raise ValueError("trial_id has already been recorded") from exc
+            if context is not None and self._db.execute(
+                "SELECT 1 FROM causal_trials "
+                "WHERE experiment_id = ? AND arm = ? AND context_key = ?",
+                (key, group, context),
+            ).fetchone():
+                raise ValueError(
+                    "matched context already has an observation for this arm"
+                ) from exc
+            raise
         return {
             "record_id": int(cursor.lastrowid), "experiment_id": key,
             "arm": group, "outcome": float(outcome), "evidence_ref": evidence,
@@ -184,31 +220,69 @@ class CausalExperimentStore:
         key = self._label(experiment_id, "experiment_id")
         group = self._label(arm, "arm")
         experiment = self.experiment(key)
-        if experiment["design"] == "matched" and context_key is None:
-            raise ValueError("matched strategy outcomes require context_key")
-        if experiment["design"] != "matched" and context_key is not None:
+        if group not in self.ARMS:
+            raise ValueError("arm must be treatment or control")
+        expected_action = (
+            experiment["treatment_name"]
+            if group == "treatment"
+            else experiment["control_name"]
+        )
+        if data.get("action") != expected_action:
+            raise ValueError("strategy outcome action does not match the experiment arm")
+        expected_context = None
+        if experiment["design"] == "matched":
+            if context_key is None:
+                raise ValueError("matched strategy outcomes require context_key")
+            event_context = data.get("context")
+            if not isinstance(event_context, str) or not event_context.strip():
+                raise ValueError("matched strategy outcomes require a recorded context")
+            expected_context = self._label(event_context, "outcome context")
+            supplied_context = self._label(context_key, "context_key")
+            if supplied_context != expected_context:
+                raise ValueError(
+                    "context_key must match the recorded strategy outcome context"
+                )
+        elif context_key is not None:
             raise ValueError("context_key is only valid for matched experiments")
         trial_id = f"{key}:{operation_id}"
-        existing = self._db.execute(
-            "SELECT * FROM causal_trials WHERE trial_id = ?", (trial_id,)
-        ).fetchone()
-        expected_context = None if context_key is None else self._label(context_key, "context_key")
-        if existing is not None:
-            row = dict(existing)
-            expected = (key, group, float(observed), evidence, expected_context)
-            actual = (
-                row["experiment_id"], row["arm"], row["outcome"],
-                row["evidence_ref"], row["context_key"],
+        # Serialize the idempotency check and insertion. Without an immediate
+        # transaction, concurrent projections can both observe a missing
+        # operation and one caller then fails on the unique trial_id constraint.
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            existing = self._db.execute(
+                "SELECT * FROM causal_trials WHERE trial_id = ?", (trial_id,)
+            ).fetchone()
+            if existing is not None:
+                row = dict(existing)
+                expected = (key, group, float(observed), evidence, expected_context)
+                actual = (
+                    row["experiment_id"], row["arm"], row["outcome"],
+                    row["evidence_ref"], row["context_key"],
+                )
+                if actual != expected:
+                    raise ValueError("operation_id was already projected with different trial data")
+                self._db.commit()
+                return {
+                    "record_id": int(row["id"]),
+                    "experiment_id": row["experiment_id"],
+                    "arm": row["arm"],
+                    "outcome": float(row["outcome"]),
+                    "evidence_ref": row["evidence_ref"],
+                    "context_key": row["context_key"],
+                    "trial_id": row["trial_id"],
+                }
+            # record_trial commits this transaction after the same validation
+            # and insert path used by direct trial registration.
+            return self.record_trial(
+                key, group, observed,
+                evidence_ref=evidence,
+                trial_id=trial_id,
+                context_key=expected_context,
             )
-            if actual != expected:
-                raise ValueError("operation_id was already projected with different trial data")
-            return row
-        return self.record_trial(
-            key, group, observed,
-            evidence_ref=evidence,
-            trial_id=trial_id,
-            context_key=expected_context,
-        )
+        except Exception:
+            self._db.rollback()
+            raise
 
     @staticmethod
     def _mean_variance(values: list[float]) -> tuple[float | None, float | None]:

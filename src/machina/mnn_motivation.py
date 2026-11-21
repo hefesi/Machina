@@ -72,10 +72,8 @@ class MotivationalDrive:
         gain = _bounded("gain", gain)
         if gain > 0.3:
             raise ValueError("gain must not exceed 0.3")
-        return {
-            name: (pressure - 0.5) * gain
-            for name, pressure in self.temporal_urgencies().items()
-        }
+        pressure = float(self.pressure if self.pressure is not None else self.urgency)
+        return {self.name: (pressure - 0.5) * gain}
 
     def snapshot(self) -> dict[str, object]:
         return asdict(self)
@@ -248,6 +246,14 @@ class MotivationSystem:
     def temporal_urgencies(self) -> dict[str, float]:
         """Return leaky-integrated motivational pressure from prior cycles."""
         return {name: float(drive.pressure or 0.0) for name, drive in self.drives.items()}
+
+    def temporal_autonomy_adjustments(self, *, gain: float = 0.3) -> dict[str, float]:
+        """Expose one canonical bounded feedback value for every persistent drive."""
+        return {
+            name: adjustment
+            for name, drive in sorted(self.drives.items())
+            for name, adjustment in drive.temporal_autonomy_adjustments(gain=gain).items()
+        }
 
     def ranked_temporal_drives(self) -> list[tuple[str, float]]:
         """Rank temporally integrated pressure with deterministic tie breaks."""
