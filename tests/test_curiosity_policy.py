@@ -57,6 +57,22 @@ class CuriositySelectorTests(unittest.TestCase):
             self.selector.choose([q, q])
 
 
+    def test_drive_adjustments_share_finite_bounded_validation_contract(self):
+        question = self.question("memory", drive="memory")
+        invalid_sources = (
+            {"memory": True},
+            {"memory": float("nan")},
+            {"memory": float("inf")},
+            {"memory": 0.31},
+            {"memory": -0.31},
+            {"": 0.1},
+            ["memory", 0.1],
+        )
+        for source in invalid_sources:
+            with self.subTest(source=source):
+                with self.assertRaises(ValueError):
+                    self.selector.choose([question], drive_adjustments=source)
+
     def test_drive_adjustments_bias_matching_questions_and_are_bounded(self):
         memory = self.question("memory", drive="memory", relevance=0.65)
         curiosity = self.question("curiosity", drive="curiosity", relevance=0.8)
