@@ -381,3 +381,8 @@ deliberator. Each source must be a mapping of non-empty drive names to finite
 numbers in `[-0.3, 0.3]`; the downstream per-goal effect remains clamped to
 `[-0.15, 0.15]`. This prevents callers from bypassing the shared feedback
 contract by invoking the lower-level choice API directly.
+
+
+### Shared drive-feedback contract
+
+The canonical `merge_drive_adjustments()` implementation lives in `machina.drive_feedback` and is imported by both the autonomy and curiosity-policy layers. This keeps mapping validation, finite-value checks, per-source bounds, stable summation and the single aggregate clamp identical for curiosity preview and final goal scoring. The historical `machina.autonomy.merge_drive_adjustments` import remains available through the module-level re-export.
