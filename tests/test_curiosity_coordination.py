@@ -218,6 +218,63 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         self.assertAlmostEqual(0.099, weak_conflict[0])
         self.assertAlmostEqual(0.036, strong_conflict[0])
 
+    def test_multi_edge_conflict_feedback_reaches_curiosity_and_final_autonomy(self):
+        motivation = MotivationSystem(
+            [
+                MotivationalDrive(
+                    "curiosity", level=0.9, setpoint=0.9, persistence=0.0
+                ),
+                MotivationalDrive(
+                    "stability", level=0.7, setpoint=0.7, persistence=0.0
+                ),
+                MotivationalDrive(
+                    "creation", level=0.4, setpoint=0.4, persistence=0.0
+                ),
+            ],
+            [
+                MotivationalConflict("curiosity", "stability", strength=0.8),
+                MotivationalConflict("curiosity", "creation", strength=0.2),
+            ],
+            conflict_gain=0.5,
+        )
+        effective = motivation.effective_urgencies()
+        self.assertAlmostEqual(0.74, effective["curiosity"])
+
+        # The normal cycle integrates the multi-edge result into the same
+        # persistent pressure consumed by curiosity preview and final choice.
+        motivation.step()
+        result = self.coordinator.deliberate(
+            self.mappings(),
+            cycle_id="multi-edge-conflict-feedback",
+            investigation_store=self.store,
+            motivation=motivation,
+            persist_selected=False,
+        )
+        candidate_id = result["curiosity_candidate_goal_id"]
+        self.assertIsNotNone(candidate_id)
+        curiosity_score = next(
+            item["score"]
+            for item in result["curiosity_decision"].ranked
+            if item["question"]["question_id"] == candidate_id
+        )
+        autonomy_score = next(
+            item["score"]
+            for item in result["autonomy_decision"].alternatives
+            if item["goal"]["goal_id"] == candidate_id
+        )
+
+        self.assertAlmostEqual(0.072, result["drive_adjustments"]["curiosity"])
+        self.assertAlmostEqual(
+            result["drive_adjustments"]["curiosity"],
+            curiosity_score["drive_adjustment"],
+        )
+        self.assertAlmostEqual(
+            result["drive_adjustments"]["curiosity"],
+            autonomy_score["feedback_adjustment"],
+        )
+        self.assertEqual([], self.store.open_investigations())
+
+
     def test_initial_and_follow_up_reuse_canonical_motivation_adjustments(self):
         class CalibratedMotivation:
             def temporal_urgencies(self):
