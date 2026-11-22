@@ -286,5 +286,46 @@ class MotivationSystemTests(unittest.TestCase):
             system.temporal_autonomy_adjustments(gain=0.5)
 
 
+    def test_multiple_conflicts_average_strength_scaled_pressure(self):
+        drives = [
+            MotivationalDrive("curiosity", level=0.9),
+            MotivationalDrive("stability", level=0.7),
+            MotivationalDrive("creation", level=0.4),
+        ]
+        conflicts = [
+            MotivationalConflict("curiosity", "stability", strength=0.8),
+            MotivationalConflict("curiosity", "creation", strength=0.2),
+        ]
+        system = MotivationSystem(
+            drives,
+            conflicts,
+            conflict_gain=0.5,
+        )
+        raw = {name: drive.urgency for name, drive in system.drives.items()}
+        effective = system.effective_urgencies()
+
+        # Each edge contributes strength * partner urgency; the arithmetic
+        # mean keeps both edge strengths meaningful without normalizing them
+        # away as a conventional weighted mean would.
+        self.assertAlmostEqual(0.74, effective["curiosity"])
+        self.assertAlmostEqual(0.34, effective["stability"])
+        self.assertAlmostEqual(0.31, effective["creation"])
+        self.assertEqual(
+            raw,
+            {name: drive.urgency for name, drive in system.drives.items()},
+        )
+
+        reversed_system = MotivationSystem(
+            list(reversed([
+                MotivationalDrive("curiosity", level=0.9),
+                MotivationalDrive("stability", level=0.7),
+                MotivationalDrive("creation", level=0.4),
+            ])),
+            list(reversed(conflicts)),
+            conflict_gain=0.5,
+        )
+        self.assertEqual(effective, reversed_system.effective_urgencies())
+
+
 if __name__ == "__main__":
     unittest.main()
