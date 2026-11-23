@@ -174,6 +174,25 @@ class CuriosityInvestigationStore:
             self._db.rollback()
             raise
 
+    @contextmanager
+    def _read_snapshot(self) -> Iterator[None]:
+        """Keep multi-query reads on one SQLite snapshot.
+
+        Nested callers reuse their existing transaction, including write
+        transactions used by lifecycle and review operations.
+        """
+        owns_transaction = not self._db.in_transaction
+        if owns_transaction:
+            self._db.execute("BEGIN")
+        try:
+            yield
+            if owns_transaction:
+                self._db.commit()
+        except Exception:
+            if owns_transaction:
+                self._db.rollback()
+            raise
+
     @staticmethod
     def _label(value: str, name: str) -> str:
         if not isinstance(value, str) or not value.strip():
@@ -407,25 +426,26 @@ class CuriosityInvestigationStore:
 
     def get_investigation(self, investigation_id: str) -> dict[str, Any]:
         key = self._label(investigation_id, "investigation_id")
-        row = self._db.execute(
-            "SELECT * FROM curiosity_investigations WHERE investigation_id=?", (key,)
-        ).fetchone()
-        if row is None:
-            raise ValueError("unknown investigation_id")
-        result = dict(row)
-        result["remaining_unknowns"] = json.loads(result["remaining_unknowns"])
-        result["evidence"] = [
-            dict(item) for item in self._db.execute(
-                "SELECT record_id, evidence_ref, finding, cycle_id, created_at "
-                "FROM curiosity_evidence WHERE investigation_id=? ORDER BY record_id",
-                (key,),
-            ).fetchall()
-        ]
-        closure = self._db.execute(
-            "SELECT cycle_id FROM curiosity_closures WHERE investigation_id=?", (key,)
-        ).fetchone()
-        result["closed_cycle_id"] = closure["cycle_id"] if closure else None
-        return result
+        with self._read_snapshot():
+            row = self._db.execute(
+                "SELECT * FROM curiosity_investigations WHERE investigation_id=?", (key,)
+            ).fetchone()
+            if row is None:
+                raise ValueError("unknown investigation_id")
+            result = dict(row)
+            result["remaining_unknowns"] = json.loads(result["remaining_unknowns"])
+            result["evidence"] = [
+                dict(item) for item in self._db.execute(
+                    "SELECT record_id, evidence_ref, finding, cycle_id, created_at "
+                    "FROM curiosity_evidence WHERE investigation_id=? ORDER BY record_id",
+                    (key,),
+                ).fetchall()
+            ]
+            closure = self._db.execute(
+                "SELECT cycle_id FROM curiosity_closures WHERE investigation_id=?", (key,)
+            ).fetchone()
+            result["closed_cycle_id"] = closure["cycle_id"] if closure else None
+            return result
 
     def investigation_lineage(self, investigation_id: str) -> dict[str, Any]:
         """Return one investigation's ancestors and descendants from durable lineage.
@@ -500,22 +520,25 @@ class CuriosityInvestigationStore:
         }
 
     def open_investigations(self) -> list[dict[str, Any]]:
-        """Return all open investigations in creation order for goal generation."""
-        rows = self._db.execute(
-            "SELECT investigation_id FROM curiosity_investigations "
-            "WHERE status='open' ORDER BY lineage_sequence"
-        ).fetchall()
-        return [self.get_investigation(row["investigation_id"]) for row in rows]
+        """Return one consistent snapshot of open investigations in creation order."""
+        with self._read_snapshot():
+            rows = self._db.execute(
+                "SELECT investigation_id FROM curiosity_investigations "
+                "WHERE status='open' ORDER BY lineage_sequence"
+            ).fetchall()
+            return [self.get_investigation(row["investigation_id"]) for row in rows]
 
     def history(self, *, gap_property: str | None = None) -> list[dict[str, Any]]:
-        query = "SELECT investigation_id FROM curiosity_investigations"
-        params: tuple[Any, ...] = ()
-        if gap_property is not None:
-            query += " WHERE gap_property=?"
-            params = (self._label(gap_property, "gap_property"),)
-        query += " ORDER BY lineage_sequence"
-        return [self.get_investigation(row["investigation_id"])
-                for row in self._db.execute(query, params).fetchall()]
+        """Return investigation history from one consistent database snapshot."""
+        with self._read_snapshot():
+            query = "SELECT investigation_id FROM curiosity_investigations"
+            params: tuple[Any, ...] = ()
+            if gap_property is not None:
+                query += " WHERE gap_property=?"
+                params = (self._label(gap_property, "gap_property"),)
+            query += " ORDER BY lineage_sequence"
+            return [self.get_investigation(row["investigation_id"])
+                    for row in self._db.execute(query, params).fetchall()]
 
     def has_prior_question(self, gap_property: str, question: str) -> bool:
         prop = self._label(gap_property, "gap_property")
