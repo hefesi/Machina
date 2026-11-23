@@ -559,3 +559,16 @@ class CuriosityInvestigationStore:
             (prop, self._question_key(prompt)),
         ).fetchone()
         return row is not None
+
+    def has_follow_up_goal(
+        self, parent_investigation_id: str, goal_id: str
+    ) -> bool:
+        """Return whether this parent already has a persisted child for goal_id."""
+        parent = self._label(parent_investigation_id, "parent_investigation_id")
+        goal = self._label(goal_id, "goal_id")
+        row = self._db.execute(
+            """SELECT 1 FROM curiosity_investigations
+            WHERE parent_investigation_id=? AND goal_id=? LIMIT 1""",
+            (parent, goal),
+        ).fetchone()
+        return row is not None
