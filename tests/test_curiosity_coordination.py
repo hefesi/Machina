@@ -597,9 +597,15 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         self.assertIn("source_investigation_id=parent-investigation", result["investigation"]["selection_reason"])
         self.assertFalse(result["execution_performed"])
 
+        rephrased_mappings = {
+            "Does recall remain stable after restart?": {
+                **mappings["Does recall remain stable after restart?"],
+                "question": "Will recall still be available after restarting the process?",
+            }
+        }
         repeated = self.coordinator.deliberate_follow_up(
             "parent-investigation",
-            mappings,
+            rephrased_mappings,
             cycle_id="cycle-follow-up-2",
             investigation_store=self.store,
         )
@@ -607,7 +613,7 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
         self.assertFalse(repeated["curiosity_goal_won"])
         self.assertIsNone(repeated["investigation"])
         self.assertEqual(
-            "prior_investigation_exists",
+            "follow_up_goal_already_investigated",
             repeated["proposals"]["suppressed"][0]["reason"],
         )
 
