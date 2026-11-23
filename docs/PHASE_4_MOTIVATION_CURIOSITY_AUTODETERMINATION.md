@@ -409,3 +409,13 @@ verifies that the resulting adjustment is identical in `CuriositySelector`
 and the coordinator's final `AutonomyController` decision. The values are
 operational heuristics, not a claim that the system experiences competing
 needs.
+
+### Follow-up duplicate suppression
+
+Follow-up identity is anchored to the persisted parent investigation and the
+stable goal ID derived from its recorded unresolved item, not only to the
+caller-authored wording of the next question. With `allow_repeat=False`, a
+rephrased question for an already-persisted child goal is suppressed using the
+investigation store. The existing normalized question-history check remains an
+additional guard against repeating an equivalent question elsewhere. Explicit
+`allow_repeat=True` continues to opt into another investigation.
