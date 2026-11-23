@@ -1304,6 +1304,7 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
 
     def test_open_investigations_returns_one_snapshot_during_concurrent_close(self):
         investigation_id = "snapshot-reader-investigation"
+        database = self.store.path
         self.store.start_investigation(
             investigation_id,
             gap_property="memory_gap",
@@ -1313,32 +1314,40 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
             cycle_id="snapshot-start",
             goal_id="investigate_gap:memory-gap",
         )
-        writer = CuriosityInvestigationStore(self.store.path)
         reader_paused = threading.Event()
         release_reader = threading.Event()
         update_started = threading.Event()
         writer_finished = threading.Event()
-        original_get = self.store.get_investigation
-        first_read = [True]
 
-        def pause_first_record_read(key):
-            if first_read[0]:
-                first_read[0] = False
-                reader_paused.set()
-                if not release_reader.wait(5):
-                    raise TimeoutError("reader snapshot was not released")
-            return original_get(key)
+        def read_open_snapshot():
+            reader = CuriosityInvestigationStore(database)
+            original_get = reader.get_investigation
+            first_read = [True]
 
-        def trace_writer(statement):
-            if statement.lstrip().upper().startswith(
-                "UPDATE CURIOSITY_INVESTIGATIONS"
-            ):
-                update_started.set()
+            def pause_first_record_read(key):
+                if first_read[0]:
+                    first_read[0] = False
+                    reader_paused.set()
+                    if not release_reader.wait(5):
+                        raise TimeoutError("reader snapshot was not released")
+                return original_get(key)
 
-        writer._db.set_trace_callback(trace_writer)
-        self.store.get_investigation = pause_first_record_read
+            reader.get_investigation = pause_first_record_read
+            try:
+                return reader.open_investigations()
+            finally:
+                reader.close()
 
         def close_from_writer():
+            writer = CuriosityInvestigationStore(database)
+
+            def trace_writer(statement):
+                if statement.lstrip().upper().startswith(
+                    "UPDATE CURIOSITY_INVESTIGATIONS"
+                ):
+                    update_started.set()
+
+            writer._db.set_trace_callback(trace_writer)
             try:
                 return writer.close_investigation(
                     investigation_id,
@@ -1348,38 +1357,35 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
                     cycle_id="snapshot-close",
                 )
             finally:
+                writer.close()
                 writer_finished.set()
 
-        try:
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                try:
-                    reader_future = executor.submit(self.store.open_investigations)
-                    self.assertTrue(reader_paused.wait(2))
-                    writer_future = executor.submit(close_from_writer)
-                    self.assertTrue(update_started.wait(2))
-                    self.assertFalse(
-                        writer_finished.wait(0.25),
-                        "a concurrent close committed inside the open-investigation read snapshot",
-                    )
-                finally:
-                    release_reader.set()
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            try:
+                reader_future = executor.submit(read_open_snapshot)
+                self.assertTrue(reader_paused.wait(2))
+                writer_future = executor.submit(close_from_writer)
+                self.assertTrue(update_started.wait(2))
+                self.assertFalse(
+                    writer_finished.wait(0.25),
+                    "a concurrent close committed inside the open-investigation read snapshot",
+                )
+            finally:
+                release_reader.set()
 
-                snapshot = reader_future.result(timeout=2)
-                closed = writer_future.result(timeout=2)
+            snapshot = reader_future.result(timeout=2)
+            closed = writer_future.result(timeout=2)
 
-            self.assertEqual([investigation_id], [
-                item["investigation_id"] for item in snapshot
-            ])
-            self.assertEqual("open", snapshot[0]["status"])
-            self.assertIsNone(snapshot[0]["closed_cycle_id"])
-            self.assertEqual("closed", closed["status"])
-            self.assertEqual(
-                "closed",
-                writer.get_investigation(investigation_id)["status"],
-            )
-        finally:
-            self.store.get_investigation = original_get
-            writer.close()
+        self.assertEqual([investigation_id], [
+            item["investigation_id"] for item in snapshot
+        ])
+        self.assertEqual("open", snapshot[0]["status"])
+        self.assertIsNone(snapshot[0]["closed_cycle_id"])
+        self.assertEqual("closed", closed["status"])
+        self.assertEqual(
+            "closed",
+            self.store.get_investigation(investigation_id)["status"],
+        )
 
 
 if __name__ == "__main__":
