@@ -410,9 +410,25 @@ class SelfModelLearningBridge:
                 raise ValueError("question must be a non-empty string")
             if not isinstance(drive, str) or not drive.strip():
                 raise ValueError("drive must be a non-empty string")
-            if not allow_repeat and investigation_store.has_prior_question(investigation["gap_property"], question.strip()):
-                suppressed.append({"remaining_unknown": raw_unknown, "question": question.strip(),
-                                   "reason": "prior_investigation_exists"})
+            slug = re.sub(r"[^a-z0-9]+", "-", raw_unknown.casefold()).strip("-") or "unknown"
+            goal_id = "follow_up:" + investigation_id + ":" + slug
+            if not allow_repeat and investigation_store.has_follow_up_goal(
+                investigation_id, goal_id
+            ):
+                suppressed.append({
+                    "remaining_unknown": raw_unknown,
+                    "question": question.strip(),
+                    "reason": "follow_up_goal_already_investigated",
+                })
+                continue
+            if not allow_repeat and investigation_store.has_prior_question(
+                investigation["gap_property"], question.strip()
+            ):
+                suppressed.append({
+                    "remaining_unknown": raw_unknown,
+                    "question": question.strip(),
+                    "reason": "prior_investigation_exists",
+                })
                 continue
             values = {}
             for field, default in (("information_gain", 0.5), ("impact", 0.5),
@@ -427,8 +443,6 @@ class SelfModelLearningBridge:
                 if not math.isfinite(number) or not 0.0 <= number <= 1.0:
                     raise ValueError(f"{field} must be finite and in [0, 1]")
                 values[field] = number
-            slug = re.sub(r"[^a-z0-9]+", "-", raw_unknown.casefold()).strip("-") or "unknown"
-            goal_id = "follow_up:" + investigation_id + ":" + slug
             if goal_id in seen:
                 raise ValueError("duplicate generated follow-up goal_id: " + goal_id)
             seen.add(goal_id)
