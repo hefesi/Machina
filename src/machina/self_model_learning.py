@@ -412,15 +412,6 @@ class SelfModelLearningBridge:
                 raise ValueError("drive must be a non-empty string")
             slug = re.sub(r"[^a-z0-9]+", "-", raw_unknown.casefold()).strip("-") or "unknown"
             goal_id = "follow_up:" + investigation_id + ":" + slug
-            if not allow_repeat and investigation_store.has_follow_up_goal(
-                investigation_id, goal_id
-            ):
-                suppressed.append({
-                    "remaining_unknown": raw_unknown,
-                    "question": question.strip(),
-                    "reason": "follow_up_goal_already_investigated",
-                })
-                continue
             if not allow_repeat and investigation_store.has_prior_question(
                 investigation["gap_property"], question.strip()
             ):
@@ -428,6 +419,15 @@ class SelfModelLearningBridge:
                     "remaining_unknown": raw_unknown,
                     "question": question.strip(),
                     "reason": "prior_investigation_exists",
+                })
+                continue
+            if not allow_repeat and investigation_store.has_follow_up_goal(
+                investigation_id, goal_id
+            ):
+                suppressed.append({
+                    "remaining_unknown": raw_unknown,
+                    "question": question.strip(),
+                    "reason": "follow_up_goal_already_investigated",
                 })
                 continue
             values = {}
