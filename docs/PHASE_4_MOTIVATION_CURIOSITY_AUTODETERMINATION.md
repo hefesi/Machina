@@ -428,3 +428,15 @@ rephrased question for an already-persisted child goal is suppressed using the
 investigation store. The existing normalized question-history check remains an
 additional guard against repeating an equivalent question elsewhere. Explicit
 `allow_repeat=True` continues to opt into another investigation.
+
+
+### Follow-up persistence outcome in the VirtualBrain trace
+
+A follow-up can win unified goal selection after another cycle has already
+persisted the same parent/goal pair. The final SQLite transaction then
+suppresses the duplicate child, and the brain journal deliberately does not
+append a second `curiosity.investigation_started` event. The
+`curiosity_context.persistence_outcome` trace field distinguishes
+`persisted`, `not_selected`, and
+`duplicate_suppressed_after_selection`. This keeps goal selection separate
+from durable investigation creation and makes the concurrent outcome auditable.
