@@ -12,6 +12,10 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 
+class FollowUpAlreadyExists(ValueError):
+    """A concurrent cycle already persisted this parent's follow-up goal."""
+
+
 class CuriosityInvestigationStore:
     """SQLite-backed investigation lifecycle and evidence ledger.
 
@@ -226,6 +230,7 @@ class CuriosityInvestigationStore:
         cycle_id: str,
         goal_id: str,
         parent_investigation_id: str | None = None,
+        deduplicate_follow_up: bool = False,
     ) -> dict[str, Any]:
         key = self._label(investigation_id, "investigation_id")
         prop = self._label(gap_property, "gap_property")
@@ -238,6 +243,10 @@ class CuriosityInvestigationStore:
             self._label(parent_investigation_id, "parent_investigation_id")
             if parent_investigation_id is not None else None
         )
+        if not isinstance(deduplicate_follow_up, bool):
+            raise ValueError("deduplicate_follow_up must be a boolean")
+        if deduplicate_follow_up and parent_key is None:
+            raise ValueError("deduplicate_follow_up requires parent_investigation_id")
         if self._db.in_transaction:
             raise RuntimeError("start_investigation cannot run inside an existing transaction")
         self._db.execute("BEGIN IMMEDIATE")
@@ -253,6 +262,17 @@ class CuriosityInvestigationStore:
                     raise ValueError("unknown parent_investigation_id")
                 if parent["status"] != "closed":
                     raise ValueError("parent_investigation_id must refer to a closed investigation")
+                if deduplicate_follow_up:
+                    existing = self._db.execute(
+                        "SELECT investigation_id FROM curiosity_investigations "
+                        "WHERE parent_investigation_id=? AND goal_id=? "
+                        "ORDER BY lineage_sequence LIMIT 1",
+                        (parent_key, goal),
+                    ).fetchone()
+                    if existing is not None:
+                        raise FollowUpAlreadyExists(
+                            "follow-up goal already exists for this parent investigation"
+                        )
             next_sequence = self._db.execute(
                 "SELECT COALESCE(MAX(lineage_sequence), 0) + 1 "
                 "FROM curiosity_investigations"
