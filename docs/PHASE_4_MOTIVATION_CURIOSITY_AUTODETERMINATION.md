@@ -340,6 +340,15 @@ The test validates continuity and duplicate suppression; it does not claim
 that the resulting decisions are empirically better. That requires a separate
 controlled longitudinal evaluation.
 
+For `allow_repeat=False`, the final child-persistence operation repeats the
+parent/goal duplicate check inside the same SQLite `BEGIN IMMEDIATE` transaction
+that inserts the child. This closes the race in which two independent cycles
+could both pass proposal-time suppression with differently worded questions
+and then persist the same unresolved goal. A losing concurrent cycle leaves the
+first child intact and does not append a duplicate investigation event. The
+explicit `allow_repeat=True` path bypasses this goal-level guard; the existing
+open-question uniqueness constraint still applies.
+
 
 ### System-level temporal feedback contract
 
