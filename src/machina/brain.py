@@ -483,12 +483,22 @@ class VirtualBrain:
             selected_curiosity = (
                 curiosity_preview["curiosity_candidate_goal_id"] == selected.goal_id
             )
+            existing_follow_up = None
+            if (
+                selected_curiosity
+                and curiosity_investigation is None
+                and curiosity_follow_up_mappings is not None
+            ):
+                existing_follow_up = self.curiosity_store.get_follow_up_goal(
+                    curiosity_follow_up_investigation_id,
+                    selected.goal_id,
+                )
             persistence_outcome = (
                 "not_selected" if not selected_curiosity
                 else "persisted" if curiosity_investigation is not None
                 else (
                     "duplicate_suppressed_after_selection"
-                    if curiosity_follow_up_mappings is not None
+                    if existing_follow_up is not None
                     else "persistence_not_confirmed"
                 )
             )
@@ -503,6 +513,14 @@ class VirtualBrain:
                     if selected_curiosity else None
                 ),
                 "investigation": curiosity_investigation,
+                "existing_follow_up_investigation_id": (
+                    existing_follow_up["investigation_id"]
+                    if existing_follow_up is not None else None
+                ),
+                "existing_follow_up_cycle_id": (
+                    existing_follow_up["cycle_id"]
+                    if existing_follow_up is not None else None
+                ),
                 "persistence_outcome": persistence_outcome,
                 "persistence_policy": "after_unified_deliberation_selection",
             })

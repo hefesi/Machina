@@ -985,6 +985,14 @@ class VirtualBrainLoopTests(unittest.TestCase):
                 curiosity["persistence_outcome"],
             )
             self.assertIsNone(curiosity["investigation"])
+            self.assertEqual(
+                "competing-follow-up-child",
+                curiosity["existing_follow_up_investigation_id"],
+            )
+            self.assertEqual(
+                "competing-follow-up-cycle",
+                curiosity["existing_follow_up_cycle_id"],
+            )
             self.assertNotIn(
                 "curiosity.investigation_started",
                 [event.event_type for event in result.events],

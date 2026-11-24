@@ -438,5 +438,9 @@ suppresses the duplicate child, and the brain journal deliberately does not
 append a second `curiosity.investigation_started` event. The
 `curiosity_context.persistence_outcome` trace field distinguishes
 `persisted`, `not_selected`, and
-`duplicate_suppressed_after_selection`. This keeps goal selection separate
-from durable investigation creation and makes the concurrent outcome auditable.
+`duplicate_suppressed_after_selection`. When a concurrent child already
+exists, the trace also records that child's investigation ID and originating
+cycle ID. If the duplicate cannot be resolved to a durable child, the outcome
+is `persistence_not_confirmed` rather than an unsupported duplicate claim.
+This keeps goal selection separate from durable investigation creation and
+makes the concurrent outcome auditable.

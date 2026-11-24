@@ -580,15 +580,36 @@ class CuriosityInvestigationStore:
         ).fetchone()
         return row is not None
 
+    def _follow_up_goal_id(self, parent: str, goal: str) -> str | None:
+        row = self._db.execute(
+            """SELECT investigation_id FROM curiosity_investigations
+            WHERE parent_investigation_id=? AND goal_id=?
+            ORDER BY lineage_sequence DESC LIMIT 1""",
+            (parent, goal),
+        ).fetchone()
+        return row["investigation_id"] if row is not None else None
+
     def has_follow_up_goal(
         self, parent_investigation_id: str, goal_id: str
     ) -> bool:
         """Return whether this parent already has a persisted child for goal_id."""
         parent = self._label(parent_investigation_id, "parent_investigation_id")
         goal = self._label(goal_id, "goal_id")
-        row = self._db.execute(
-            """SELECT 1 FROM curiosity_investigations
-            WHERE parent_investigation_id=? AND goal_id=? LIMIT 1""",
-            (parent, goal),
-        ).fetchone()
-        return row is not None
+        return self._follow_up_goal_id(parent, goal) is not None
+
+    def get_follow_up_goal(
+        self, parent_investigation_id: str, goal_id: str
+    ) -> dict[str, Any] | None:
+        """Return the latest durable child for a parent/goal pair, if present.
+
+        The read snapshot keeps the identity lookup and investigation details
+        consistent while another cycle may be persisting follow-up work.
+        """
+        parent = self._label(parent_investigation_id, "parent_investigation_id")
+        goal = self._label(goal_id, "goal_id")
+        with self._read_snapshot():
+            investigation_id = self._follow_up_goal_id(parent, goal)
+            return (
+                self.get_investigation(investigation_id)
+                if investigation_id is not None else None
+            )
