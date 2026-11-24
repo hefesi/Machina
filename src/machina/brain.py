@@ -483,6 +483,15 @@ class VirtualBrain:
             selected_curiosity = (
                 curiosity_preview["curiosity_candidate_goal_id"] == selected.goal_id
             )
+            persistence_outcome = (
+                "not_selected" if not selected_curiosity
+                else "persisted" if curiosity_investigation is not None
+                else (
+                    "duplicate_suppressed_after_selection"
+                    if curiosity_follow_up_mappings is not None
+                    else "persistence_not_confirmed"
+                )
+            )
             curiosity_trace.update({
                 "candidate_goal_id": curiosity_preview["curiosity_candidate_goal_id"],
                 "selected_by_unified_deliberation": selected_curiosity,
@@ -494,6 +503,7 @@ class VirtualBrain:
                     if selected_curiosity else None
                 ),
                 "investigation": curiosity_investigation,
+                "persistence_outcome": persistence_outcome,
                 "persistence_policy": "after_unified_deliberation_selection",
             })
             if curiosity_investigation is not None:
