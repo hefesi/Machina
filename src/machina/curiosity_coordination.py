@@ -12,7 +12,7 @@ from .autonomy import (
     AutonomyContext, AutonomyController, AutonomyDecision, GoalCandidate,
     merge_drive_adjustments,
 )
-from .curiosity import CuriosityInvestigationStore
+from .curiosity import CuriosityInvestigationStore, FollowUpAlreadyExists
 from .curiosity_policy import CuriosityDecision, CuriosityQuestion, CuriositySelector
 from .homeostasis import HomeostaticProposal
 from .self_model_learning import SelfModelLearningBridge
@@ -557,6 +557,7 @@ class CuriosityGoalCoordinator:
             "provenance_by_goal": provenance_by_goal,
             "curiosity_decision": curiosity_decision,
             "stability_pressure": selected_pressure,
+            "allow_repeat": allow_repeat,
         }
         investigation = (
             self.persist_selected_follow_up_candidate(
@@ -649,18 +650,28 @@ class CuriosityGoalCoordinator:
         if not isinstance(hypothesis, str) or not hypothesis.strip():
             raise ValueError("hypothesis must be a non-empty string when supplied")
         pressure = _bounded("stability_pressure", prepared["stability_pressure"], 0.0, 1.0)
-        return investigation_store.start_investigation(
-            child_investigation_id or f"{cycle_id}:{selected_goal_id}",
-            gap_property=parent["gap_property"],
-            question=provenance["question"],
-            hypothesis=hypothesis.strip(),
-            selection_reason=(
-                f"CuriositySelector follow-up score={score:.6f}; "
-                f"source_investigation_id={source_id}; "
-                f"stability_pressure={pressure:.6f}; "
-                f"remaining_unknown={unknown}"
-            ),
-            cycle_id=cycle_id,
-            goal_id=selected_goal_id,
-            parent_investigation_id=source_id,
-        )
+        allow_repeat = prepared.get("allow_repeat", False)
+        if not isinstance(allow_repeat, bool):
+            raise ValueError("prepared allow_repeat must be a boolean")
+        try:
+            return investigation_store.start_investigation(
+                child_investigation_id or f"{cycle_id}:{selected_goal_id}",
+                gap_property=parent["gap_property"],
+                question=provenance["question"],
+                hypothesis=hypothesis.strip(),
+                selection_reason=(
+                    f"CuriositySelector follow-up score={score:.6f}; "
+                    f"source_investigation_id={source_id}; "
+                    f"stability_pressure={pressure:.6f}; "
+                    f"remaining_unknown={unknown}"
+                ),
+                cycle_id=cycle_id,
+                goal_id=selected_goal_id,
+                parent_investigation_id=source_id,
+                deduplicate_follow_up=not allow_repeat,
+            )
+        except FollowUpAlreadyExists:
+            # Another cycle may have persisted this same parent/goal after
+            # candidate preparation. Keep the durable first child and avoid
+            # creating a duplicate investigation or journal event.
+            return None
