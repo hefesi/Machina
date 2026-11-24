@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from machina.autonomy import AutonomyContext, AutonomyController
-from machina.curiosity import CuriosityInvestigationStore
+from machina.curiosity import CuriosityInvestigationStore, FollowUpAlreadyExists
 from machina.curiosity_coordination import CuriosityGoalCoordinator
 from machina.goal_outcome_learning import GoalOutcomeLearner
 from machina.homeostasis import HomeostaticProposal
@@ -1108,6 +1108,102 @@ class CuriosityGoalCoordinatorTests(unittest.TestCase):
             ],
         )
 
+
+    def test_concurrent_follow_up_persistence_deduplicates_rephrased_child(self):
+        parent_id = "concurrent-follow-up-parent"
+        unknown = "Does the retrieval path survive a process restart?"
+        self.store.start_investigation(
+            parent_id,
+            gap_property="memory_recall",
+            question="Which baseline retrieval path should be measured first?",
+            hypothesis="The baseline path may lose evidence after restart.",
+            selection_reason="Concurrent follow-up deduplication regression.",
+            cycle_id="concurrent-follow-up-parent-cycle",
+            goal_id="concurrent-follow-up-parent-goal",
+        )
+        self.store.close_investigation(
+            parent_id,
+            outcome="partially_answered",
+            answer_summary="The baseline was measured, but restart behavior remains unknown.",
+            remaining_unknowns=[unknown],
+            cycle_id="concurrent-follow-up-parent-close",
+        )
+
+        database = self.store.path
+        barrier = threading.Barrier(2)
+
+        def create_child(index):
+            store = CuriosityInvestigationStore(database)
+            try:
+                barrier.wait(timeout=5)
+                return store.start_investigation(
+                    f"concurrent-follow-up-child-{index}",
+                    gap_property="memory_recall",
+                    question=(
+                        "Which retrieval index explains the remaining unknown?"
+                        if index == 0
+                        else "Could another index account for this unresolved gap?"
+                    ),
+                    hypothesis="A retrieval index may explain the remaining behavior.",
+                    selection_reason="Concurrent follow-up deduplication regression.",
+                    cycle_id=f"concurrent-follow-up-cycle-{index}",
+                    goal_id=(
+                        "follow_up:concurrent-follow-up-parent:"
+                        "does-the-retrieval-path-survive-a-process-restart"
+                    ),
+                    parent_investigation_id=parent_id,
+                    deduplicate_follow_up=True,
+                )
+            except FollowUpAlreadyExists:
+                return None
+            finally:
+                store.close()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(create_child, range(2)))
+
+        created = [item for item in results if item is not None]
+        self.assertEqual(1, len(created))
+        self.assertEqual(1, results.count(None))
+        first_child = created[0]
+        self.assertEqual(
+            [first_child["investigation_id"]],
+            [
+                item["investigation_id"]
+                for item in self.store.investigation_lineage(parent_id)["descendants"]
+            ],
+        )
+
+        self.store.close_investigation(
+            first_child["investigation_id"],
+            outcome="partially_answered",
+            answer_summary="The first follow-up completed; a repeated investigation is explicitly requested.",
+            remaining_unknowns=[unknown],
+            cycle_id="concurrent-follow-up-child-close",
+        )
+        repeated = self.coordinator.deliberate_follow_up(
+            parent_id,
+            {
+                unknown: {
+                    "question": "Could a different retrieval path explain the remaining behavior?",
+                    "hypothesis": "A second retrieval path may preserve the missing relation.",
+                    "information_gain": 0.95,
+                    "impact": 0.9,
+                    "urgency": 0.9,
+                    "estimated_cost": 0.05,
+                    "risk": 0.01,
+                }
+            },
+            cycle_id="concurrent-follow-up-explicit-repeat",
+            investigation_store=self.store,
+            allow_repeat=True,
+        )
+        self.assertTrue(repeated["curiosity_goal_won"])
+        self.assertIsNotNone(repeated["investigation"])
+        self.assertEqual(
+            2,
+            len(self.store.investigation_lineage(parent_id)["descendants"]),
+        )
 
     def test_follow_up_curiosity_continues_across_multiple_generations(self):
         root_id = "multi-generation-root"
