@@ -84,9 +84,11 @@ class HomeostaticRegulator:
 
     def assess(self, *, cycle_id: str | None = None) -> HomeostaticProposal:
         """Assess exactly one new SelfModel cycle; duplicate cycles are rejected."""
-        selected_cycle = cycle_id or self.self_model.cycle_id
+        selected_cycle = self.self_model.cycle_id if cycle_id is None else cycle_id
         if not isinstance(selected_cycle, str) or not selected_cycle.strip():
-            raise ValueError("SelfModel has no cycle; supply cycle_id")
+            if cycle_id is None:
+                raise ValueError("SelfModel has no cycle; supply cycle_id")
+            raise ValueError("cycle_id must be a non-empty string")
         if selected_cycle == self._last_cycle_id:
             raise ValueError("cycle_id has already been assessed")
         beliefs = self.self_model.beliefs
