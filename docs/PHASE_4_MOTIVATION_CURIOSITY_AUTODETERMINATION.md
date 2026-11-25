@@ -429,6 +429,11 @@ investigation store. The existing normalized question-history check remains an
 additional guard against repeating an equivalent question elsewhere. Explicit
 `allow_repeat=True` continues to opt into another investigation.
 
+The parent/goal identity lookup uses the additive composite index
+`idx_curiosity_parent_goal_sequence` on `(parent_investigation_id, goal_id,
+lineage_sequence)`. Existing databases receive the index through the normal
+schema migration; historical investigation records are preserved.
+
 
 ### Follow-up persistence outcome in the VirtualBrain trace
 
