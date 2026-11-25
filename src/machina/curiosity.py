@@ -100,6 +100,7 @@ class CuriosityInvestigationStore:
             or "lineage_sequence" not in columns
             or "idx_curiosity_lineage_sequence" not in indexes
             or "idx_curiosity_parent_investigation" not in indexes
+            or "idx_curiosity_parent_goal_sequence" not in indexes
         )
         if "lineage_sequence" in columns:
             needs_migration = needs_migration or (
@@ -149,6 +150,11 @@ class CuriosityInvestigationStore:
                 self._db.execute(
                     "CREATE INDEX IF NOT EXISTS idx_curiosity_parent_investigation "
                     "ON curiosity_investigations(parent_investigation_id)"
+                )
+                self._db.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_curiosity_parent_goal_sequence "
+                    "ON curiosity_investigations("
+                    "parent_investigation_id, goal_id, lineage_sequence)"
                 )
                 self._db.commit()
             except Exception:
