@@ -159,6 +159,19 @@ class HomeostaticRegulatorTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.regulator.assess(cycle_id="c1")
 
+    def test_falsey_explicit_cycle_ids_are_rejected_without_advancing_streak(self):
+        self.observe("c1", 0.8)
+        before = self.regulator.snapshot()
+
+        for invalid_cycle_id in ("", 0, False):
+            with self.subTest(cycle_id=invalid_cycle_id):
+                with self.assertRaises(ValueError):
+                    self.regulator.assess(cycle_id=invalid_cycle_id)
+                self.assertEqual(before, self.regulator.snapshot())
+
+        result = self.regulator.assess()
+        self.assertEqual(1, result.persistence["prediction_error"])
+
     def test_rejects_invalid_rules(self):
         with self.assertRaises(ValueError):
             HomeostaticRule("metric", "drive", 0.5, 0.5, 0.0, 0.1)
