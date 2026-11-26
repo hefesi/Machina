@@ -449,3 +449,7 @@ cycle ID. If the duplicate cannot be resolved to a durable child, the outcome
 is `persistence_not_confirmed` rather than an unsupported duplicate claim.
 This keeps goal selection separate from durable investigation creation and
 makes the concurrent outcome auditable.
+
+### Snapshot schema version validation
+
+HomeostaticRegulator and MotivationSystem restore paths validate snapshot schema versions as actual integers, not merely values that compare equal to an integer in Python. Boolean and floating-point versions are rejected, as are non-mapping payloads. MotivationSystem continues to accept its explicitly supported legacy integer schemas (1, 2 and 3) alongside the current schema. This is a metadata integrity check only; valid historical snapshots retain their existing restore behavior.
