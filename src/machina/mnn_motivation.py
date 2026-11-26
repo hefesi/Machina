@@ -306,8 +306,14 @@ class MotivationSystem:
 
     @classmethod
     def from_snapshot(cls, data: Mapping[str, object]) -> "MotivationSystem":
+        if not isinstance(data, Mapping):
+            raise ValueError("unsupported motivation snapshot schema")
         schema = data.get("schema_version")
-        if schema not in (1, 2, 3, cls.SNAPSHOT_SCHEMA):
+        if (
+            isinstance(schema, bool)
+            or not isinstance(schema, int)
+            or schema not in (1, 2, 3, cls.SNAPSHOT_SCHEMA)
+        ):
             raise ValueError("unsupported motivation snapshot schema")
         timestep = data.get("timestep")
         if isinstance(timestep, bool) or not isinstance(timestep, int) or timestep < 0:
