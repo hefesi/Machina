@@ -267,6 +267,21 @@ class MotivationSystemTests(unittest.TestCase):
         self.assertEqual([], restored.snapshot()["cooperations"])
 
 
+    def test_snapshot_rejects_non_integer_schema_versions(self):
+        snapshot = self.make_system().snapshot()
+        for invalid_version in (True, False, 1.0, 2.0, 4.0, "4", None):
+            with self.subTest(schema_version=invalid_version):
+                malformed = dict(snapshot, schema_version=invalid_version)
+                with self.assertRaisesRegex(
+                    ValueError, "unsupported motivation snapshot schema"
+                ):
+                    MotivationSystem.from_snapshot(malformed)
+
+        with self.assertRaisesRegex(
+            ValueError, "unsupported motivation snapshot schema"
+        ):
+            MotivationSystem.from_snapshot(None)
+
     def test_temporal_autonomy_adjustments_are_available_per_drive_and_system(self):
         system = MotivationSystem([
             MotivationalDrive("curiosity", level=0.9, pressure=0.9),
