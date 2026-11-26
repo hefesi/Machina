@@ -164,7 +164,13 @@ class HomeostaticRegulator:
 
     @classmethod
     def from_snapshot(cls, self_model: SelfModel, data: Mapping[str, Any]) -> "HomeostaticRegulator":
-        if not isinstance(data, Mapping) or data.get("schema_version") != cls.schema_version:
+        version = data.get("schema_version") if isinstance(data, Mapping) else None
+        if (
+            not isinstance(data, Mapping)
+            or isinstance(version, bool)
+            or not isinstance(version, int)
+            or version != cls.schema_version
+        ):
             raise ValueError("unsupported HomeostaticRegulator snapshot")
         raw_rules = data.get("rules")
         raw_streaks = data.get("streaks")
