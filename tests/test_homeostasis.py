@@ -151,6 +151,14 @@ class HomeostaticRegulatorTests(unittest.TestCase):
         result = restored.assess()
         self.assertEqual({"error_recovery": 0.12}, result.adjustments)
 
+    def test_snapshot_rejects_boolean_or_float_schema_versions(self):
+        snapshot = self.regulator.snapshot()
+        for invalid_version in (True, False, 1.0):
+            with self.subTest(schema_version=invalid_version):
+                malformed = dict(snapshot, schema_version=invalid_version)
+                with self.assertRaisesRegex(ValueError, "unsupported HomeostaticRegulator snapshot"):
+                    HomeostaticRegulator.from_snapshot(self.model, malformed)
+
     def test_assessment_is_read_only_and_cycle_is_idempotency_guarded(self):
         self.observe("c1", 0.8)
         before = self.model.snapshot()
