@@ -453,3 +453,25 @@ makes the concurrent outcome auditable.
 ### Snapshot schema version validation
 
 HomeostaticRegulator and MotivationSystem restore paths validate snapshot schema versions as actual integers, not merely values that compare equal to an integer in Python. Boolean and floating-point versions are rejected, as are non-mapping payloads. MotivationSystem continues to accept its explicitly supported legacy integer schemas (1, 2 and 3) alongside the current schema. This is a metadata integrity check only; valid historical snapshots retain their existing restore behavior.
+
+
+### Small-sample uncertainty intervals for causal reports
+
+Randomized comparisons now use a Welch two-sample Student-t interval with
+Welch-Satterthwaite degrees of freedom. Matched comparisons use paired
+differences and a Student-t interval with n_pairs - 1 degrees of freedom.
+The critical value is selected conservatively from a two-sided 95% table by
+rounding degrees of freedom down to the greatest supported row; values above
+120 use the conservative 1.980 critical value.
+
+A zero empirical variance does not produce a zero-width confidence interval.
+The report preserves the point estimate but marks its interval unavailable,
+and strategy_guidance() returns hold rather than treating a degenerate
+interval as certainty. The earlier confidence_interval_95_normal_approx
+field remains as a compatibility alias; new callers should use
+confidence_interval_95_student_t.
+
+These intervals remain approximations. The store cannot verify random
+assignment, protocol adherence, independence, absence of interference or
+absence of selection bias. They are decision-support summaries, not proof of
+causality and not automatic authorization to change strategy.

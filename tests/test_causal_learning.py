@@ -258,11 +258,84 @@ class CausalExperimentStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "minimum_per_arm"):
             self.store.report("retrieval-v1", minimum_per_arm=1)
 
+    def test_randomized_report_uses_welch_student_t_interval_for_small_samples(self):
+        self._register("randomized")
+        treatment = [.6, .7, .8, .9, 1.0]
+        control = [.1, .2, .3, .4, .5]
+        for index, (treated, controlled) in enumerate(zip(treatment, control)):
+            self.store.record_trial(
+                "retrieval-v1", "treatment", treated,
+                evidence_ref=f"welch-t-{index}", trial_id=f"welch-tt-{index}",
+            )
+            self.store.record_trial(
+                "retrieval-v1", "control", controlled,
+                evidence_ref=f"welch-c-{index}", trial_id=f"welch-ct-{index}",
+            )
+
+        estimate = self.store.report("retrieval-v1")["estimate"]
+        self.assertEqual("student_t_welch", estimate["interval_method"])
+        self.assertEqual("available", estimate["interval_status"])
+        self.assertAlmostEqual(8.0, estimate["degrees_of_freedom"])
+        self.assertAlmostEqual(2.306, estimate["critical_value"], places=3)
+        self.assertGreater(estimate["critical_value"], 1.96)
+        self.assertEqual(
+            estimate["confidence_interval_95_student_t"],
+            estimate["confidence_interval_95_normal_approx"],
+        )
+
+    def test_matched_report_uses_paired_student_t_interval(self):
+        self._register("matched")
+        differences = [.1, .2, .3, .4, .5]
+        for index, difference in enumerate(differences):
+            self.store.record_trial(
+                "retrieval-v1", "control", .4,
+                evidence_ref=f"paired-c-{index}", trial_id=f"paired-ct-{index}",
+                context_key=f"paired-{index}",
+            )
+            self.store.record_trial(
+                "retrieval-v1", "treatment", .4 + difference,
+                evidence_ref=f"paired-t-{index}", trial_id=f"paired-tt-{index}",
+                context_key=f"paired-{index}",
+            )
+
+        estimate = self.store.report("retrieval-v1")["estimate"]
+        self.assertEqual("student_t_paired", estimate["interval_method"])
+        self.assertEqual(4.0, estimate["degrees_of_freedom"])
+        self.assertAlmostEqual(2.776, estimate["critical_value"], places=3)
+        self.assertIsNotNone(estimate["confidence_interval_95_student_t"])
+
+    def test_strategy_guidance_holds_when_empirical_variance_is_zero(self):
+        self._register("randomized")
+        for index in range(5):
+            self.store.record_trial(
+                "retrieval-v1", "treatment", .9,
+                evidence_ref=f"constant-t-{index}", trial_id=f"constant-tt-{index}",
+            )
+            self.store.record_trial(
+                "retrieval-v1", "control", .2,
+                evidence_ref=f"constant-c-{index}", trial_id=f"constant-ct-{index}",
+            )
+
+        report = self.store.report("retrieval-v1")
+        self.assertEqual(
+            "unavailable_zero_estimated_variance",
+            report["estimate"]["interval_status"],
+        )
+        self.assertIsNone(report["estimate"]["confidence_interval_95_student_t"])
+        guidance = self.store.strategy_guidance("retrieval-v1")
+        self.assertEqual("hold", guidance["guidance"])
+        self.assertEqual(
+            "uncertainty_interval_unavailable_due_to_zero_estimated_variance",
+            guidance["reason"],
+        )
+
     def test_strategy_guidance_only_recommends_when_interval_excludes_zero(self):
         self._register("randomized")
         for index in range(20):
-            self.store.record_trial("retrieval-v1", "treatment", .9, evidence_ref=f"et{index}", trial_id=f"gt{index}")
-            self.store.record_trial("retrieval-v1", "control", .2, evidence_ref=f"ec{index}", trial_id=f"gc{index}")
+            treatment = .85 + (index % 5) * .01
+            control = .20 + (index % 5) * .01
+            self.store.record_trial("retrieval-v1", "treatment", treatment, evidence_ref=f"et{index}", trial_id=f"gt{index}")
+            self.store.record_trial("retrieval-v1", "control", control, evidence_ref=f"ec{index}", trial_id=f"gc{index}")
         guidance = self.store.strategy_guidance("retrieval-v1")
         self.assertEqual("favor_treatment_for_human_review", guidance["guidance"])
         self.assertFalse(guidance["policy_mutated"])
