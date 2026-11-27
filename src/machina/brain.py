@@ -93,6 +93,12 @@ class VirtualBrain:
         if motivation_system is not None and not isinstance(motivation_system, MotivationSystem):
             raise TypeError("motivation_system must be a MotivationSystem")
         self.motivation_system = motivation_system
+        if self.motivation_system is not None:
+            try:
+                self._restore_latest_motivation_snapshot()
+            except Exception:
+                self.store.close()
+                raise
         if causal_experiment_store is not None and not isinstance(causal_experiment_store, CausalExperimentStore):
             raise TypeError("causal_experiment_store must be a CausalExperimentStore")
         self.causal_experiment_store = causal_experiment_store
@@ -1756,6 +1762,26 @@ class VirtualBrain:
             epistemic_status=EpistemicStatus.OBSERVED,
             confidence=1.0,
         )
+
+    def _restore_latest_motivation_snapshot(self) -> None:
+        """Rehydrate the latest durable drive state before starting another cycle.
+
+        Motivation feedback is journaled at the end of each evaluated cycle.
+        A newly constructed VirtualBrain must use that snapshot for its next
+        deliberation, not silently restart from the caller's initial defaults.
+        """
+        if self.motivation_system is None:
+            return
+        feedback = self.store.artifacts_for_event_types(("motivation.feedback_applied",))
+        if not feedback:
+            return
+        latest = feedback[-1]
+        snapshot = latest.data.get("motivation_snapshot")
+        if not isinstance(snapshot, Mapping):
+            raise ValueError("latest persisted motivation feedback is missing its snapshot")
+        if latest.data.get("timestep") != snapshot.get("timestep"):
+            raise ValueError("persisted motivation feedback timestep does not match its snapshot")
+        self._restore_motivation_snapshot(snapshot)
 
     def _restore_motivation_snapshot(self, snapshot: Mapping[str, Any]) -> None:
         """Restore persisted drive values without breaking organism object identity."""
