@@ -72,10 +72,8 @@ class MotivationalDrive:
         gain = _bounded("gain", gain)
         if gain > 0.3:
             raise ValueError("gain must not exceed 0.3")
-        return {
-            name: (pressure - 0.5) * gain
-            for name, pressure in self.temporal_urgencies().items()
-        }
+        pressure = float(self.pressure if self.pressure is not None else self.urgency)
+        return {self.name: (pressure - 0.5) * gain}
 
     def snapshot(self) -> dict[str, object]:
         return asdict(self)
@@ -204,9 +202,9 @@ class MotivationSystem:
     def effective_urgencies(self, *, gain: float | None = None) -> dict[str, float]:
         """Return urgency after symmetric, order-independent competition.
 
-        Cooperative partners contribute a bounded positive boost first;
-        competing partners then contribute bounded inhibition. The raw drive
-        deficit is never overwritten.
+        Cooperative and competing links contribute strength-scaled partner
+        pressure. Their mean contribution is bounded by the configured gain,
+        and the raw drive deficit is never overwritten.
         """
         selected_gain = self.conflict_gain if gain is None else _bounded("gain", gain)
         opponents: dict[str, list[tuple[float, float]]] = {
@@ -234,13 +232,16 @@ class MotivationSystem:
             cooperative_links = partners[name]
             boost = 0.0
             if cooperative_links:
-                partner_pressure = sum(weight * urgency for weight, urgency in cooperative_links) / len(cooperative_links)
+                partner_pressure = math.fsum(
+                    weight * urgency for weight, urgency in cooperative_links
+                ) / len(cooperative_links)
                 boost = self.cooperation_gain * partner_pressure
             conflict_links = opponents[name]
             inhibition = 0.0
             if conflict_links:
-                total_weight = sum(weight for weight, _ in conflict_links)
-                competing_pressure = sum(weight * urgency for weight, urgency in conflict_links) / total_weight
+                competing_pressure = math.fsum(
+                    weight * urgency for weight, urgency in conflict_links
+                ) / len(conflict_links)
                 inhibition = selected_gain * competing_pressure
             result[name] = max(0.0, min(1.0, drive.urgency + boost - inhibition))
         return result
@@ -248,6 +249,14 @@ class MotivationSystem:
     def temporal_urgencies(self) -> dict[str, float]:
         """Return leaky-integrated motivational pressure from prior cycles."""
         return {name: float(drive.pressure or 0.0) for name, drive in self.drives.items()}
+
+    def temporal_autonomy_adjustments(self, *, gain: float = 0.3) -> dict[str, float]:
+        """Expose one canonical bounded feedback value for every persistent drive."""
+        return {
+            name: adjustment
+            for name, drive in sorted(self.drives.items())
+            for name, adjustment in drive.temporal_autonomy_adjustments(gain=gain).items()
+        }
 
     def ranked_temporal_drives(self) -> list[tuple[str, float]]:
         """Rank temporally integrated pressure with deterministic tie breaks."""
@@ -297,8 +306,14 @@ class MotivationSystem:
 
     @classmethod
     def from_snapshot(cls, data: Mapping[str, object]) -> "MotivationSystem":
+        if not isinstance(data, Mapping):
+            raise ValueError("unsupported motivation snapshot schema")
         schema = data.get("schema_version")
-        if schema not in (1, 2, 3, cls.SNAPSHOT_SCHEMA):
+        if (
+            isinstance(schema, bool)
+            or not isinstance(schema, int)
+            or schema not in (1, 2, 3, cls.SNAPSHOT_SCHEMA)
+        ):
             raise ValueError("unsupported motivation snapshot schema")
         timestep = data.get("timestep")
         if isinstance(timestep, bool) or not isinstance(timestep, int) or timestep < 0:

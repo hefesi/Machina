@@ -7,6 +7,7 @@ from pathlib import Path
 from machina.autonomy import AutonomyContext, AutonomyController, GoalCandidate
 from machina.deliberation import InternalDeliberator
 from machina.goal_store import PersistentGoalStore
+from machina.mnn_motivation import MotivationalDrive, MotivationSystem
 
 
 class InternalDeliberatorTests(unittest.TestCase):
@@ -76,6 +77,24 @@ class InternalDeliberatorTests(unittest.TestCase):
                 if item["goal"]["goal_id"] == "sustain_drive:curiosity"
             )
             self.assertAlmostEqual(0.15, selected["score"]["feedback_adjustment"])
+            store.close()
+
+    def test_motivation_system_temporal_feedback_reaches_final_goal_score(self):
+        motivation = MotivationSystem([
+            MotivationalDrive("curiosity", level=0.8, pressure=0.8),
+        ])
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            deliberator = InternalDeliberator(AutonomyController(), store)
+            result = deliberator.deliberate(
+                AutonomyContext(),
+                motivation=motivation,
+            )
+            selected = next(
+                item for item in result.autonomy.alternatives
+                if item["goal"]["goal_id"] == "sustain_drive:curiosity"
+            )
+            self.assertAlmostEqual(0.09, selected["score"]["feedback_adjustment"])
             store.close()
 
     def test_open_goal_limit_is_validated(self):
@@ -155,6 +174,33 @@ class InternalDeliberatorTests(unittest.TestCase):
                         "requires_human_or_external_policy_approval": True,
                     },
                 )
+            store.close()
+
+
+    def test_curiosity_candidate_is_audited_as_a_distinct_deliberation_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = PersistentGoalStore(Path(directory) / "goals.sqlite3")
+            deliberator = InternalDeliberator(AutonomyController(), store)
+            curiosity = GoalCandidate(
+                "investigate_gap:memory",
+                "Investigate the evidence gap",
+                "curiosity",
+                0.95,
+                0.9,
+                0.95,
+                0.1,
+                0.02,
+            )
+            result = deliberator.deliberate(
+                AutonomyContext(memory_count=1),
+                additional_candidates=[curiosity],
+                additional_sources={curiosity.goal_id: "curiosity"},
+            )
+            self.assertEqual(curiosity.goal_id, result.selected_goal.goal_id)
+            self.assertEqual("curiosity", result.selected_source)
+            history = store.recent_deliberations(1)
+            self.assertEqual("curiosity", history[0]["selected_source"])
+            self.assertEqual(curiosity.goal_id, history[0]["selected_goal_id"])
             store.close()
 
 

@@ -84,12 +84,15 @@ class HomeostaticRegulator:
 
     def assess(self, *, cycle_id: str | None = None) -> HomeostaticProposal:
         """Assess exactly one new SelfModel cycle; duplicate cycles are rejected."""
-        selected_cycle = cycle_id or self.self_model.cycle_id
+        selected_cycle = self.self_model.cycle_id if cycle_id is None else cycle_id
         if not isinstance(selected_cycle, str) or not selected_cycle.strip():
-            raise ValueError("SelfModel has no cycle; supply cycle_id")
+            if cycle_id is None:
+                raise ValueError("SelfModel has no cycle; supply cycle_id")
+            raise ValueError("cycle_id must be a non-empty string")
         if selected_cycle == self._last_cycle_id:
             raise ValueError("cycle_id has already been assessed")
         beliefs = self.self_model.beliefs
+        adjustment_contributions: dict[str, list[float]] = {}
         adjustments: dict[str, float] = {}
         deviations: dict[str, float] = {}
         evidence: set[str] = set()
@@ -119,14 +122,26 @@ class HomeostaticRegulator:
             ref = belief.get("evidence_ref")
             if isinstance(ref, str) and ref:
                 evidence.add(ref)
+            amount = 0.0
             if count >= self.persistence_cycles:
                 amount = rule.below_adjustment if direction == "below" else rule.above_adjustment
-                adjustments[rule.drive] = max(-0.3, min(0.3, amount))
+                adjustment_contributions.setdefault(rule.drive, []).append(float(amount))
             rationale.append(
                 f"{name}: {direction} range by {abs(deviation):.6f}; "
                 f"persistent cycles={count}/{self.persistence_cycles}; "
-                f"drive={rule.drive}; proposal="
-                f"{adjustments.get(rule.drive, 0.0):.6f}"
+                f"drive={rule.drive}; rule_adjustment={amount:.6f}"
+            )
+        # Aggregate every rule for a drive before applying the global bound.
+        # Clamping each intermediate sum makes mixed positive/negative rules
+        # depend on mapping insertion order. Sorting plus fsum gives a stable
+        # aggregate, and the final clamp is applied exactly once per drive.
+        adjustments = {
+            drive: max(-0.3, min(0.3, math.fsum(sorted(values))))
+            for drive, values in sorted(adjustment_contributions.items())
+        }
+        for drive, value in adjustments.items():
+            rationale.append(
+                f"{drive}: aggregate homeostatic proposal={value:.6f}"
             )
         self._last_cycle_id = selected_cycle
         return HomeostaticProposal(
@@ -149,7 +164,13 @@ class HomeostaticRegulator:
 
     @classmethod
     def from_snapshot(cls, self_model: SelfModel, data: Mapping[str, Any]) -> "HomeostaticRegulator":
-        if not isinstance(data, Mapping) or data.get("schema_version") != cls.schema_version:
+        version = data.get("schema_version") if isinstance(data, Mapping) else None
+        if (
+            not isinstance(data, Mapping)
+            or isinstance(version, bool)
+            or not isinstance(version, int)
+            or version != cls.schema_version
+        ):
             raise ValueError("unsupported HomeostaticRegulator snapshot")
         raw_rules = data.get("rules")
         raw_streaks = data.get("streaks")

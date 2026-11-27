@@ -54,6 +54,30 @@ class CausalExperimentStore:
             "CREATE INDEX IF NOT EXISTS idx_causal_trials_experiment "
             "ON causal_trials(experiment_id, arm, id)"
         )
+        duplicate_context = self._db.execute(
+            """
+            SELECT experiment_id, arm, context_key, COUNT(*) AS observations
+            FROM causal_trials
+            WHERE context_key IS NOT NULL
+            GROUP BY experiment_id, arm, context_key
+            HAVING COUNT(*) > 1
+            LIMIT 1
+            """
+        ).fetchone()
+        if duplicate_context is not None:
+            self._db.rollback()
+            self._db.close()
+            raise RuntimeError(
+                "causal trial ledger contains duplicate matched context/arm rows; "
+                "resolve the conflicting historical observations before opening it"
+            )
+        self._db.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_causal_trials_context_arm_unique
+            ON causal_trials(experiment_id, arm, context_key)
+            WHERE context_key IS NOT NULL
+            """
+        )
         self._db.commit()
 
     def close(self) -> None:
@@ -148,7 +172,19 @@ class CausalExperimentStore:
             self._db.commit()
         except sqlite3.IntegrityError as exc:
             self._db.rollback()
-            raise ValueError("trial_id has already been recorded") from exc
+            if self._db.execute(
+                "SELECT 1 FROM causal_trials WHERE trial_id = ?", (token,)
+            ).fetchone():
+                raise ValueError("trial_id has already been recorded") from exc
+            if context is not None and self._db.execute(
+                "SELECT 1 FROM causal_trials "
+                "WHERE experiment_id = ? AND arm = ? AND context_key = ?",
+                (key, group, context),
+            ).fetchone():
+                raise ValueError(
+                    "matched context already has an observation for this arm"
+                ) from exc
+            raise
         return {
             "record_id": int(cursor.lastrowid), "experiment_id": key,
             "arm": group, "outcome": float(outcome), "evidence_ref": evidence,
@@ -184,41 +220,148 @@ class CausalExperimentStore:
         key = self._label(experiment_id, "experiment_id")
         group = self._label(arm, "arm")
         experiment = self.experiment(key)
-        if experiment["design"] == "matched" and context_key is None:
-            raise ValueError("matched strategy outcomes require context_key")
-        if experiment["design"] != "matched" and context_key is not None:
+        if group not in self.ARMS:
+            raise ValueError("arm must be treatment or control")
+        expected_action = (
+            experiment["treatment_name"]
+            if group == "treatment"
+            else experiment["control_name"]
+        )
+        if data.get("action") != expected_action:
+            raise ValueError("strategy outcome action does not match the experiment arm")
+        expected_context = None
+        if experiment["design"] == "matched":
+            if context_key is None:
+                raise ValueError("matched strategy outcomes require context_key")
+            event_context = data.get("context")
+            if not isinstance(event_context, str) or not event_context.strip():
+                raise ValueError("matched strategy outcomes require a recorded context")
+            expected_context = self._label(event_context, "outcome context")
+            supplied_context = self._label(context_key, "context_key")
+            if supplied_context != expected_context:
+                raise ValueError(
+                    "context_key must match the recorded strategy outcome context"
+                )
+        elif context_key is not None:
             raise ValueError("context_key is only valid for matched experiments")
         trial_id = f"{key}:{operation_id}"
-        existing = self._db.execute(
-            "SELECT * FROM causal_trials WHERE trial_id = ?", (trial_id,)
-        ).fetchone()
-        expected_context = None if context_key is None else self._label(context_key, "context_key")
-        if existing is not None:
-            row = dict(existing)
-            expected = (key, group, float(observed), evidence, expected_context)
-            actual = (
-                row["experiment_id"], row["arm"], row["outcome"],
-                row["evidence_ref"], row["context_key"],
+        # Serialize the idempotency check and insertion. Without an immediate
+        # transaction, concurrent projections can both observe a missing
+        # operation and one caller then fails on the unique trial_id constraint.
+        self._db.execute("BEGIN IMMEDIATE")
+        try:
+            existing = self._db.execute(
+                "SELECT * FROM causal_trials WHERE trial_id = ?", (trial_id,)
+            ).fetchone()
+            if existing is not None:
+                row = dict(existing)
+                expected = (key, group, float(observed), evidence, expected_context)
+                actual = (
+                    row["experiment_id"], row["arm"], row["outcome"],
+                    row["evidence_ref"], row["context_key"],
+                )
+                if actual != expected:
+                    raise ValueError("operation_id was already projected with different trial data")
+                self._db.commit()
+                return {
+                    "record_id": int(row["id"]),
+                    "experiment_id": row["experiment_id"],
+                    "arm": row["arm"],
+                    "outcome": float(row["outcome"]),
+                    "evidence_ref": row["evidence_ref"],
+                    "context_key": row["context_key"],
+                    "trial_id": row["trial_id"],
+                }
+            # record_trial commits this transaction after the same validation
+            # and insert path used by direct trial registration.
+            return self.record_trial(
+                key, group, observed,
+                evidence_ref=evidence,
+                trial_id=trial_id,
+                context_key=expected_context,
             )
-            if actual != expected:
-                raise ValueError("operation_id was already projected with different trial data")
-            return row
-        return self.record_trial(
-            key, group, observed,
-            evidence_ref=evidence,
-            trial_id=trial_id,
-            context_key=expected_context,
-        )
+        except Exception:
+            self._db.rollback()
+            raise
 
     @staticmethod
     def _mean_variance(values: list[float]) -> tuple[float | None, float | None]:
         if not values:
             return None, None
-        mean = sum(values) / len(values)
         if len(values) < 2:
-            return mean, None
-        variance = sum((value - mean) ** 2 for value in values) / (len(values) - 1)
+            return values[0], None
+        if all(value == values[0] for value in values):
+            return values[0], 0.0
+        mean = math.fsum(values) / len(values)
+        variance = math.fsum((value - mean) ** 2 for value in values) / (len(values) - 1)
         return mean, variance
+
+    @staticmethod
+    def _student_t_critical_975(degrees_of_freedom: float) -> float:
+        """Return a conservative two-sided 95% Student-t critical value.
+
+        The tabulated value for the greatest listed degrees of freedom not
+        exceeding the observed value is used. Rounding degrees of freedom down
+        avoids making the interval narrower than the corresponding table row.
+        For df above 120, 1.980 remains conservative relative to the normal
+        limit of 1.960.
+        """
+        if (
+            isinstance(degrees_of_freedom, bool)
+            or not isinstance(degrees_of_freedom, (int, float))
+            or not math.isfinite(degrees_of_freedom)
+            or degrees_of_freedom < 1
+        ):
+            raise ValueError("degrees_of_freedom must be finite and >= 1")
+
+        critical_values = {
+            1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571,
+            6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
+            11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131,
+            16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
+            21: 2.080, 22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060,
+            26: 2.056, 27: 2.052, 28: 2.048, 29: 2.045, 30: 2.042,
+            40: 2.021, 60: 2.000, 120: 1.980,
+        }
+        rounded_down = math.floor(degrees_of_freedom)
+        available = [df for df in critical_values if df <= rounded_down]
+        if not available:
+            raise ValueError("degrees_of_freedom must be >= 1")
+        return critical_values[max(available)]
+
+    @classmethod
+    def _student_t_interval(
+        cls,
+        effect: float,
+        standard_error: float | None,
+        degrees_of_freedom: float | None,
+    ) -> tuple[list[float] | None, float | None]:
+        # A zero empirical variance is not evidence of zero uncertainty. Keep
+        # the point estimate, but do not create a degenerate interval that could
+        # trigger directional strategy guidance.
+        if standard_error is None or standard_error <= 0 or degrees_of_freedom is None:
+            return None, None
+        critical = cls._student_t_critical_975(degrees_of_freedom)
+        margin = critical * standard_error
+        return [effect - margin, effect + margin], critical
+
+    @staticmethod
+    def _welch_degrees_of_freedom(
+        treatment_variance: float,
+        treatment_count: int,
+        control_variance: float,
+        control_count: int,
+    ) -> float | None:
+        treatment_component = treatment_variance / treatment_count
+        control_component = control_variance / control_count
+        combined = treatment_component + control_component
+        denominator = (
+            treatment_component ** 2 / (treatment_count - 1)
+            + control_component ** 2 / (control_count - 1)
+        )
+        if denominator <= 0:
+            return None
+        return combined ** 2 / denominator
 
     def report(self, experiment_id: str, *, minimum_per_arm: int = 5) -> dict[str, Any]:
         key = self._label(experiment_id, "experiment_id")
@@ -247,13 +390,28 @@ class CausalExperimentStore:
             differences = [pair["treatment"] - pair["control"] for pair in pairs]
             mean_diff, variance = self._mean_variance(differences)
             if len(pairs) >= minimum_per_arm:
-                standard_error = math.sqrt(variance / len(pairs)) if variance is not None else None
+                standard_error = (
+                    math.sqrt(variance / len(pairs))
+                    if variance is not None else None
+                )
+                degrees_of_freedom = float(len(pairs) - 1)
+                interval, critical = self._student_t_interval(
+                    float(mean_diff), standard_error, degrees_of_freedom
+                )
+                interval_status = (
+                    "available" if interval is not None
+                    else "unavailable_zero_estimated_variance"
+                )
                 estimate = {
-                    "effect": mean_diff, "standard_error": standard_error,
-                    "confidence_interval_95_normal_approx": (
-                        [mean_diff - 1.96 * standard_error, mean_diff + 1.96 * standard_error]
-                        if standard_error is not None else None
-                    ),
+                    "effect": mean_diff,
+                    "standard_error": standard_error,
+                    "degrees_of_freedom": degrees_of_freedom,
+                    "critical_value": critical,
+                    "confidence_interval_95_student_t": interval,
+                    # Compatibility alias for callers of the earlier report shape.
+                    "confidence_interval_95_normal_approx": interval,
+                    "interval_method": "student_t_paired",
+                    "interval_status": interval_status,
                     "matched_pairs": len(pairs),
                     "counterfactual_scope": "average paired contrast; not an individual counterfactual",
                 }
@@ -263,12 +421,27 @@ class CausalExperimentStore:
             standard_error = math.sqrt(
                 float(treatment_var) / len(treatment) + float(control_var) / len(control)
             )
+            degrees_of_freedom = self._welch_degrees_of_freedom(
+                float(treatment_var), len(treatment),
+                float(control_var), len(control),
+            )
+            interval, critical = self._student_t_interval(
+                difference, standard_error, degrees_of_freedom
+            )
+            interval_status = (
+                "available" if interval is not None
+                else "unavailable_zero_estimated_variance"
+            )
             estimate = {
-                "effect": difference, "standard_error": standard_error,
-                "confidence_interval_95_normal_approx": [
-                    difference - 1.96 * standard_error,
-                    difference + 1.96 * standard_error,
-                ],
+                "effect": difference,
+                "standard_error": standard_error,
+                "degrees_of_freedom": degrees_of_freedom,
+                "critical_value": critical,
+                "confidence_interval_95_student_t": interval,
+                # Compatibility alias for callers of the earlier report shape.
+                "confidence_interval_95_normal_approx": interval,
+                "interval_method": "student_t_welch",
+                "interval_status": interval_status,
                 "counterfactual_scope": "group-average contrast; not an individual counterfactual",
             }
             classification = "randomized_comparison"
@@ -281,7 +454,7 @@ class CausalExperimentStore:
             "trials": trials,
             "limitations": [
                 "The store records, but cannot verify, the declared assignment design.",
-                "A confidence interval is an approximation and depends on design assumptions.",
+                "A Student-t confidence interval is an approximation and depends on design and sampling assumptions.",
                 "Unmeasured confounding, interference, selection bias, and protocol violations may invalidate causal interpretation.",
                 "The unobserved outcome for an individual unit is not directly knowable.",
             ],
@@ -306,11 +479,16 @@ class CausalExperimentStore:
         guidance = "hold"
         reason = "evidence_is_insufficient_or_not_identifying"
         interval = (
-            estimate.get("confidence_interval_95_normal_approx")
+            estimate.get("confidence_interval_95_student_t")
             if isinstance(estimate, dict) else None
         )
         if report["classification"] == "observational_association":
             reason = "observational_data_cannot_authorize_policy_changes"
+        elif (
+            isinstance(estimate, dict)
+            and estimate.get("interval_status") == "unavailable_zero_estimated_variance"
+        ):
+            reason = "uncertainty_interval_unavailable_due_to_zero_estimated_variance"
         elif isinstance(interval, list) and len(interval) == 2:
             lower, upper = interval
             if lower > 0:

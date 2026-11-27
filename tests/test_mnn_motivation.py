@@ -139,10 +139,29 @@ class MotivationSystemTests(unittest.TestCase):
         )
         raw = {name: drive.urgency for name, drive in system.drives.items()}
         effective = system.effective_urgencies()
-        self.assertAlmostEqual(0.55, effective["explore"])
-        self.assertAlmostEqual(0.25, effective["rest"])
+        self.assertAlmostEqual(0.62, effective["explore"])
+        self.assertAlmostEqual(0.34, effective["rest"])
         self.assertAlmostEqual(0.8, effective["create"])
         self.assertEqual(raw, {name: drive.urgency for name, drive in system.drives.items()})
+
+
+    def test_conflict_strength_scales_single_edge_inhibition(self):
+        def effective_curiosity(strength):
+            system = MotivationSystem(
+                [
+                    MotivationalDrive("curiosity", level=0.9),
+                    MotivationalDrive("stability", level=0.7),
+                ],
+                [MotivationalConflict("curiosity", "stability", strength=strength)],
+                conflict_gain=0.5,
+            )
+            return system.effective_urgencies()["curiosity"]
+
+        weak = effective_curiosity(0.2)
+        strong = effective_curiosity(0.8)
+        self.assertAlmostEqual(0.83, weak)
+        self.assertAlmostEqual(0.62, strong)
+        self.assertGreater(weak, strong)
 
     def test_conflict_arbitration_is_independent_of_registration_order(self):
         drives = [
@@ -246,6 +265,81 @@ class MotivationSystemTests(unittest.TestCase):
         restored = MotivationSystem.from_snapshot(legacy)
         self.assertEqual(0.4, restored.effective_urgencies()["legacy"])
         self.assertEqual([], restored.snapshot()["cooperations"])
+
+
+    def test_snapshot_rejects_non_integer_schema_versions(self):
+        snapshot = self.make_system().snapshot()
+        for invalid_version in (True, False, 1.0, 2.0, 4.0, "4", None):
+            with self.subTest(schema_version=invalid_version):
+                malformed = dict(snapshot, schema_version=invalid_version)
+                with self.assertRaisesRegex(
+                    ValueError, "unsupported motivation snapshot schema"
+                ):
+                    MotivationSystem.from_snapshot(malformed)
+
+        with self.assertRaisesRegex(
+            ValueError, "unsupported motivation snapshot schema"
+        ):
+            MotivationSystem.from_snapshot(None)
+
+    def test_temporal_autonomy_adjustments_are_available_per_drive_and_system(self):
+        system = MotivationSystem([
+            MotivationalDrive("curiosity", level=0.9, pressure=0.9),
+            MotivationalDrive("stability", level=0.1, pressure=0.1),
+            MotivationalDrive("neutral", level=0.5, pressure=0.5),
+        ])
+
+        adjustments = system.temporal_autonomy_adjustments()
+        self.assertAlmostEqual(0.12, adjustments["curiosity"])
+        self.assertAlmostEqual(-0.12, adjustments["stability"])
+        self.assertAlmostEqual(0.0, adjustments["neutral"])
+        self.assertEqual(
+            {"curiosity": 0.12},
+            system.drives["curiosity"].temporal_autonomy_adjustments(),
+        )
+        with self.assertRaises(ValueError):
+            system.temporal_autonomy_adjustments(gain=0.5)
+
+
+    def test_multiple_conflicts_average_strength_scaled_pressure(self):
+        drives = [
+            MotivationalDrive("curiosity", level=0.9),
+            MotivationalDrive("stability", level=0.7),
+            MotivationalDrive("creation", level=0.4),
+        ]
+        conflicts = [
+            MotivationalConflict("curiosity", "stability", strength=0.8),
+            MotivationalConflict("curiosity", "creation", strength=0.2),
+        ]
+        system = MotivationSystem(
+            drives,
+            conflicts,
+            conflict_gain=0.5,
+        )
+        raw = {name: drive.urgency for name, drive in system.drives.items()}
+        effective = system.effective_urgencies()
+
+        # Each edge contributes strength * partner urgency; the arithmetic
+        # mean keeps both edge strengths meaningful without normalizing them
+        # away as a conventional weighted mean would.
+        self.assertAlmostEqual(0.74, effective["curiosity"])
+        self.assertAlmostEqual(0.34, effective["stability"])
+        self.assertAlmostEqual(0.31, effective["creation"])
+        self.assertEqual(
+            raw,
+            {name: drive.urgency for name, drive in system.drives.items()},
+        )
+
+        reversed_system = MotivationSystem(
+            list(reversed([
+                MotivationalDrive("curiosity", level=0.9),
+                MotivationalDrive("stability", level=0.7),
+                MotivationalDrive("creation", level=0.4),
+            ])),
+            list(reversed(conflicts)),
+            conflict_gain=0.5,
+        )
+        self.assertEqual(effective, reversed_system.effective_urgencies())
 
 
 if __name__ == "__main__":

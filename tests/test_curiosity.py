@@ -1,3 +1,4 @@
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -131,6 +132,46 @@ class CuriosityInvestigationStoreTests(unittest.TestCase):
                 remaining_unknowns="not a list", cycle_id="cycle-2",
             )
         self.assertEqual("open", self.store.get_investigation("inv-1")["status"])
+
+
+    def test_legacy_migration_adds_composite_follow_up_lookup_index(self):
+        legacy_path = Path(self.tmp.name) / "legacy-curiosity.sqlite3"
+        connection = sqlite3.connect(legacy_path)
+        connection.execute("""
+            CREATE TABLE curiosity_investigations (
+                investigation_id TEXT PRIMARY KEY,
+                gap_property TEXT NOT NULL,
+                question TEXT NOT NULL,
+                question_key TEXT NOT NULL,
+                hypothesis TEXT NOT NULL,
+                selection_reason TEXT NOT NULL,
+                cycle_id TEXT NOT NULL,
+                goal_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+                outcome TEXT,
+                answer_summary TEXT,
+                remaining_unknowns TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                closed_at TEXT
+            )
+        """)
+        connection.commit()
+        connection.close()
+
+        migrated = CuriosityInvestigationStore(legacy_path)
+        try:
+            columns = [
+                row["name"]
+                for row in migrated._db.execute(
+                    "PRAGMA index_info(idx_curiosity_parent_goal_sequence)"
+                )
+            ]
+            self.assertEqual(
+                ["parent_investigation_id", "goal_id", "lineage_sequence"],
+                columns,
+            )
+        finally:
+            migrated.close()
 
 
 if __name__ == "__main__":

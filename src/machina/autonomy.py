@@ -10,7 +10,9 @@ from dataclasses import asdict, dataclass
 import math
 import sqlite3
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
+
+from .drive_feedback import merge_drive_adjustments
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,7 +184,9 @@ class AutonomyController:
             raise ValueError("goal_id values must be unique")
         approved = set(approved_external_goal_ids)
         recent = set(recent_goal_ids)
-        adjustments = drive_adjustments or {}
+        adjustments = merge_drive_adjustments(
+            {} if drive_adjustments is None else drive_adjustments
+        )
         eligible: list[tuple[GoalCandidate, dict[str, float]]] = []
         rejected: list[dict[str, str]] = []
 
@@ -262,11 +266,15 @@ class AutonomyController:
     ) -> AutonomyDecision:
         """Generate and choose a goal from context and sustained internal pressure."""
         candidates = self.generate_goals(context)
-        adjustments = dict(drive_adjustments or {})
+        adjustment_sources: list[Mapping[str, float]] = []
+        if drive_adjustments is not None:
+            adjustment_sources.append(drive_adjustments)
         if motivation is not None:
             candidates.extend(self.generate_motivational_goals(motivation))
-            if hasattr(motivation, "temporal_autonomy_adjustments"):
-                adjustments.update(motivation.temporal_autonomy_adjustments())
+            provider = getattr(motivation, "temporal_autonomy_adjustments", None)
+            if callable(provider):
+                adjustment_sources.append(provider())
+        adjustments = merge_drive_adjustments(*adjustment_sources)
         return self.choose(
             candidates,
             drive_adjustments=adjustments,

@@ -38,6 +38,23 @@ class AutonomyControllerTests(unittest.TestCase):
         scores = {item["goal"]["goal_id"]: item["score"]["total"] for item in decision.alternatives}
         self.assertGreater(scores["explore"], scores["stabilize"])
 
+    def test_step_merges_caller_and_temporal_motivation_adjustments(self):
+        motivation = MotivationSystem([
+            MotivationalDrive("curiosity", level=0.9, priority=1.0),
+        ])
+        decision = self.controller.step(
+            AutonomyContext(memory_count=4),
+            drive_adjustments={"curiosity": -0.1},
+            motivation=motivation,
+        )
+        curiosity_goal = next(
+            item for item in decision.alternatives
+            if item["goal"]["goal_id"] == "sustain_drive:curiosity"
+        )
+        # Caller feedback (-0.10) and temporal motivation (+0.12) must be
+        # combined, not overwritten by whichever source is applied last.
+        self.assertAlmostEqual(0.02, curiosity_goal["score"]["feedback_adjustment"])
+
     def test_sustained_motivational_pressure_generates_internal_goal(self):
         motivation = MotivationSystem([
             MotivationalDrive("curiosity", level=0.9, priority=1.0, persistence=0.5),
@@ -160,6 +177,34 @@ class AutonomyControllerTests(unittest.TestCase):
             self.controller.choose([goal, duplicate])
         with self.assertRaises(ValueError):
             AutonomyContext(memory_count=-1)
+
+
+    def test_choose_uses_shared_drive_adjustment_validation_and_bounds(self):
+        goal = GoalCandidate(
+            "explore", "Explore a relevant unknown", "curiosity",
+            0.5, 0.5, 0.8, 0.2, 0.01,
+        )
+        decision = self.controller.choose(
+            [goal], drive_adjustments={"curiosity": 0.3}
+        )
+        self.assertEqual(
+            0.15,
+            decision.alternatives[0]["score"]["feedback_adjustment"],
+        )
+
+        invalid_sources = (
+            {"curiosity": True},
+            {"curiosity": float("nan")},
+            {"curiosity": float("inf")},
+            {"curiosity": 0.31},
+            {"curiosity": -0.31},
+            {"": 0.1},
+            ["curiosity", 0.1],
+        )
+        for source in invalid_sources:
+            with self.subTest(source=source):
+                with self.assertRaises(ValueError):
+                    self.controller.choose([goal], drive_adjustments=source)
 
 
 if __name__ == "__main__":
