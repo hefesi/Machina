@@ -560,13 +560,18 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             control_name="baseline", protocol_ref="protocol:exp-1",
         )
         for index in range(n):
+            # Use non-degenerate deterministic outcomes: constant fixtures can
+            # hide whether the interval correctly represents sampling uncertainty.
+            spread = ((index % 5) - 2) * 0.01
+            treated = min(1.0, max(0.0, treatment + spread))
+            controlled = min(1.0, max(0.0, control - spread * 0.5))
             if design == "matched":
                 context = f"context-{index}"
-                store.record_trial("exp-1", "treatment", treatment, evidence_ref=f"et-{index}{suffix}", trial_id=f"t-{index}{suffix}", context_key=context)
-                store.record_trial("exp-1", "control", control, evidence_ref=f"ec-{index}{suffix}", trial_id=f"c-{index}{suffix}", context_key=context)
+                store.record_trial("exp-1", "treatment", treated, evidence_ref=f"et-{index}{suffix}", trial_id=f"t-{index}{suffix}", context_key=context)
+                store.record_trial("exp-1", "control", controlled, evidence_ref=f"ec-{index}{suffix}", trial_id=f"c-{index}{suffix}", context_key=context)
             else:
-                store.record_trial("exp-1", "treatment", treatment, evidence_ref=f"et-{index}{suffix}", trial_id=f"t-{index}{suffix}")
-                store.record_trial("exp-1", "control", control, evidence_ref=f"ec-{index}{suffix}", trial_id=f"c-{index}{suffix}")
+                store.record_trial("exp-1", "treatment", treated, evidence_ref=f"et-{index}{suffix}", trial_id=f"t-{index}{suffix}")
+                store.record_trial("exp-1", "control", controlled, evidence_ref=f"ec-{index}{suffix}", trial_id=f"c-{index}{suffix}")
         return store
 
     def test_randomized_causal_experiment_updates_inferred_belief_with_provenance(self):
@@ -580,6 +585,7 @@ class SelfModelLearningBridgeTests(unittest.TestCase):
             self.assertTrue(result["accepted"])
             self.assertEqual("inferred", belief["status"])
             self.assertEqual("randomized_comparison", belief["value"]["classification"])
+            self.assertIn("confidence_interval_95_student_t", belief["value"])
             self.assertGreater(belief["value"]["effect_treatment_minus_control"], 0)
             self.assertIn("protocol:exp-1", str(belief["value"]["protocol_ref"]))
             self.assertIn("et-0", belief["evidence_ref"])

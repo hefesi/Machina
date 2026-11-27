@@ -308,7 +308,7 @@ class CausalExperimentStoreTests(unittest.TestCase):
 
     def test_strategy_guidance_holds_when_empirical_variance_is_zero(self):
         self._register("randomized")
-        for index in range(5):
+        for index in range(12):
             self.store.record_trial(
                 "retrieval-v1", "treatment", .9,
                 evidence_ref=f"constant-t-{index}", trial_id=f"constant-tt-{index}",

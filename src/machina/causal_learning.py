@@ -288,6 +288,8 @@ class CausalExperimentStore:
     def _mean_variance(values: list[float]) -> tuple[float | None, float | None]:
         if not values:
             return None, None
+        if all(value == values[0] for value in values):
+            return values[0], 0.0
         mean = math.fsum(values) / len(values)
         if len(values) < 2:
             return mean, None

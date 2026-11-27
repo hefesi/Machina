@@ -760,7 +760,7 @@ class SelfModelLearningBridge:
                 "self_model_updated": False,
             }
 
-        interval = estimate.get("confidence_interval_95_normal_approx")
+        interval = estimate.get("confidence_interval_95_student_t")
         effect = estimate.get("effect")
         if (
             not isinstance(interval, list) or len(interval) != 2
@@ -822,7 +822,8 @@ class SelfModelLearningBridge:
             "treatment": experiment["treatment_name"],
             "control": experiment["control_name"],
             "effect_treatment_minus_control": float(effect),
-            "confidence_interval_95_normal_approx": [lower, upper],
+            "confidence_interval_95_student_t": [lower, upper],
+            "confidence_interval_95_normal_approx": [lower, upper],  # legacy compatibility alias
             "standard_error": estimate.get("standard_error"),
             "sample_units": sample_units,
             "treatment_n": report["treatment"]["n"],
