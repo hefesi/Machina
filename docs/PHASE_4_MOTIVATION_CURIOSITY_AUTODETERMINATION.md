@@ -475,3 +475,27 @@ These intervals remain approximations. The store cannot verify random
 assignment, protocol adherence, independence, absence of interference or
 absence of selection bias. They are decision-support summaries, not proof of
 causality and not automatic authorization to change strategy.
+
+
+### Motivation snapshot restoration across brain restarts
+
+Each successful motivation feedback stage stores a complete `MotivationSystem`
+snapshot in the append-only brain event journal. When a new `VirtualBrain` is
+constructed with a configured `MotivationSystem`, it restores the latest
+committed feedback snapshot before the next deliberation. The caller-provided
+object identity is preserved; its drive state, relations and timestep are
+rehydrated from the durable snapshot.
+
+If the journal has no motivation feedback yet, the supplied initial
+configuration remains authoritative. If the latest feedback event is malformed
+or its recorded timestep disagrees with its snapshot, construction fails closed
+instead of silently starting from stale defaults. A brain constructed without
+a `MotivationSystem` does not enable motivation implicitly.
+
+This complements the existing resume path: a paused cycle still reuses its
+persisted `motivation.feedback_applied` event without applying the same
+fulfillment twice, while a later cycle after a process restart now begins from
+that same durable state. The longitudinal regression exercises two curiosity
+decisions separated by a process restart and verifies that the restored
+motivational feedback and the next homeostatic proposal reach both selector
+preview and final autonomy scoring.
