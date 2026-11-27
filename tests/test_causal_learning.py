@@ -272,7 +272,9 @@ class CausalExperimentStoreTests(unittest.TestCase):
                 evidence_ref=f"welch-c-{index}", trial_id=f"welch-ct-{index}",
             )
 
-        estimate = self.store.report("retrieval-v1")["estimate"]
+        report = self.store.report("retrieval-v1")
+        self.assertEqual("randomized_comparison", report["classification"])
+        estimate = report["estimate"]
         self.assertEqual("student_t_welch", estimate["interval_method"])
         self.assertEqual("available", estimate["interval_status"])
         self.assertAlmostEqual(8.0, estimate["degrees_of_freedom"])
@@ -328,6 +330,32 @@ class CausalExperimentStoreTests(unittest.TestCase):
             "uncertainty_interval_unavailable_due_to_zero_estimated_variance",
             guidance["reason"],
         )
+
+    def test_matched_strategy_guidance_holds_when_paired_variance_is_zero(self):
+        self._register("matched")
+        for index in range(5):
+            context = f"constant-pair-{index}"
+            self.store.record_trial(
+                "retrieval-v1", "control", .2,
+                evidence_ref=f"matched-constant-c-{index}",
+                trial_id=f"matched-constant-ct-{index}",
+                context_key=context,
+            )
+            self.store.record_trial(
+                "retrieval-v1", "treatment", .9,
+                evidence_ref=f"matched-constant-t-{index}",
+                trial_id=f"matched-constant-tt-{index}",
+                context_key=context,
+            )
+
+        report = self.store.report("retrieval-v1")
+        self.assertEqual("matched_comparison", report["classification"])
+        self.assertEqual(
+            "unavailable_zero_estimated_variance",
+            report["estimate"]["interval_status"],
+        )
+        guidance = self.store.strategy_guidance("retrieval-v1")
+        self.assertEqual("hold", guidance["guidance"])
 
     def test_strategy_guidance_only_recommends_when_interval_excludes_zero(self):
         self._register("randomized")

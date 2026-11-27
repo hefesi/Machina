@@ -442,6 +442,7 @@ class CausalExperimentStore:
                 "interval_status": interval_status,
                 "counterfactual_scope": "group-average contrast; not an individual counterfactual",
             }
+            classification = "randomized_comparison"
         return {
             "experiment": experiment,
             "classification": classification,
