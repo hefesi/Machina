@@ -258,6 +258,11 @@ class CausalExperimentStoreTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "minimum_per_arm"):
             self.store.report("retrieval-v1", minimum_per_arm=1)
 
+    def test_mean_variance_keeps_single_observation_variance_undefined(self):
+        mean, variance = self.store._mean_variance([.4])
+        self.assertEqual(.4, mean)
+        self.assertIsNone(variance)
+
     def test_randomized_report_uses_welch_student_t_interval_for_small_samples(self):
         self._register("randomized")
         treatment = [.6, .7, .8, .9, 1.0]
